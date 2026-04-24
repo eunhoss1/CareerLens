@@ -1,0 +1,185 @@
+export type ReadinessStatus = "IMMEDIATE_APPLY" | "PREPARE_THEN_APPLY" | "LONG_TERM_PREPARE";
+
+export type UserProfileRequest = {
+  user_id?: number;
+  display_name: string;
+  email: string;
+  target_country: string;
+  target_city?: string;
+  target_job_family: string;
+  desired_job_title?: string;
+  current_country?: string;
+  nationality?: string;
+  experience_years: number;
+  related_experience_years?: number;
+  language_level: string;
+  english_level?: string;
+  japanese_level?: string;
+  education: string;
+  major?: string;
+  graduation_status?: string;
+  preferred_work_type?: string;
+  expected_salary_range?: string;
+  available_start_date?: string;
+  visa_sponsorship_needed?: boolean;
+  tech_stack: string[];
+  certifications: string[];
+  github_present: boolean;
+  portfolio_present: boolean;
+  github_url?: string;
+  portfolio_url?: string;
+  project_experience_summary?: string;
+  domain_experience?: string;
+  cloud_experience?: string;
+  database_experience?: string;
+  deployment_experience?: string;
+  language_test_scores?: string;
+  preferences: string[];
+};
+
+export type UserProfileSummary = UserProfileRequest & {
+  user_id: number;
+};
+
+export type ScoreBreakdown = {
+  total_score: number;
+  skill_score: number;
+  experience_score: number;
+  language_score: number;
+  education_score: number;
+  portfolio_score: number;
+};
+
+export type JobRecommendation = {
+  diagnosis_id: number;
+  job_id: number;
+  company_name: string;
+  country: string;
+  job_title: string;
+  job_family: string;
+  salary_range: string;
+  work_type: string;
+  visa_requirement: string;
+  recommendation_grade: string;
+  readiness_status: ReadinessStatus;
+  readiness_label: string;
+  recommendation_summary: string;
+  next_action_summary: string;
+  missing_items: string[];
+  score_breakdown: ScoreBreakdown;
+};
+
+export type RecommendationResponse = {
+  user_id: number;
+  profile: UserProfileSummary;
+  criteria_summary: string;
+  total_candidate_count: number;
+  returned_recommendation_count: number;
+  overall_readiness_status: ReadinessStatus;
+  overall_readiness_label: string;
+  recommendations: JobRecommendation[];
+  diagnosed_at: string;
+};
+
+export const demoProfile: UserProfileRequest = {
+  display_name: "CareerLens Demo User",
+  email: "demo@careerlens.local",
+  target_country: "United States",
+  target_city: "Seattle",
+  target_job_family: "Backend",
+  desired_job_title: "Backend Software Engineer",
+  current_country: "South Korea",
+  nationality: "South Korea",
+  experience_years: 3,
+  related_experience_years: 2,
+  language_level: "BUSINESS",
+  english_level: "BUSINESS",
+  japanese_level: "BASIC",
+  education: "Bachelor in Computer Science",
+  major: "Computer Science",
+  graduation_status: "Graduated",
+  preferred_work_type: "Hybrid",
+  expected_salary_range: "USD 100k-130k",
+  available_start_date: "Within 3 months",
+  visa_sponsorship_needed: true,
+  tech_stack: ["Java", "Spring Boot", "MySQL", "REST API", "Docker"],
+  certifications: ["AWS Cloud Practitioner"],
+  github_present: true,
+  portfolio_present: true,
+  github_url: "https://github.com/careerlens-demo",
+  portfolio_url: "https://portfolio.example.com",
+  project_experience_summary: "Built REST APIs, database-backed services, and deployment-ready backend projects.",
+  domain_experience: "Cloud backend and career platform prototype",
+  cloud_experience: "AWS EC2, RDS, S3 basics",
+  database_experience: "MySQL schema design and query optimization",
+  deployment_experience: "Docker-based local deployment and CI/CD basics",
+  language_test_scores: "TOEIC 860",
+  preferences: ["Hybrid", "Visa support", "Cloud backend"]
+};
+
+export async function diagnoseRecommendations(profile: UserProfileRequest): Promise<RecommendationResponse> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+  const response = await fetch(`${baseUrl}/api/recommendations/diagnose`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ user_profile: profile }),
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Recommendation diagnosis request failed.");
+  }
+
+  return response.json();
+}
+
+export async function diagnoseStoredProfile(userId: number): Promise<RecommendationResponse> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+  const response = await fetch(`${baseUrl}/api/recommendations/diagnose/users/${userId}`, {
+    method: "POST",
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Stored profile diagnosis request failed.");
+  }
+
+  return response.json();
+}
+
+export async function fetchUserProfile(userId: number): Promise<UserProfileSummary> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+  const response = await fetch(`${baseUrl}/api/users/${userId}/profile`, {
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Profile request failed.");
+  }
+
+  return response.json();
+}
+
+export async function saveUserProfile(userId: number, profile: UserProfileRequest): Promise<UserProfileSummary> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+  const response = await fetch(`${baseUrl}/api/users/${userId}/profile`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(profile),
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Profile save request failed.");
+  }
+
+  return response.json();
+}

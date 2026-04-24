@@ -1,0 +1,13 @@
+node_modules/
+.next/
+dist/
+build/
+target/
+.gradle/
+.idea/
+.vscode/
+*.log
+*.tsbuildinfo
+.env
+.env.local
+seed-data/raw/

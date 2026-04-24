@@ -1,0 +1,29 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: careerlens-backend
+  datasource:
+    url: jdbc:mysql://localhost:3306/careerlens?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: root
+    password: 1234
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+
+careerlens:
+  seed:
+    path: ../seed-data/recommendation-seed.json
+    processed-path: ../seed-data/processed
+
+app:
+  cors:
+    allowed-origins: http://localhost:3000
