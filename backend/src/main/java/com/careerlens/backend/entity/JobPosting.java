@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,6 +32,18 @@ public class JobPosting {
     private String visaRequirement;
     private String salaryRange;
     private String workType;
+    private LocalDate applicationDeadline;
+    private Integer salaryScore;
+    private Integer workLifeBalanceScore;
+    private Integer companyValueScore;
+    private Integer probabilityWeight;
+    private Integer salaryWeight;
+    private Integer workLifeBalanceWeight;
+    private Integer companyValueWeight;
+    private Integer jobFitWeight;
+
+    @Column(length = 1000)
+    private String evaluationRationale;
 
     @ElementCollection
     @CollectionTable(name = "job_required_skills", joinColumns = @JoinColumn(name = "job_id"))
@@ -137,6 +150,86 @@ public class JobPosting {
 
     public void setWorkType(String workType) {
         this.workType = workType;
+    }
+
+    public LocalDate getApplicationDeadline() {
+        return applicationDeadline;
+    }
+
+    public void setApplicationDeadline(LocalDate applicationDeadline) {
+        this.applicationDeadline = applicationDeadline;
+    }
+
+    public Integer getSalaryScore() {
+        return salaryScore;
+    }
+
+    public void setSalaryScore(Integer salaryScore) {
+        this.salaryScore = salaryScore;
+    }
+
+    public Integer getWorkLifeBalanceScore() {
+        return workLifeBalanceScore;
+    }
+
+    public void setWorkLifeBalanceScore(Integer workLifeBalanceScore) {
+        this.workLifeBalanceScore = workLifeBalanceScore;
+    }
+
+    public Integer getCompanyValueScore() {
+        return companyValueScore;
+    }
+
+    public void setCompanyValueScore(Integer companyValueScore) {
+        this.companyValueScore = companyValueScore;
+    }
+
+    public Integer getProbabilityWeight() {
+        return probabilityWeight;
+    }
+
+    public void setProbabilityWeight(Integer probabilityWeight) {
+        this.probabilityWeight = probabilityWeight;
+    }
+
+    public Integer getSalaryWeight() {
+        return salaryWeight;
+    }
+
+    public void setSalaryWeight(Integer salaryWeight) {
+        this.salaryWeight = salaryWeight;
+    }
+
+    public Integer getWorkLifeBalanceWeight() {
+        return workLifeBalanceWeight;
+    }
+
+    public void setWorkLifeBalanceWeight(Integer workLifeBalanceWeight) {
+        this.workLifeBalanceWeight = workLifeBalanceWeight;
+    }
+
+    public Integer getCompanyValueWeight() {
+        return companyValueWeight;
+    }
+
+    public void setCompanyValueWeight(Integer companyValueWeight) {
+        this.companyValueWeight = companyValueWeight;
+    }
+
+    public Integer getJobFitWeight() {
+        return jobFitWeight;
+    }
+
+    public void setJobFitWeight(Integer jobFitWeight) {
+        this.jobFitWeight = jobFitWeight;
+    }
+
+    public String getEvaluationRationale() {
+        return evaluationRationale;
+    }
+
+    public void setEvaluationRationale(String evaluationRationale) {
+        this.evaluationRationale = evaluationRationale;
     }
 
     public List<String> getRequiredSkills() {

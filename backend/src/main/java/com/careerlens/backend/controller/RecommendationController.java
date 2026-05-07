@@ -31,6 +31,14 @@ public class RecommendationController {
         return recommendationServiceV2.diagnoseStoredProfile(userId);
     }
 
+    @PostMapping("/diagnose/users/{userId}/jobs/{jobId}")
+    public RecommendationDiagnosisResponseDto diagnoseStoredProfileForJob(
+            @PathVariable Long userId,
+            @PathVariable Long jobId
+    ) {
+        return recommendationServiceV2.diagnoseStoredProfileForJob(userId, jobId);
+    }
+
     @GetMapping("/{userId}")
     public RecommendationDiagnosisResponseDto getRecommendations(@PathVariable Long userId) {
         return recommendationServiceV2.getLatestRecommendations(userId);

@@ -73,6 +73,7 @@ GET /api/recommendations/{userId}
 /
 /signup
 /login
+/mypage
 /onboarding/profile
 /jobs/recommendation
 ```
@@ -89,6 +90,9 @@ JobPosting
 -> UserProfile과 PatternProfile 비교
 -> DiagnosisResult 저장
 ```
+
+`DiagnosisResult`에는 추천 점수 계산에 사용된 `PatternProfile`의 ref/title/evidence summary가 함께 저장됩니다.
+프론트 추천 카드와 상세 비교 패널에서도 기준 패턴과 근거 요약을 표시합니다.
 
 패턴 점수에 반영되는 항목:
 
@@ -130,6 +134,13 @@ seed-data/templates/job-postings-template.csv
 seed-data/templates/employee-samples-template.csv
 seed-data/templates/accepted-candidate-patterns-template.csv
 seed-data/templates/pattern-profiles-template.csv
+```
+
+추가 데이터 계약 문서:
+
+```txt
+docs/recommendation-data-contract.md
+docs/pattern-scoring-guide.md
 ```
 
 원본 조사 파일 위치:

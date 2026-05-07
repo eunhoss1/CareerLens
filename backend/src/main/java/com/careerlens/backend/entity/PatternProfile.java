@@ -43,6 +43,9 @@ public class PatternProfile {
     @Column(length = 1000)
     private String projectExperienceBenchmark;
 
+    @Column(length = 1000)
+    private String evidenceSummary;
+
     @ElementCollection
     @CollectionTable(name = "pattern_core_skills", joinColumns = @JoinColumn(name = "pattern_id"))
     @Column(name = "skill")
@@ -148,6 +151,14 @@ public class PatternProfile {
 
     public void setProjectExperienceBenchmark(String projectExperienceBenchmark) {
         this.projectExperienceBenchmark = projectExperienceBenchmark;
+    }
+
+    public String getEvidenceSummary() {
+        return evidenceSummary;
+    }
+
+    public void setEvidenceSummary(String evidenceSummary) {
+        this.evidenceSummary = evidenceSummary;
     }
 
     public List<String> getCoreSkills() {

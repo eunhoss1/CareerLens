@@ -48,6 +48,11 @@ public class UserProfile {
     private Boolean portfolioPresent;
     private String githubUrl;
     private String portfolioUrl;
+    private Boolean prioritizeSalary;
+    private Boolean prioritizeAcceptanceProbability;
+    private Boolean prioritizeWorkLifeBalance;
+    private Boolean prioritizeCompanyValue;
+    private Boolean prioritizeJobFit;
 
     @Column(length = 1000)
     private String projectExperienceSummary;
@@ -268,6 +273,46 @@ public class UserProfile {
 
     public void setPortfolioUrl(String portfolioUrl) {
         this.portfolioUrl = portfolioUrl;
+    }
+
+    public Boolean getPrioritizeSalary() {
+        return prioritizeSalary;
+    }
+
+    public void setPrioritizeSalary(Boolean prioritizeSalary) {
+        this.prioritizeSalary = prioritizeSalary;
+    }
+
+    public Boolean getPrioritizeAcceptanceProbability() {
+        return prioritizeAcceptanceProbability;
+    }
+
+    public void setPrioritizeAcceptanceProbability(Boolean prioritizeAcceptanceProbability) {
+        this.prioritizeAcceptanceProbability = prioritizeAcceptanceProbability;
+    }
+
+    public Boolean getPrioritizeWorkLifeBalance() {
+        return prioritizeWorkLifeBalance;
+    }
+
+    public void setPrioritizeWorkLifeBalance(Boolean prioritizeWorkLifeBalance) {
+        this.prioritizeWorkLifeBalance = prioritizeWorkLifeBalance;
+    }
+
+    public Boolean getPrioritizeCompanyValue() {
+        return prioritizeCompanyValue;
+    }
+
+    public void setPrioritizeCompanyValue(Boolean prioritizeCompanyValue) {
+        this.prioritizeCompanyValue = prioritizeCompanyValue;
+    }
+
+    public Boolean getPrioritizeJobFit() {
+        return prioritizeJobFit;
+    }
+
+    public void setPrioritizeJobFit(Boolean prioritizeJobFit) {
+        this.prioritizeJobFit = prioritizeJobFit;
     }
 
     public String getProjectExperienceSummary() {

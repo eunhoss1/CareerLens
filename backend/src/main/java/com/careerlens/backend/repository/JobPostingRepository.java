@@ -10,4 +10,6 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, Long> {
     Optional<JobPosting> findByExternalRef(String externalRef);
 
     List<JobPosting> findByCountryIgnoreCaseAndJobFamilyIgnoreCase(String country, String jobFamily);
+
+    List<JobPosting> findAllByOrderByCountryAscJobFamilyAscCompanyNameAscJobTitleAsc();
 }

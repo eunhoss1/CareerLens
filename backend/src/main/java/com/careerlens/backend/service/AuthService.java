@@ -25,17 +25,25 @@ public class AuthService {
 
     @Transactional
     public AuthResponseDto signup(SignupRequestDto request) {
-        userRepository.findByLoginId(request.loginId()).ifPresent(user -> {
-            throw new IllegalArgumentException("Login ID already exists: " + request.loginId());
+        String loginId = request.loginId().trim().toLowerCase();
+        String email = request.email().trim().toLowerCase();
+        String displayName = request.displayName().trim();
+
+        if (!request.password().equals(request.passwordConfirm())) {
+            throw new IllegalArgumentException("비밀번호 확인이 일치하지 않습니다.");
+        }
+
+        userRepository.findByLoginId(loginId).ifPresent(user -> {
+            throw new IllegalArgumentException("이미 사용 중인 아이디입니다: " + loginId);
         });
-        userRepository.findByEmail(request.email()).ifPresent(user -> {
-            throw new IllegalArgumentException("Email already exists: " + request.email());
+        userRepository.findByEmail(email).ifPresent(user -> {
+            throw new IllegalArgumentException("이미 사용 중인 이메일입니다: " + email);
         });
 
         User user = new User();
-        user.setLoginId(request.loginId());
-        user.setDisplayName(request.displayName());
-        user.setEmail(request.email());
+        user.setLoginId(loginId);
+        user.setDisplayName(displayName);
+        user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setCreatedAt(LocalDateTime.now());
         User savedUser = userRepository.save(user);
@@ -43,13 +51,14 @@ public class AuthService {
         return toResponse(savedUser);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponseDto login(LoginRequestDto request) {
-        User user = userRepository.findByLoginId(request.loginId())
-                .or(() -> userRepository.findByEmail(request.loginId()))
-                .orElseThrow(() -> new IllegalArgumentException("Invalid login ID or password."));
+        String loginIdentifier = request.loginId().trim().toLowerCase();
+        User user = userRepository.findByLoginId(loginIdentifier)
+                .or(() -> userRepository.findByEmail(loginIdentifier))
+                .orElseThrow(() -> new IllegalArgumentException("아이디 또는 비밀번호가 올바르지 않습니다."));
         if (user.getPasswordHash() == null || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new IllegalArgumentException("Invalid login ID or password.");
+            throw new IllegalArgumentException("아이디 또는 비밀번호가 올바르지 않습니다.");
         }
         return toResponse(user);
     }

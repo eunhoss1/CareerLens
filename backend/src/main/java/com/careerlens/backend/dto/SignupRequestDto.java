@@ -1,13 +1,19 @@
 package com.careerlens.backend.dto;
 
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public record SignupRequestDto(
-        @NotBlank String loginId,
-        @NotBlank String displayName,
+        @NotBlank
+        @Pattern(regexp = "^[a-zA-Z0-9._-]{4,30}$", message = "Login ID must be 4-30 characters using letters, numbers, dot, underscore, or hyphen.")
+        String loginId,
+        @NotBlank @Size(max = 40) String displayName,
         @Email @NotBlank String email,
-        @NotBlank @Size(min = 4, message = "Password must be at least 4 characters for demo login.") String password
+        @NotBlank @Size(min = 8, message = "Password must be at least 8 characters.") String password,
+        @NotBlank String passwordConfirm,
+        @AssertTrue(message = "Terms must be accepted.") Boolean termsAccepted
 ) {
 }

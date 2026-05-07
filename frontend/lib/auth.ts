@@ -24,7 +24,14 @@ export function clearStoredUser() {
   window.localStorage.removeItem(STORAGE_KEY);
 }
 
-export async function signup(input: { login_id: string; display_name: string; email: string; password: string }): Promise<AuthUser> {
+export async function signup(input: {
+  login_id: string;
+  display_name: string;
+  email: string;
+  password: string;
+  password_confirm: string;
+  terms_accepted: boolean;
+}): Promise<AuthUser> {
   return authRequest("/api/auth/signup", input);
 }
 

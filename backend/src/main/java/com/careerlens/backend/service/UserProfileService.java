@@ -70,6 +70,11 @@ public class UserProfileService {
         profile.setPortfolioPresent(Boolean.TRUE.equals(request.portfolioPresent()));
         profile.setGithubUrl(request.githubUrl());
         profile.setPortfolioUrl(request.portfolioUrl());
+        profile.setPrioritizeSalary(Boolean.TRUE.equals(request.prioritizeSalary()));
+        profile.setPrioritizeAcceptanceProbability(Boolean.TRUE.equals(request.prioritizeAcceptanceProbability()));
+        profile.setPrioritizeWorkLifeBalance(Boolean.TRUE.equals(request.prioritizeWorkLifeBalance()));
+        profile.setPrioritizeCompanyValue(Boolean.TRUE.equals(request.prioritizeCompanyValue()));
+        profile.setPrioritizeJobFit(Boolean.TRUE.equals(request.prioritizeJobFit()));
         profile.setProjectExperienceSummary(request.projectExperienceSummary());
         profile.setDomainExperience(request.domainExperience());
         profile.setCloudExperience(request.cloudExperience());
@@ -101,19 +106,24 @@ public class UserProfileService {
                 profile.getExpectedSalaryRange(),
                 profile.getAvailableStartDate(),
                 profile.getVisaSponsorshipNeeded(),
-                profile.getTechStack(),
-                profile.getCertifications(),
+                mutableList(profile.getTechStack()),
+                mutableList(profile.getCertifications()),
                 profile.getGithubPresent(),
                 profile.getPortfolioPresent(),
                 profile.getGithubUrl(),
                 profile.getPortfolioUrl(),
+                profile.getPrioritizeSalary(),
+                profile.getPrioritizeAcceptanceProbability(),
+                profile.getPrioritizeWorkLifeBalance(),
+                profile.getPrioritizeCompanyValue(),
+                profile.getPrioritizeJobFit(),
                 profile.getProjectExperienceSummary(),
                 profile.getDomainExperience(),
                 profile.getCloudExperience(),
                 profile.getDatabaseExperience(),
                 profile.getDeploymentExperience(),
                 profile.getLanguageTestScores(),
-                profile.getPreferences()
+                mutableList(profile.getPreferences())
         );
     }
 

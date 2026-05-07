@@ -28,6 +28,11 @@ export type UserProfileRequest = {
   portfolio_present: boolean;
   github_url?: string;
   portfolio_url?: string;
+  prioritize_salary?: boolean;
+  prioritize_acceptance_probability?: boolean;
+  prioritize_work_life_balance?: boolean;
+  prioritize_company_value?: boolean;
+  prioritize_job_fit?: boolean;
   project_experience_summary?: string;
   domain_experience?: string;
   cloud_experience?: string;
@@ -60,13 +65,28 @@ export type JobRecommendation = {
   salary_range: string;
   work_type: string;
   visa_requirement: string;
+  pattern_ref: string;
+  pattern_title: string;
+  pattern_evidence_summary: string;
   recommendation_grade: string;
+  primary_recommendation_category: string;
   readiness_status: ReadinessStatus;
   readiness_label: string;
   recommendation_summary: string;
   next_action_summary: string;
   missing_items: string[];
   score_breakdown: ScoreBreakdown;
+  acceptance_probability_score: number;
+  salary_score: number;
+  work_life_balance_score: number;
+  company_value_score: number;
+  job_fit_score: number;
+  probability_weight: number;
+  salary_weight: number;
+  work_life_balance_weight: number;
+  company_value_weight: number;
+  job_fit_weight: number;
+  evaluation_rationale: string;
 };
 
 export type RecommendationResponse = {
@@ -108,6 +128,11 @@ export const demoProfile: UserProfileRequest = {
   portfolio_present: true,
   github_url: "https://github.com/careerlens-demo",
   portfolio_url: "https://portfolio.example.com",
+  prioritize_salary: false,
+  prioritize_acceptance_probability: true,
+  prioritize_work_life_balance: false,
+  prioritize_company_value: false,
+  prioritize_job_fit: true,
   project_experience_summary: "Built REST APIs, database-backed services, and deployment-ready backend projects.",
   domain_experience: "Cloud backend and career platform prototype",
   cloud_experience: "AWS EC2, RDS, S3 basics",
@@ -146,6 +171,21 @@ export async function diagnoseStoredProfile(userId: number): Promise<Recommendat
   if (!response.ok) {
     const message = await response.text();
     throw new Error(message || "Stored profile diagnosis request failed.");
+  }
+
+  return response.json();
+}
+
+export async function diagnoseStoredProfileForJob(userId: number, jobId: number): Promise<RecommendationResponse> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+  const response = await fetch(`${baseUrl}/api/recommendations/diagnose/users/${userId}/jobs/${jobId}`, {
+    method: "POST",
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Selected job diagnosis request failed.");
   }
 
   return response.json();

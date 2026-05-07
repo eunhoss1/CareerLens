@@ -132,6 +132,25 @@ seed-data/templates/accepted-candidate-patterns-template.csv
 seed-data/templates/pattern-profiles-template.csv
 ```
 
+중요 컬럼:
+
+```txt
+pattern_ref
+job_external_ref
+employee_sample_ref
+pattern_title
+core_skills
+preferred_skills
+target_experience_years
+language_benchmark
+github_expected
+portfolio_expected
+project_experience_benchmark
+evidence_summary
+```
+
+`evidence_summary`는 추천 화면에 표시되는 패턴 근거입니다. 공고 요구사항과 익명화 직원 표본 중 어떤 신호를 보고 이 패턴을 만들었는지 적습니다.
+
 ## 리스트 값 작성 규칙
 
 CSV 안에서 한 셀에 여러 값을 넣을 때는 `|`를 사용합니다.

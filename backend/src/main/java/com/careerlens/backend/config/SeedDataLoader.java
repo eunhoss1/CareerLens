@@ -3,9 +3,19 @@ package com.careerlens.backend.config;
 import com.careerlens.backend.entity.EmployeeProfileSample;
 import com.careerlens.backend.entity.JobPosting;
 import com.careerlens.backend.entity.PatternProfile;
+import com.careerlens.backend.entity.User;
+import com.careerlens.backend.entity.UserProfile;
 import com.careerlens.backend.repository.EmployeeProfileSampleRepository;
 import com.careerlens.backend.repository.JobPostingRepository;
 import com.careerlens.backend.repository.PatternProfileRepository;
+import com.careerlens.backend.repository.ApplicationRecordRepository;
+import com.careerlens.backend.repository.DiagnosisResultRepository;
+import com.careerlens.backend.repository.PlannerRoadmapRepository;
+import com.careerlens.backend.repository.PlannerTaskRepository;
+import com.careerlens.backend.repository.UserProfileRepository;
+import com.careerlens.backend.repository.UserRepository;
+import com.careerlens.backend.repository.VerificationRequestRepository;
+import com.careerlens.backend.repository.VerificationBadgeRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
 import java.io.IOException;
@@ -14,6 +24,7 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -29,6 +40,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +53,15 @@ public class SeedDataLoader implements ApplicationRunner {
     private final JobPostingRepository jobPostingRepository;
     private final EmployeeProfileSampleRepository employeeProfileSampleRepository;
     private final PatternProfileRepository patternProfileRepository;
+    private final ApplicationRecordRepository applicationRecordRepository;
+    private final DiagnosisResultRepository diagnosisResultRepository;
+    private final PlannerRoadmapRepository plannerRoadmapRepository;
+    private final PlannerTaskRepository plannerTaskRepository;
+    private final UserRepository userRepository;
+    private final UserProfileRepository userProfileRepository;
+    private final VerificationRequestRepository verificationRequestRepository;
+    private final VerificationBadgeRepository verificationBadgeRepository;
+    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final String seedPath;
     private final String processedSeedPath;
 
@@ -49,6 +70,14 @@ public class SeedDataLoader implements ApplicationRunner {
             JobPostingRepository jobPostingRepository,
             EmployeeProfileSampleRepository employeeProfileSampleRepository,
             PatternProfileRepository patternProfileRepository,
+            ApplicationRecordRepository applicationRecordRepository,
+            DiagnosisResultRepository diagnosisResultRepository,
+            PlannerRoadmapRepository plannerRoadmapRepository,
+            PlannerTaskRepository plannerTaskRepository,
+            UserRepository userRepository,
+            UserProfileRepository userProfileRepository,
+            VerificationRequestRepository verificationRequestRepository,
+            VerificationBadgeRepository verificationBadgeRepository,
             @Value("${careerlens.seed.path}") String seedPath,
             @Value("${careerlens.seed.processed-path:../seed-data/processed}") String processedSeedPath
     ) {
@@ -56,6 +85,14 @@ public class SeedDataLoader implements ApplicationRunner {
         this.jobPostingRepository = jobPostingRepository;
         this.employeeProfileSampleRepository = employeeProfileSampleRepository;
         this.patternProfileRepository = patternProfileRepository;
+        this.applicationRecordRepository = applicationRecordRepository;
+        this.diagnosisResultRepository = diagnosisResultRepository;
+        this.plannerRoadmapRepository = plannerRoadmapRepository;
+        this.plannerTaskRepository = plannerTaskRepository;
+        this.userRepository = userRepository;
+        this.userProfileRepository = userProfileRepository;
+        this.verificationRequestRepository = verificationRequestRepository;
+        this.verificationBadgeRepository = verificationBadgeRepository;
         this.seedPath = seedPath;
         this.processedSeedPath = processedSeedPath;
     }
@@ -65,6 +102,7 @@ public class SeedDataLoader implements ApplicationRunner {
     public void run(ApplicationArguments args) throws Exception {
         if (hasProcessedCsvSeed()) {
             loadProcessedCsvSeed();
+            ensureDemoUserProfile();
             return;
         }
 
@@ -72,6 +110,7 @@ public class SeedDataLoader implements ApplicationRunner {
         Map<String, JobPosting> jobsByRef = saveJobs(payload.jobPostings);
         Map<String, EmployeeProfileSample> samplesByRef = saveSamples(payload.employeeProfileSamples);
         savePatterns(payload.patternProfiles, jobsByRef, samplesByRef);
+        ensureDemoUserProfile();
     }
 
     private boolean hasProcessedCsvSeed() {
@@ -87,6 +126,7 @@ public class SeedDataLoader implements ApplicationRunner {
 
     private void loadProcessedCsvSeed() throws IOException {
         Path basePath = Path.of(processedSeedPath);
+        resetRecommendationSeedData();
         Map<String, JobPosting> jobsByRef = saveJobs(readJobCsv(basePath.resolve("job-postings.csv")));
         Map<String, EmployeeProfileSample> samplesByRef = saveSamples(readEmployeeCsv(basePath.resolve("employee-samples.csv")));
 
@@ -98,6 +138,87 @@ public class SeedDataLoader implements ApplicationRunner {
 
         Path acceptedPatternsPath = basePath.resolve("accepted-candidate-patterns.csv");
         savePatterns(readAcceptedCandidatePatternCsv(acceptedPatternsPath), jobsByRef, samplesByRef);
+    }
+
+    private void resetRecommendationSeedData() {
+        applicationRecordRepository.deleteAll();
+        verificationBadgeRepository.deleteAll();
+        verificationRequestRepository.deleteAll();
+        plannerTaskRepository.deleteAll();
+        plannerRoadmapRepository.deleteAll();
+        diagnosisResultRepository.deleteAll();
+        patternProfileRepository.deleteAll();
+        employeeProfileSampleRepository.deleteAll();
+        jobPostingRepository.deleteAll();
+    }
+
+    private void ensureDemoUserProfile() {
+        User demoUser = userRepository.findByLoginId("demo")
+                .or(() -> userRepository.findByEmail("demo@careerlens.local"))
+                .orElseGet(User::new);
+        boolean newUser = demoUser.getId() == null;
+        demoUser.setLoginId("demo");
+        demoUser.setDisplayName("CareerLens Demo");
+        demoUser.setEmail("demo@careerlens.local");
+        if (newUser || demoUser.getPasswordHash() == null || demoUser.getPasswordHash().isBlank()) {
+            demoUser.setPasswordHash(passwordEncoder.encode("CareerLens123!"));
+        }
+        if (demoUser.getCreatedAt() == null) {
+            demoUser.setCreatedAt(java.time.LocalDateTime.now());
+        }
+        User savedUser = userRepository.save(demoUser);
+
+        if (userProfileRepository.findByUserId(savedUser.getId()).isPresent()) {
+            return;
+        }
+
+        UserProfile profile = new UserProfile();
+        profile.setUser(savedUser);
+        profile.setTargetCountry("United States");
+        profile.setTargetCity("Seattle");
+        profile.setTargetJobFamily("Backend");
+        profile.setDesiredJobTitle("Backend Software Engineer");
+        profile.setCurrentCountry("South Korea");
+        profile.setNationality("South Korea");
+        profile.setExperienceYears(3);
+        profile.setRelatedExperienceYears(2);
+        profile.setLanguageLevel("BUSINESS");
+        profile.setEnglishLevel("BUSINESS");
+        profile.setJapaneseLevel("BASIC");
+        profile.setEducation("Bachelor in Computer Science");
+        profile.setMajor("Computer Science");
+        profile.setGraduationStatus("Graduated");
+        profile.setPreferredWorkType("Hybrid");
+        profile.setExpectedSalaryRange("USD 100k-130k");
+        profile.setAvailableStartDate("Within 3 months");
+        profile.setVisaSponsorshipNeeded(true);
+        profile.setGithubPresent(true);
+        profile.setPortfolioPresent(true);
+        profile.setGithubUrl("https://github.com/careerlens-demo");
+        profile.setPortfolioUrl("https://portfolio.example.com");
+        profile.setPrioritizeSalary(false);
+        profile.setPrioritizeAcceptanceProbability(true);
+        profile.setPrioritizeWorkLifeBalance(false);
+        profile.setPrioritizeCompanyValue(false);
+        profile.setPrioritizeJobFit(true);
+        profile.setProjectExperienceSummary("Built REST APIs, database-backed services, and deployment-ready backend projects.");
+        profile.setDomainExperience("Cloud backend and career platform prototype");
+        profile.setCloudExperience("AWS EC2, RDS, S3 basics");
+        profile.setDatabaseExperience("MySQL schema design and query optimization");
+        profile.setDeploymentExperience("Docker-based local deployment and CI/CD basics");
+        profile.setLanguageTestScores("TOEIC 860");
+        profile.setTechStack(mutableValues("Java", "Spring Boot", "MySQL", "REST API", "Docker"));
+        profile.setCertifications(mutableValues("AWS Cloud Practitioner"));
+        profile.setPreferences(mutableValues("Hybrid", "Visa support", "Cloud backend"));
+        userProfileRepository.save(profile);
+    }
+
+    private List<String> mutableValues(String... values) {
+        List<String> result = new ArrayList<>();
+        for (String value : values) {
+            result.add(value);
+        }
+        return result;
     }
 
     private SeedPayload readJsonPayload() throws IOException {
@@ -121,6 +242,9 @@ public class SeedDataLoader implements ApplicationRunner {
             if (!parseBoolean(value(record, "active"), true)) {
                 continue;
             }
+            if (blank(value(record, "external_ref"))) {
+                continue;
+            }
 
             JobPostingSeed seed = new JobPostingSeed();
             seed.externalRef = value(record, "external_ref");
@@ -137,6 +261,16 @@ public class SeedDataLoader implements ApplicationRunner {
             seed.visaRequirement = value(record, "visa_requirement");
             seed.salaryRange = value(record, "salary_range");
             seed.workType = value(record, "work_type");
+            seed.applicationDeadline = parseDate(value(record, "application_deadline"));
+            seed.salaryScore = firstPresentInteger(value(record, "salary_score"), inferSalaryScore(seed.salaryRange));
+            seed.workLifeBalanceScore = firstPresentInteger(value(record, "work_life_balance_score"), inferWorkLifeBalanceScore(seed.workType));
+            seed.companyValueScore = firstPresentInteger(value(record, "company_value_score"), "75");
+            seed.probabilityWeight = firstPresentInteger(value(record, "probability_weight"), "30");
+            seed.salaryWeight = firstPresentInteger(value(record, "salary_weight"), "15");
+            seed.workLifeBalanceWeight = firstPresentInteger(value(record, "work_life_balance_weight"), "15");
+            seed.companyValueWeight = firstPresentInteger(value(record, "company_value_weight"), "15");
+            seed.jobFitWeight = firstPresentInteger(value(record, "job_fit_weight"), "25");
+            seed.evaluationRationale = value(record, "evaluation_rationale");
             seeds.add(seed);
         }
         return seeds;
@@ -146,6 +280,9 @@ public class SeedDataLoader implements ApplicationRunner {
         List<EmployeeProfileSampleSeed> seeds = new ArrayList<>();
         for (CSVRecord record : parseCsv(path)) {
             if (!parseBoolean(value(record, "public_safe"), true)) {
+                continue;
+            }
+            if (blank(value(record, "sample_ref"))) {
                 continue;
             }
 
@@ -176,6 +313,9 @@ public class SeedDataLoader implements ApplicationRunner {
             if (!parseBoolean(value(record, "active"), true)) {
                 continue;
             }
+            if (blank(value(record, "pattern_ref")) || blank(value(record, "job_external_ref"))) {
+                continue;
+            }
 
             PatternProfileSeed seed = new PatternProfileSeed();
             seed.patternRef = value(record, "pattern_ref");
@@ -192,6 +332,11 @@ public class SeedDataLoader implements ApplicationRunner {
             seed.githubExpected = parseBoolean(value(record, "github_expected"), false);
             seed.portfolioExpected = parseBoolean(value(record, "portfolio_expected"), false);
             seed.projectExperienceBenchmark = value(record, "project_experience_benchmark");
+            seed.evidenceSummary = firstPresent(
+                    value(record, "evidence_summary"),
+                    value(record, "pattern_summary"),
+                    seed.projectExperienceBenchmark
+            );
             seeds.add(seed);
         }
         return seeds;
@@ -202,6 +347,9 @@ public class SeedDataLoader implements ApplicationRunner {
         for (CSVRecord record : parseCsv(path)) {
             PatternProfileSeed seed = new PatternProfileSeed();
             String acceptedPatternRef = value(record, "accepted_pattern_ref");
+            if (blank(acceptedPatternRef) || blank(value(record, "job_external_ref"))) {
+                continue;
+            }
             seed.patternRef = acceptedPatternRef.replaceFirst("^ACP-", "PAT-");
             seed.jobExternalRef = value(record, "job_external_ref");
             seed.employeeSampleRef = firstListValue(value(record, "employee_sample_refs"));
@@ -216,6 +364,11 @@ public class SeedDataLoader implements ApplicationRunner {
             seed.githubExpected = containsIgnoreCase(value(record, "modeled_portfolio_assets"), "github");
             seed.portfolioExpected = !blank(value(record, "modeled_portfolio_assets"));
             seed.projectExperienceBenchmark = value(record, "modeled_project_keywords");
+            seed.evidenceSummary = firstPresent(
+                    value(record, "derivation_reason"),
+                    value(record, "fit_rationale"),
+                    seed.projectExperienceBenchmark
+            );
             seeds.add(seed);
         }
         return seeds;
@@ -251,6 +404,16 @@ public class SeedDataLoader implements ApplicationRunner {
             job.setVisaRequirement(seed.visaRequirement);
             job.setSalaryRange(seed.salaryRange);
             job.setWorkType(seed.workType);
+            job.setApplicationDeadline(seed.applicationDeadline);
+            job.setSalaryScore(seed.salaryScore);
+            job.setWorkLifeBalanceScore(seed.workLifeBalanceScore);
+            job.setCompanyValueScore(seed.companyValueScore);
+            job.setProbabilityWeight(seed.probabilityWeight);
+            job.setSalaryWeight(seed.salaryWeight);
+            job.setWorkLifeBalanceWeight(seed.workLifeBalanceWeight);
+            job.setCompanyValueWeight(seed.companyValueWeight);
+            job.setJobFitWeight(seed.jobFitWeight);
+            job.setEvaluationRationale(seed.evaluationRationale);
             jobsByRef.put(seed.externalRef, jobPostingRepository.save(job));
         }
         return jobsByRef;
@@ -314,16 +477,37 @@ public class SeedDataLoader implements ApplicationRunner {
             pattern.setGithubExpected(Boolean.TRUE.equals(seed.githubExpected));
             pattern.setPortfolioExpected(Boolean.TRUE.equals(seed.portfolioExpected));
             pattern.setProjectExperienceBenchmark(seed.projectExperienceBenchmark);
+            pattern.setEvidenceSummary(firstPresent(seed.evidenceSummary, seed.projectExperienceBenchmark));
             patternProfileRepository.save(pattern);
         }
     }
 
     private String value(CSVRecord record, String name) {
-        if (!record.isMapped(name)) {
+        String resolvedName = name;
+        if (!record.isMapped(resolvedName)) {
+            String bomName = "\uFEFF" + name;
+            if (!record.isMapped(bomName)) {
+                for (Map.Entry<String, String> entry : record.toMap().entrySet()) {
+                    if (normalizeHeader(entry.getKey()).equals(name)) {
+                        String entryValue = entry.getValue();
+                        return entryValue == null ? "" : entryValue.trim();
+                    }
+                }
+                return "";
+            }
+            resolvedName = bomName;
+        }
+        String value = record.get(resolvedName);
+        return value == null ? "" : value.trim();
+    }
+
+    private String normalizeHeader(String header) {
+        if (header == null) {
             return "";
         }
-        String value = record.get(name);
-        return value == null ? "" : value.trim();
+        return header.replace("\uFEFF", "")
+                .replace("\"", "")
+                .trim();
     }
 
     private List<String> splitList(String value) {
@@ -349,11 +533,50 @@ public class SeedDataLoader implements ApplicationRunner {
         return matcher.find() ? Integer.parseInt(matcher.group()) : null;
     }
 
+    private LocalDate parseDate(String value) {
+        if (blank(value) || value.equalsIgnoreCase("Not specified") || value.equalsIgnoreCase("Rolling")) {
+            return null;
+        }
+        return LocalDate.parse(value.trim());
+    }
+
     private Integer firstPresentInteger(String first, String second) {
         Integer firstValue = parseInteger(first);
         return firstValue == null ? parseInteger(second) : firstValue;
     }
 
+    private String inferSalaryScore(String salaryRange) {
+        if (blank(salaryRange) || salaryRange.equalsIgnoreCase("Not specified")) {
+            return "55";
+        }
+        if (salaryRange.contains("250") || salaryRange.contains("253") || salaryRange.contains("300")) {
+            return "92";
+        }
+        if (salaryRange.contains("190") || salaryRange.contains("199")) {
+            return "82";
+        }
+        if (salaryRange.contains("160") || salaryRange.contains("168")) {
+            return "74";
+        }
+        return "68";
+    }
+
+    private String inferWorkLifeBalanceScore(String workType) {
+        if (blank(workType) || workType.equalsIgnoreCase("Not specified")) {
+            return "60";
+        }
+        String lower = workType.toLowerCase();
+        if (lower.contains("remote")) {
+            return "88";
+        }
+        if (lower.contains("hybrid")) {
+            return "78";
+        }
+        if (lower.contains("oncall")) {
+            return "45";
+        }
+        return "62";
+    }
     private boolean parseBoolean(String value, boolean defaultValue) {
         if (blank(value) || value.equalsIgnoreCase("Not specified")) {
             return defaultValue;
@@ -391,6 +614,15 @@ public class SeedDataLoader implements ApplicationRunner {
         return values.isEmpty() ? "" : values.get(0);
     }
 
+    private String firstPresent(String... values) {
+        for (String value : values) {
+            if (!blank(value)) {
+                return value;
+            }
+        }
+        return "";
+    }
+
     private boolean containsIgnoreCase(String value, String target) {
         return value != null && value.toLowerCase().contains(target.toLowerCase());
     }
@@ -426,6 +658,16 @@ public class SeedDataLoader implements ApplicationRunner {
         public String visaRequirement;
         public String salaryRange;
         public String workType;
+        public LocalDate applicationDeadline;
+        public Integer salaryScore;
+        public Integer workLifeBalanceScore;
+        public Integer companyValueScore;
+        public Integer probabilityWeight;
+        public Integer salaryWeight;
+        public Integer workLifeBalanceWeight;
+        public Integer companyValueWeight;
+        public Integer jobFitWeight;
+        public String evaluationRationale;
     }
 
     public static class EmployeeProfileSampleSeed {
@@ -458,5 +700,6 @@ public class SeedDataLoader implements ApplicationRunner {
         public Boolean githubExpected;
         public Boolean portfolioExpected;
         public String projectExperienceBenchmark;
+        public String evidenceSummary;
     }
 }

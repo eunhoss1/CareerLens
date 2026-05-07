@@ -98,6 +98,9 @@ seed-data/templates/employee-samples-template.csv
 seed-data/templates/accepted-candidate-patterns-template.csv
 ```
 
+현재는 DB 핵심 엔티티로 저장하기보다 seed-data 중간 산출물로 관리합니다.
+AI가 초안을 만들 수 있지만, 팀 검토 후 최종 `PatternProfile`로 요약해야 합니다.
+
 ### D. PatternProfile
 
 백엔드 추천 점수 계산에 실제로 사용되는 최종 패턴입니다.
@@ -115,12 +118,15 @@ seed-data/templates/accepted-candidate-patterns-template.csv
 - `github_expected`
 - `portfolio_expected`
 - `project_experience_benchmark`
+- `evidence_summary`
 
 템플릿:
 
 ```txt
 seed-data/templates/pattern-profiles-template.csv
 ```
+
+추천 결과 화면에는 어떤 `PatternProfile`로 점수가 계산됐는지와 `evidence_summary`를 함께 표시합니다.
 
 ## 3. 가상 합격자 더미 데이터가 도움이 되는 이유
 
