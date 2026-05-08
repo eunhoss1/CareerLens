@@ -139,6 +139,7 @@ mvn spring-boot:run
 5. DB_DDL_AUTO가 update 또는 create인지 확인했는가?
 6. application.yml이 아니라 다른 profile 설정이 실행되고 있지 않은가?
 7. 백엔드 실행 로그에 Access denied, Unknown database, Communications link failure가 없는가?
+8. IntelliJ Database Tool과 MariaDB Workbench가 같은 host/port/schema를 보고 있는가?
 ```
 
 ## 9. 자주 나는 오류
@@ -183,7 +184,67 @@ DB_URL=jdbc:mariadb://...
 DB_DDL_AUTO=update
 ```
 
-## 10. 팀 공지용 요약
+백엔드가 실제로 연결한 DB를 확인하려면 MariaDB Workbench에서 아래를 실행한다.
+
+```sql
+SELECT DATABASE();
+SHOW TABLES;
+```
+
+IntelliJ에서는 DB가 보이는데 Workbench에는 안 보이는 경우 대부분 아래 중 하나다.
+
+```txt
+1. IntelliJ와 Workbench가 서로 다른 포트의 MariaDB/MySQL을 보고 있음
+2. Workbench에서 다른 schema를 선택하고 있음
+3. Workbench schema 새로고침을 하지 않음
+4. 백엔드가 실제로는 MySQL 기본값으로 붙고 있음
+5. 백엔드가 DB 연결 실패로 실행되지 않았음
+```
+
+## 10. CORS와 Fail to fetch 확인
+
+브라우저에서 `Failed to fetch` 또는 CORS 에러가 보이면 DB 문제와 프론트/백엔드 연결 문제를 같이 확인해야 한다.
+
+백엔드 CORS 기본 허용값:
+
+```txt
+http://localhost:3000
+http://127.0.0.1:3000
+http://localhost:3001
+http://127.0.0.1:3001
+```
+
+개발 환경에서는 아래 패턴도 기본 허용한다.
+
+```txt
+http://localhost:*
+http://127.0.0.1:*
+```
+
+다른 주소나 포트에서 프론트를 실행하면 환경변수로 허용 origin을 추가한다.
+
+```env
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001
+CORS_ALLOWED_ORIGIN_PATTERNS=http://localhost:*,http://127.0.0.1:*
+```
+
+프론트가 백엔드를 다른 주소로 호출해야 하면 `frontend` 쪽에 아래 환경변수를 설정한다.
+
+```env
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
+```
+
+확인 순서:
+
+```txt
+1. 백엔드가 8080에서 정상 실행 중인지 확인
+2. 브라우저에서 http://localhost:8080/api/jobs 접속
+3. 프론트가 실제로 호출하는 URL이 http://localhost:8080인지 Network 탭에서 확인
+4. 프론트 접속 origin이 CORS_ALLOWED_ORIGINS에 포함되어 있는지 확인
+5. 백엔드 로그에 DB 연결 실패나 500 에러가 없는지 확인
+```
+
+## 11. 팀 공지용 요약
 
 ```txt
 DB는 각자 MySQL/MariaDB 중 편한 것을 사용해도 됩니다.
