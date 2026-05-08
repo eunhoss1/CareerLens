@@ -338,9 +338,9 @@ Frontend Port: 3000
 docs/team-versions.md
 ```
 
-## 10. MySQL 설정
+## 10. 로컬 DB 설정
 
-MySQL에서 DB를 먼저 생성합니다.
+MySQL 또는 MariaDB에서 DB를 먼저 생성합니다.
 
 ```sql
 CREATE DATABASE careerlens DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -352,17 +352,40 @@ CREATE DATABASE careerlens DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode
 backend/src/main/resources/application.yml
 ```
 
-기본 DB 설정:
+기본 DB 설정은 환경변수 기반입니다.
 
 ```yaml
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/careerlens?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    username: root
-    password: 1234
+    url: ${DB_URL:jdbc:mysql://localhost:3306/careerlens?serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:1234}
+    driver-class-name: ${DB_DRIVER:com.mysql.cj.jdbc.Driver}
+  jpa:
+    hibernate:
+      ddl-auto: ${DB_DDL_AUTO:update}
 ```
 
-팀 환경에서는 DB 계정/비밀번호를 각자 환경에 맞게 수정합니다.
+팀 환경에서는 DB 계정/비밀번호를 파일에 직접 수정하지 말고 환경변수로 설정합니다.
+
+MariaDB 사용 예시:
+
+```env
+DB_URL=jdbc:mariadb://localhost:3306/careerlens?useUnicode=true&characterEncoding=utf8
+DB_USERNAME=root
+DB_PASSWORD=본인비밀번호
+DB_DRIVER=org.mariadb.jdbc.Driver
+DB_DDL_AUTO=update
+```
+
+테이블은 직접 만들지 않습니다.
+`careerlens` DB만 만들어두면 백엔드 실행 시 JPA가 엔티티 기준으로 테이블을 자동 생성합니다.
+
+자세한 내용:
+
+```txt
+docs/local-db-setup.md
+```
 
 ## 11. 실행 방법
 
@@ -429,6 +452,7 @@ docs/csv-data-pipeline.md
 docs/ai-api-setup.md
 docs/departure-flight-api-integration.md
 docs/demo-scenario-and-script.md
+docs/local-db-setup.md
 docs/team-versions.md
 ```
 
