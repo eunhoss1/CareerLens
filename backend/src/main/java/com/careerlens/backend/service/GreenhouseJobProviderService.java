@@ -15,6 +15,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.text.DecimalFormat;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -65,6 +66,21 @@ public class GreenhouseJobProviderService {
                     + "\\s*(?:" + BROAD_CURRENCY_MARKER + ")?",
             Pattern.CASE_INSENSITIVE
     );
+    private static final String SALARY_CODE = "(USD|CAD|AUD|GBP|EUR|INR|JPY|KRW|SGD)";
+    private static final String SALARY_AMOUNT = "([0-9][0-9,]*(?:\\.\\d+)?\\s*(?:k|K|m|M|lakh|crore)?)";
+    private static final Pattern NORMALIZED_SALARY_BETWEEN_PATTERN = Pattern.compile(
+            "between\\s+(?:" + SALARY_CODE + "\\s*)?" + SALARY_AMOUNT
+                    + "\\s+and\\s+(?:" + SALARY_CODE + "\\s*)?" + SALARY_AMOUNT
+                    + "\\s*(?:" + SALARY_CODE + ")?",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern NORMALIZED_SALARY_RANGE_PATTERN = Pattern.compile(
+            "(?:" + SALARY_CODE + "\\s*)?" + SALARY_AMOUNT
+                    + "\\s*(?:-|to|~|and)\\s*(?:" + SALARY_CODE + "\\s*)?" + SALARY_AMOUNT
+                    + "\\s*(?:" + SALARY_CODE + ")?",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final String SALARY_FORMAT_PATTERN = "#,###.##";
 
     private final ObjectMapper objectMapper;
     private final JobPostingRepository jobPostingRepository;
@@ -225,6 +241,7 @@ public class GreenhouseJobProviderService {
         String location = locationFor(job);
         String department = departmentFor(job);
         String sourceUrl = text(job.path("absolute_url"));
+        String effectiveCompanyName = valueOrDefault(text(job.path("company_name")), companyName);
         String textForAnalysis = (title + " " + content + " " + location).toLowerCase(Locale.ROOT);
         String classificationText = (title + " " + department).toLowerCase(Locale.ROOT);
         String country = valueOrDefault(inferCountry(location), "Not specified");
@@ -250,7 +267,7 @@ public class GreenhouseJobProviderService {
                 "greenhouse",
                 boardToken,
                 "greenhouse:" + boardToken + ":" + jobId,
-                companyName,
+                effectiveCompanyName,
                 country,
                 title,
                 jobFamily,
@@ -263,7 +280,7 @@ public class GreenhouseJobProviderService {
                 inferDegree(textForAnalysis),
                 textForAnalysis.contains("portfolio"),
                 inferVisaRequirement(textForAnalysis),
-                inferSalaryRange(content),
+                inferSalaryRange(job, content, country),
                 inferWorkType(textForAnalysis),
                 summarize(content, title),
                 false
@@ -640,40 +657,168 @@ public class GreenhouseJobProviderService {
     }
 
     private String inferVisaRequirement(String text) {
-        if (text.contains("visa sponsorship") || text.contains("sponsorship")) {
+        String normalized = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        if (containsAny(normalized,
+                "without sponsorship",
+                "do not sponsor",
+                "does not sponsor",
+                "unable to sponsor",
+                "cannot sponsor",
+                "not sponsor",
+                "no visa sponsorship",
+                "not eligible for sponsorship",
+                "must be authorized to work",
+                "must have work authorization")) {
+            return "Work authorization required / sponsorship not indicated";
+        }
+        if (containsAny(normalized,
+                "visa sponsorship is available",
+                "sponsorship available",
+                "will sponsor",
+                "eligible for visa sponsorship",
+                "visa sponsorship provided",
+                "relocation and visa")) {
             return "Visa sponsorship mentioned";
+        }
+        if (normalized.contains("visa sponsorship") || normalized.contains("sponsorship")) {
+            return "Sponsorship mentioned - verify details";
+        }
+        if (normalized.contains("work authorization") || normalized.contains("right to work")) {
+            return "Work authorization mentioned";
         }
         return "Not specified in public posting";
     }
 
-    private String inferSalaryRange(String content) {
-        String normalized = SPACE_PATTERN.matcher(content == null ? "" : content).replaceAll(" ").trim();
-        String compensationSection = sectionAfter(normalized, "Compensation", 1600);
+    private String inferSalaryRange(JsonNode job, String content, String country) {
+        String metadataSalary = salaryFromMetadata(job.path("metadata"), country);
+        if (!metadataSalary.isBlank()) {
+            return metadataSalary;
+        }
+
+        String normalized = normalizeSalarySearchText(content);
+        String compensationSection = sectionAfter(normalized, "Compensation", 2200);
         String matched = firstSalaryMatch(compensationSection);
         if (!matched.isBlank()) {
-            return normalizeSalaryRange(matched);
+            return matched;
         }
         matched = firstSalaryMatch(normalized);
-        return matched.isBlank() ? "Not disclosed" : normalizeSalaryRange(matched);
+        return matched.isBlank() ? "Not disclosed" : matched;
+    }
+
+    private String salaryFromMetadata(JsonNode metadata, String country) {
+        if (!metadata.isArray()) {
+            return "";
+        }
+        String preferredCurrency = preferredCurrency(country);
+        String fallback = "";
+        for (JsonNode item : metadata) {
+            String valueType = text(item.path("value_type"));
+            JsonNode value = item.path("value");
+            if (!"currency_range".equalsIgnoreCase(valueType) || !value.isObject()) {
+                continue;
+            }
+            String unit = text(value.path("unit"));
+            String min = text(value.path("min_value"));
+            String max = text(value.path("max_value"));
+            if (unit.isBlank() || isZeroAmount(min) || isZeroAmount(max)) {
+                continue;
+            }
+            String candidate = unit.toUpperCase(Locale.ROOT) + " " + formatSalaryAmount(min)
+                    + " - " + formatSalaryAmount(max);
+            if (unit.equalsIgnoreCase(preferredCurrency)) {
+                return candidate;
+            }
+            if (fallback.isBlank()) {
+                fallback = candidate;
+            }
+        }
+        return fallback;
+    }
+
+    private String preferredCurrency(String country) {
+        if ("United Kingdom".equalsIgnoreCase(country)) return "GBP";
+        if ("Canada".equalsIgnoreCase(country)) return "CAD";
+        if ("Australia".equalsIgnoreCase(country)) return "AUD";
+        if ("India".equalsIgnoreCase(country)) return "INR";
+        if ("Japan".equalsIgnoreCase(country)) return "JPY";
+        if ("South Korea".equalsIgnoreCase(country)) return "KRW";
+        if ("Singapore".equalsIgnoreCase(country)) return "SGD";
+        if ("Germany".equalsIgnoreCase(country) || "France".equalsIgnoreCase(country)
+                || "Spain".equalsIgnoreCase(country) || "Ireland".equalsIgnoreCase(country)
+                || "Netherlands".equalsIgnoreCase(country) || "Italy".equalsIgnoreCase(country)) {
+            return "EUR";
+        }
+        return "USD";
+    }
+
+    private boolean isZeroAmount(String value) {
+        if (value == null || value.isBlank()) {
+            return true;
+        }
+        try {
+            return Double.parseDouble(value.replace(",", "")) <= 0;
+        } catch (NumberFormatException exception) {
+            return false;
+        }
+    }
+
+    private String formatSalaryAmount(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        try {
+            return new DecimalFormat(SALARY_FORMAT_PATTERN).format(Double.parseDouble(value.replace(",", "")));
+        } catch (NumberFormatException exception) {
+            return value.trim();
+        }
     }
 
     private String firstSalaryMatch(String text) {
         if (text == null || text.isBlank()) {
             return "";
         }
-        Matcher betweenMatcher = BROAD_SALARY_BETWEEN_PATTERN.matcher(text);
-        if (betweenMatcher.find()) {
-            return betweenMatcher.group();
+        Matcher betweenMatcher = NORMALIZED_SALARY_BETWEEN_PATTERN.matcher(text);
+        while (betweenMatcher.find()) {
+            String salary = canonicalSalaryRange(betweenMatcher);
+            if (!salary.isBlank()) {
+                return salary;
+            }
         }
-        Matcher rangeMatcher = BROAD_SALARY_RANGE_PATTERN.matcher(text);
-        if (rangeMatcher.find()) {
-            return rangeMatcher.group();
-        }
-        Matcher trailingCurrencyMatcher = BROAD_SALARY_TRAILING_CURRENCY_PATTERN.matcher(text);
-        if (trailingCurrencyMatcher.find()) {
-            return trailingCurrencyMatcher.group();
+        Matcher rangeMatcher = NORMALIZED_SALARY_RANGE_PATTERN.matcher(text);
+        while (rangeMatcher.find()) {
+            String salary = canonicalSalaryRange(rangeMatcher);
+            if (!salary.isBlank()) {
+                return salary;
+            }
         }
         return "";
+    }
+
+    private String canonicalSalaryRange(Matcher matcher) {
+        String currency = firstNonBlank(matcher.group(1), matcher.group(3), matcher.group(5));
+        if (currency.isBlank()) {
+            return "";
+        }
+        return currency.toUpperCase(Locale.ROOT) + " "
+                + cleanSalaryAmount(matcher.group(2)) + " - " + cleanSalaryAmount(matcher.group(4));
+    }
+
+    private String cleanSalaryAmount(String amount) {
+        return SPACE_PATTERN.matcher(amount == null ? "" : amount.trim()).replaceAll(" ");
+    }
+
+    private String normalizeSalarySearchText(String value) {
+        String normalized = htmlUnescapeRepeated(value == null ? "" : value);
+        normalized = normalized.replace("&mdash;", "-")
+                .replace("&ndash;", "-")
+                .replace(String.valueOf((char) 0x2013), "-")
+                .replace(String.valueOf((char) 0x2014), "-")
+                .replace(String.valueOf((char) 0x00A3), " GBP ")
+                .replace(String.valueOf(Character.toChars(0x20B9)), " INR ")
+                .replace(String.valueOf((char) 0x00A5), " JPY ")
+                .replace(String.valueOf(Character.toChars(0x20AC)), " EUR ")
+                .replace("$", " USD ");
+        return SPACE_PATTERN.matcher(normalized).replaceAll(" ").trim();
     }
 
     private String normalizeSalaryRange(String value) {
@@ -892,9 +1037,42 @@ public class GreenhouseJobProviderService {
     }
 
     private String stripHtml(String value) {
-        String unescaped = HtmlUtils.htmlUnescape(value == null ? "" : value);
+        String unescaped = htmlUnescapeRepeated(value == null ? "" : value);
         String withoutTags = HTML_TAG_PATTERN.matcher(unescaped).replaceAll(" ");
         return SPACE_PATTERN.matcher(withoutTags.replace("&nbsp;", " ")).replaceAll(" ").trim();
+    }
+
+    private String htmlUnescapeRepeated(String value) {
+        String current = value == null ? "" : value;
+        for (int i = 0; i < 3; i++) {
+            String next = HtmlUtils.htmlUnescape(current);
+            if (next.equals(current)) {
+                return next;
+            }
+            current = next;
+        }
+        return current;
+    }
+
+    private boolean containsAny(String value, String... candidates) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        for (String candidate : candidates) {
+            if (candidate != null && !candidate.isBlank() && value.contains(candidate)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return "";
     }
 
     private String text(JsonNode node) {

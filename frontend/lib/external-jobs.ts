@@ -72,8 +72,7 @@ export async function previewGreenhouseJobs(params: ExternalJobImportRequest): P
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Greenhouse preview request failed.");
+    throw new Error(await readApiError(response, "Greenhouse preview request failed."));
   }
 
   return response.json();
@@ -87,8 +86,7 @@ export async function importGreenhouseJobs(request: ExternalJobImportRequest): P
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Greenhouse import request failed.");
+    throw new Error(await readApiError(response, "Greenhouse import request failed."));
   }
 
   return response.json();
@@ -101,8 +99,7 @@ export async function fetchGreenhouseSyncStatus(): Promise<ExternalJobSyncStatus
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Greenhouse sync status request failed.");
+    throw new Error(await readApiError(response, "Greenhouse sync status request failed."));
   }
 
   return response.json();
@@ -115,8 +112,7 @@ export async function runGreenhouseSync(): Promise<ExternalJobSyncStatus> {
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Greenhouse sync request failed.");
+    throw new Error(await readApiError(response, "Greenhouse sync request failed."));
   }
 
   return response.json();
@@ -127,4 +123,20 @@ function adminHeaders() {
   return {
     "X-Careerlens-User-Role": user?.role ?? "USER"
   };
+}
+
+async function readApiError(response: Response, fallback: string) {
+  const text = await response.text();
+  if (response.status === 404) {
+    return "Greenhouse 공개 Job Board API에서 해당 board token을 찾을 수 없습니다. 회사 채용 페이지가 Greenhouse여도 공개 API를 닫았거나 새 job-boards 도메인만 쓰는 경우가 있습니다.";
+  }
+  if (!text) {
+    return fallback;
+  }
+  try {
+    const parsed = JSON.parse(text) as { message?: string; error?: string };
+    return parsed.message || parsed.error || fallback;
+  } catch {
+    return text;
+  }
 }

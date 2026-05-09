@@ -62,7 +62,7 @@ app:
       timeout-seconds: ${GREENHOUSE_TIMEOUT_SECONDS:12}
       sync:
         enabled: ${GREENHOUSE_SYNC_ENABLED:false}
-        board-tokens: ${GREENHOUSE_SYNC_BOARD_TOKENS:airbnb,stripe,reddit,databricks,figma,notion,coinbase,greenhouse,anthropic,doordashusa}
+        board-tokens: ${GREENHOUSE_SYNC_BOARD_TOKENS:airbnb,stripe,reddit,databricks,figma,greenhouse,anthropic,doordashusa,asana,discord,duolingo,gitlab,mixpanel,webflow}
         default-country: ${GREENHOUSE_SYNC_DEFAULT_COUNTRY:ALL}
         default-job-family: ${GREENHOUSE_SYNC_DEFAULT_JOB_FAMILY:ALL}
         limit-per-board: ${GREENHOUSE_SYNC_LIMIT_PER_BOARD:50}

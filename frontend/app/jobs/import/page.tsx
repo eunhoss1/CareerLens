@@ -197,7 +197,7 @@ export default function JobImportPage() {
             <p className="text-xs font-bold tracking-[0.16em] text-brand">PROVIDER CONFIG</p>
             <h2 className="mt-2 text-lg font-semibold text-night">Greenhouse Board Token</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              예시로 `airbnb`, `doordash`, `reddit`처럼 Greenhouse 채용 페이지의 board token을 넣어 확인합니다. 국가/직무군은 실제 필터로 적용됩니다.
+              예시로 `airbnb`, `doordashusa`, `reddit`처럼 Greenhouse 채용 페이지의 board token을 넣어 확인합니다. 국가/직무군은 실제 필터로 적용됩니다.
             </p>
             <div className="mt-5 space-y-4">
               <div>
