@@ -63,7 +63,7 @@ export default function QnaPage() {
         </div>
 
         <div className="mt-6">
-          <ResourceBoard posts={qnaBoardPosts} emptyMessage="조건에 맞는 질문이 없습니다." />
+          <ResourceBoard posts={qnaBoardPosts} apiType="QNA" emptyMessage="조건에 맞는 질문이 없습니다." />
         </div>
 
         <Card className="mt-6 p-5">

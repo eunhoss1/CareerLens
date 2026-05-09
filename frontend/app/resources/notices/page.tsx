@@ -55,7 +55,7 @@ export default function NoticesPage() {
         </div>
 
         <div className="mt-6">
-          <ResourceBoard posts={noticeBoardPosts} />
+          <ResourceBoard posts={noticeBoardPosts} apiType="NOTICE" />
         </div>
 
         <Card className="mt-6 p-5">

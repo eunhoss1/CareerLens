@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge, Card, TextInput } from "@/components/ui";
 
 export type ResourceBoardPost = {
@@ -22,19 +22,59 @@ export type ResourceBoardPost = {
 
 export function ResourceBoard({
   posts,
+  apiType,
   emptyMessage = "조건에 맞는 게시글이 없습니다."
 }: {
   posts: ResourceBoardPost[];
+  apiType?: "NOTICE" | "QNA" | "COUNTRY" | "VISA";
   emptyMessage?: string;
 }) {
-  const categories = useMemo(() => ["전체", ...Array.from(new Set(posts.map((post) => post.category)))], [posts]);
+  const [loadedPosts, setLoadedPosts] = useState<ResourceBoardPost[]>(posts);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("전체");
   const [selectedId, setSelectedId] = useState(posts[0]?.id ?? "");
 
+  useEffect(() => {
+    setLoadedPosts(posts);
+    setSelectedId(posts[0]?.id ?? "");
+  }, [posts]);
+
+  useEffect(() => {
+    if (!apiType) {
+      return;
+    }
+    const controller = new AbortController();
+    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+
+    async function loadPosts() {
+      try {
+        const response = await fetch(`${baseUrl}/api/resources/posts?type=${apiType}`, {
+          cache: "no-store",
+          signal: controller.signal
+        });
+        if (!response.ok) {
+          return;
+        }
+        const data = (await response.json()) as ResourcePostApiResponse[];
+        const nextPosts = data.map(toBoardPost);
+        if (nextPosts.length > 0) {
+          setLoadedPosts(nextPosts);
+          setSelectedId(nextPosts[0].id);
+        }
+      } catch {
+        // 백엔드가 꺼져 있어도 자료실 시연은 정적 데이터 fallback으로 계속 동작한다.
+      }
+    }
+
+    loadPosts();
+    return () => controller.abort();
+  }, [apiType]);
+
+  const categories = useMemo(() => ["전체", ...Array.from(new Set(loadedPosts.map((post) => post.category)))], [loadedPosts]);
+
   const filteredPosts = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return posts.filter((post) => {
+    return loadedPosts.filter((post) => {
       const categoryMatched = category === "전체" || post.category === category;
       const queryMatched =
         !normalizedQuery ||
@@ -44,9 +84,9 @@ export function ResourceBoard({
           .includes(normalizedQuery);
       return categoryMatched && queryMatched;
     });
-  }, [category, posts, query]);
+  }, [category, loadedPosts, query]);
 
-  const selectedPost = filteredPosts.find((post) => post.id === selectedId) ?? filteredPosts[0] ?? posts[0];
+  const selectedPost = filteredPosts.find((post) => post.id === selectedId) ?? filteredPosts[0] ?? loadedPosts[0];
 
   return (
     <section className="grid gap-5 xl:grid-cols-[1fr_380px]">
@@ -168,4 +208,40 @@ export function ResourceBoard({
       </Card>
     </section>
   );
+}
+
+type ResourcePostApiResponse = {
+  id: number;
+  type: string;
+  category: string;
+  title: string;
+  date: string;
+  summary: string;
+  body: string[];
+  author: string;
+  views: number;
+  priority?: string;
+  status?: string;
+  pinned?: boolean;
+  tags?: string[];
+  related_href?: string;
+  relatedHref?: string;
+};
+
+function toBoardPost(post: ResourcePostApiResponse): ResourceBoardPost {
+  return {
+    id: String(post.id),
+    category: post.category,
+    title: post.title,
+    date: post.date,
+    summary: post.summary,
+    body: post.body ?? [],
+    author: post.author,
+    views: post.views ?? 0,
+    priority: post.priority,
+    status: post.status,
+    pinned: Boolean(post.pinned),
+    tags: post.tags ?? [],
+    relatedHref: post.related_href ?? post.relatedHref
+  };
 }
