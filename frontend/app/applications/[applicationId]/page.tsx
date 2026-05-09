@@ -23,6 +23,21 @@ import {
   type ApplicationStatus
 } from "@/lib/applications";
 
+type AssistantStatus = "READY" | "CHECK" | "AI_DRAFT" | "EXTERNAL" | "SENSITIVE";
+
+type AssistantField = {
+  label: string;
+  description: string;
+  status: AssistantStatus;
+  source: string;
+};
+
+type AssistantSection = {
+  title: string;
+  description: string;
+  fields: AssistantField[];
+};
+
 const statusOptions: Array<{ value: ApplicationStatus; label: string; description: string }> = [
   { value: "INTERESTED", label: "관심 공고", description: "지원 후보로 저장" },
   { value: "PREPARING_DOCUMENTS", label: "서류 준비", description: "제출 패키지 정리" },
@@ -58,6 +73,21 @@ export default function ApplicationWorkspacePage() {
   const completedDocuments = useMemo(() => {
     return record?.document_checklist.filter((item) => item.status === "DONE" || item.status === "VERIFIED").length ?? 0;
   }, [record]);
+
+  const assistantSections = useMemo(() => {
+    return record ? buildApplyAssistant(record) : [];
+  }, [record]);
+
+  const assistantSummary = useMemo(() => {
+    const fields = assistantSections.flatMap((section) => section.fields);
+    return {
+      total: fields.length,
+      ready: fields.filter((field) => field.status === "READY").length,
+      aiDraft: fields.filter((field) => field.status === "AI_DRAFT").length,
+      check: fields.filter((field) => field.status === "CHECK").length,
+      sensitive: fields.filter((field) => field.status === "SENSITIVE").length
+    };
+  }, [assistantSections]);
 
   async function changeStatus(status: ApplicationStatus) {
     if (!record) return;
@@ -99,7 +129,7 @@ export default function ApplicationWorkspacePage() {
       <PageHeader
         kicker="APPLICATION WORKSPACE"
         title="지원 워크스페이스"
-        description="공고 원문, 제출 서류, 로드맵 진행도, 다음 액션을 한 화면에서 관리합니다. 실제 제출은 공식 Apply 페이지에서 진행합니다."
+        description="공고 원문, 제출 서류, 로드맵 진행도, 실제 Apply Form 준비 항목을 한 화면에서 관리합니다. CareerLens는 지원서 작성을 보조하고, 최종 제출은 공식 Apply 페이지에서 진행합니다."
         actions={
           <>
             <LinkButton href="/applications" variant="secondary">지원관리 목록</LinkButton>
@@ -137,7 +167,9 @@ export default function ApplicationWorkspacePage() {
                 </div>
                 <p className="mt-4 text-sm font-semibold text-brand">{record.company_name}</p>
                 <h1 className="mt-1 text-2xl font-semibold leading-8 text-night">{record.job_title}</h1>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{record.country} · {record.work_type} · {record.salary_range || "연봉 미기재"}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {record.country} · {record.work_type} · {record.salary_range || "연봉 미기재"}
+                </p>
 
                 <div className="mt-5 grid grid-cols-2 gap-3">
                   <MetricCard label="지원 준비도" value={`${record.readiness_score}점`} />
@@ -171,6 +203,16 @@ export default function ApplicationWorkspacePage() {
                       <span className={`mt-1 block text-xs ${record.status === option.value ? "text-white/75" : "text-slate-500"}`}>{option.description}</span>
                     </button>
                   ))}
+                </div>
+              </Card>
+
+              <Card className="p-5">
+                <p className="lens-kicker">APPLY FORM</p>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <MetricCard label="확인 항목" value={`${assistantSummary.total}개`} />
+                  <MetricCard label="AI 초안" value={`${assistantSummary.aiDraft}개`} />
+                  <MetricCard label="확인 필요" value={`${assistantSummary.check}개`} />
+                  <MetricCard label="민감정보 제외" value={`${assistantSummary.sensitive}개`} />
                 </div>
               </Card>
             </aside>
@@ -213,6 +255,32 @@ export default function ApplicationWorkspacePage() {
                       <p className="mt-2 text-sm leading-6 text-slate-600">{item.helper_text}</p>
                     </div>
                   ))}
+                </div>
+              </Card>
+
+              <Card className="p-5">
+                <SectionHeader
+                  kicker="APPLY FORM ASSISTANT"
+                  title="실제 지원서 입력 항목 대비표"
+                  description="Webflow, Mixpanel, GitLab, Duolingo, Discord, Asana, DoorDash, Figma, Databricks, Reddit, Anthropic 지원폼에서 반복되는 공통 구조를 기준으로 준비 항목을 나눴습니다."
+                  actions={<LinkButton href="/roadmap/employment/documents" variant="secondary">AI 답변 초안 준비</LinkButton>}
+                />
+                <div className="mt-5 grid gap-3 md:grid-cols-5">
+                  <MetricCard label="자동/프로필 기반" value={`${assistantSummary.ready}개`} helper="마이페이지 정보로 준비 가능" />
+                  <MetricCard label="사용자 확인" value={`${assistantSummary.check}개`} helper="외부 Apply에서 직접 확인" />
+                  <MetricCard label="AI 초안" value={`${assistantSummary.aiDraft}개`} helper="Why/Additional 답변" />
+                  <MetricCard label="외부 입력" value={`${assistantSummary.total - assistantSummary.ready - assistantSummary.check - assistantSummary.aiDraft - assistantSummary.sensitive}개`} helper="파일/ATS 입력" />
+                  <MetricCard label="민감정보" value={`${assistantSummary.sensitive}개`} helper="자동화 제외" />
+                </div>
+
+                <div className="mt-5 space-y-4">
+                  {assistantSections.map((section) => (
+                    <ApplyAssistantSection key={section.title} section={section} />
+                  ))}
+                </div>
+
+                <div className="mt-5 border border-amber/30 bg-amber-50 p-4 text-sm leading-6 text-amber">
+                  EEO, 장애, 군복무, 성별, 인종/민족, 성적 지향 등 선택형 인구통계 항목은 민감정보입니다. CareerLens는 해당 항목을 자동 작성하거나 추천하지 않고, 사용자가 외부 Apply 페이지에서 직접 판단하도록 안내합니다.
                 </div>
               </Card>
 
@@ -269,6 +337,34 @@ export default function ApplicationWorkspacePage() {
   );
 }
 
+function ApplyAssistantSection({ section }: { section: AssistantSection }) {
+  return (
+    <section className="border border-line bg-panel p-4">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-night">{section.title}</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-600">{section.description}</p>
+        </div>
+        <Badge tone="muted">{section.fields.length}개 항목</Badge>
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        {section.fields.map((field) => (
+          <div key={`${section.title}-${field.label}`} className="border border-line bg-white p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-night">{field.label}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{field.source}</p>
+              </div>
+              <Badge tone={assistantTone(field.status)}>{assistantLabel(field.status)}</Badge>
+            </div>
+            <p className="mt-3 text-sm leading-6 text-slate-700">{field.description}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function InfoBox({ label, value }: { label: string; value: string }) {
   return (
     <div className="border border-line bg-white p-3">
@@ -292,6 +388,180 @@ function Checklist({ title, items, tone }: { title: string; items: string[]; ton
       </div>
     </div>
   );
+}
+
+function buildApplyAssistant(record: ApplicationRecord): AssistantSection[] {
+  const company = record.company_name || "지원 기업";
+  const jobTitle = record.job_title || "지원 직무";
+  const hasPortfolio = record.document_checklist.some((item) => item.key === "portfolio" && (item.status === "DONE" || item.status === "VERIFIED"));
+  const hasGithub = record.document_checklist.some((item) => item.key === "github" && item.status === "VERIFIED");
+  const hasResume = record.document_checklist.some((item) => item.key === "resume" && (item.status === "DONE" || item.status === "VERIFIED"));
+  const visaUnclear = !record.risk_notes.every((note) => !note.includes("비자"));
+
+  return [
+    {
+      title: "기본 정보",
+      description: "대부분의 ATS에서 반복되는 이름, 이메일, 연락처, 현재 위치 항목입니다.",
+      fields: [
+        {
+          label: "First Name / Last Name",
+          description: "회원 기본 정보와 영문 표기명을 기준으로 외부 Apply 페이지에 직접 입력합니다.",
+          status: "READY",
+          source: "Webflow, GitLab, Discord, DoorDash, Figma 공통"
+        },
+        {
+          label: "Email / Phone / Country",
+          description: "마이페이지의 이메일, 국가, 전화번호 정보를 기준으로 확인합니다. 전화번호 국가 코드는 외부 Apply에서 직접 검토해야 합니다.",
+          status: "CHECK",
+          source: "모든 샘플 Apply Form 공통"
+        },
+        {
+          label: "Location / City",
+          description: "근무 가능 지역, 현재 거주지, 재배치 의사를 묻는 항목과 연결됩니다.",
+          status: "CHECK",
+          source: "Webflow, Discord, Asana, Figma 공통"
+        }
+      ]
+    },
+    {
+      title: "제출 자료",
+      description: "Resume/CV, Cover Letter, LinkedIn, Website, GitHub 등 제출 패키지 준비 상태입니다.",
+      fields: [
+        {
+          label: "Resume / CV",
+          description: hasResume ? "이력서 준비 기록이 있습니다. 외부 Apply에는 파일 업로드 또는 직접 입력 방식으로 제출합니다." : "영문 이력서 준비가 필요합니다. AI 문서 분석에서 공고 키워드 반영 여부를 먼저 확인하세요.",
+          status: hasResume ? "READY" : "CHECK",
+          source: "모든 샘플 Apply Form 공통"
+        },
+        {
+          label: "Cover Letter / Additional Information",
+          description: `${company}와 ${jobTitle}에 맞춘 커버레터 또는 추가 설명 문장은 AI 초안 생성 대상으로 분리하는 것이 좋습니다.`,
+          status: "AI_DRAFT",
+          source: "Webflow, Mixpanel, GitLab, Discord, Asana, DoorDash, Reddit 공통"
+        },
+        {
+          label: "LinkedIn Profile",
+          description: "대부분 선택 또는 필수에 가깝게 요구됩니다. 프로필 URL과 이력서 내용의 일관성을 확인하세요.",
+          status: "CHECK",
+          source: "GitLab, Discord, Asana, DoorDash, Figma, Databricks, Reddit 공통"
+        },
+        {
+          label: "Website / GitHub / Portfolio",
+          description: hasGithub || hasPortfolio ? "프로젝트 링크 준비 기록이 있습니다. README와 대표 성과가 공고 요구 기술과 연결되는지 확인하세요." : "포트폴리오 또는 GitHub 검증 기록이 부족합니다. AI 문서 분석/GitHub 검증으로 보강하세요.",
+          status: hasGithub || hasPortfolio ? "READY" : "CHECK",
+          source: "Webflow, Figma, Asana, Databricks 공통"
+        }
+      ]
+    },
+    {
+      title: "근무 조건 / 비자",
+      description: "해외취업 지원에서 반복적으로 등장하는 근무 자격, 비자 스폰서십, 시작 가능 시점, 재배치 관련 항목입니다.",
+      fields: [
+        {
+          label: "Work Authorization",
+          description: "지원 국가에서 합법적으로 근무 가능한지 묻는 항목입니다. 사용자가 직접 사실관계를 확인해야 합니다.",
+          status: "CHECK",
+          source: "Webflow, Mixpanel, GitLab, Discord, DoorDash, Figma, Databricks, Reddit 공통"
+        },
+        {
+          label: "Visa Sponsorship",
+          description: visaUnclear ? "공고의 비자 조건이 명확하지 않습니다. 외부 Apply의 스폰서십 질문을 직접 확인하세요." : "비자 조건 메모를 기준으로 답변 방향을 정리하되, 최종 선택은 사용자가 직접 해야 합니다.",
+          status: "CHECK",
+          source: "Anthropic, Webflow, GitLab, DoorDash, Databricks, Reddit 공통"
+        },
+        {
+          label: "Start Date / Timeline",
+          description: "입사 가능 시점과 개인 일정 제약을 묻는 항목입니다. 마이페이지 입사 가능 시점과 일치하는지 확인합니다.",
+          status: "CHECK",
+          source: "Anthropic, DoorDash, Asana 계열 폼에서 반복"
+        },
+        {
+          label: "Relocation / Office Availability",
+          description: "현지 오피스 근무, 하이브리드, 재배치 가능 여부를 묻습니다. 공고의 근무 형태와 사용자 선호 조건을 비교하세요.",
+          status: "CHECK",
+          source: "Anthropic, Discord, Figma, DoorDash 공통"
+        }
+      ]
+    },
+    {
+      title: "회사별 질문",
+      description: "회사마다 표현은 다르지만 Why company, How did you hear, Previous employment/interview 질문이 반복됩니다.",
+      fields: [
+        {
+          label: `Why ${company}?`,
+          description: `${company}의 제품/시장/기술 방향과 본인의 프로젝트 경험을 연결하는 200~400단어 답변 초안을 준비합니다.`,
+          status: "AI_DRAFT",
+          source: "Anthropic, Discord, Figma, Duolingo 공통"
+        },
+        {
+          label: "Why this role?",
+          description: `${jobTitle} 공고의 요구 기술과 본인 경험을 연결하는 답변입니다. 추천 진단의 강점/부족 요소를 근거로 삼을 수 있습니다.`,
+          status: "AI_DRAFT",
+          source: "회사별 직무 질문으로 반복"
+        },
+        {
+          label: "How did you hear about this job?",
+          description: "Greenhouse 공개 공고, 회사 채용 페이지, LinkedIn 등 실제 유입 경로를 사용자가 직접 선택합니다.",
+          status: "EXTERNAL",
+          source: "Webflow, Mixpanel, Duolingo, Databricks, Reddit 공통"
+        },
+        {
+          label: "Previous employment / interview",
+          description: "해당 회사에서 근무했거나 이전에 인터뷰한 적이 있는지 묻는 항목입니다. 사실 기반으로 직접 입력해야 합니다.",
+          status: "EXTERNAL",
+          source: "GitLab, Figma, DoorDash, Reddit 공통"
+        }
+      ]
+    },
+    {
+      title: "직무별 검증 질문",
+      description: "경력 연차, 특정 기술 경험, 보안/수출통제, 기술 평가 선호 언어 같은 직무 검증 질문입니다.",
+      fields: [
+        {
+          label: "Years of Experience",
+          description: `${record.job_family} 직무 관련 경력 연차를 확인합니다. 공고 최소 경력과 실제 프로젝트 경력을 구분해서 준비하세요.`,
+          status: "CHECK",
+          source: "GitLab, Figma, DoorDash, Anthropic 공통"
+        },
+        {
+          label: "Role-specific Skills",
+          description: "Python, LLM, AI tools, infrastructure, engineering management 등 공고별 핵심 기술 질문에 대비합니다.",
+          status: "AI_DRAFT",
+          source: "Anthropic, Duolingo, GitLab, Figma, Databricks 공통"
+        },
+        {
+          label: "Security / Export / Sanctions",
+          description: "보안 인가, 제재 국가, 정부기관 근무 이력 등 법적 확인 항목은 사용자가 직접 사실 기반으로 답해야 합니다.",
+          status: "EXTERNAL",
+          source: "Anthropic, Asana, Databricks 공통"
+        }
+      ]
+    },
+    {
+      title: "민감정보 / 선택 정보",
+      description: "EEO, 장애, 군복무, 성별, 인종/민족 등 선택형 인구통계 항목입니다.",
+      fields: [
+        {
+          label: "Gender / Race / Ethnicity",
+          description: "채용 판단에 사용되지 않는 선택형 인구통계 항목입니다. CareerLens는 자동 추천하거나 작성하지 않습니다.",
+          status: "SENSITIVE",
+          source: "미국 소재 Greenhouse/ATS Apply Form에서 반복"
+        },
+        {
+          label: "Veteran / Disability Status",
+          description: "법적 고지와 함께 제공되는 선택 항목입니다. 사용자가 외부 Apply 페이지에서 직접 판단해야 합니다.",
+          status: "SENSITIVE",
+          source: "Webflow, Mixpanel, GitLab, Figma, Databricks 공통"
+        },
+        {
+          label: "LGBTQ+ / Pronouns / Preferred Name",
+          description: "선택형 자기 식별 정보입니다. 선호 이름이나 발음 표기는 사용자가 원하는 경우 직접 입력합니다.",
+          status: "SENSITIVE",
+          source: "Webflow, Mixpanel, Asana, Reddit 공통"
+        }
+      ]
+    }
+  ];
 }
 
 function statusLabel(status: ApplicationStatus) {
@@ -327,6 +597,22 @@ function documentLabel(status: string) {
 function documentTone(status: string) {
   if (status === "VERIFIED") return "brand";
   if (status === "DONE") return "success";
+  return "muted";
+}
+
+function assistantLabel(status: AssistantStatus) {
+  if (status === "READY") return "준비 가능";
+  if (status === "CHECK") return "확인 필요";
+  if (status === "AI_DRAFT") return "AI 초안";
+  if (status === "SENSITIVE") return "자동화 제외";
+  return "외부 입력";
+}
+
+function assistantTone(status: AssistantStatus) {
+  if (status === "READY") return "success";
+  if (status === "AI_DRAFT") return "brand";
+  if (status === "CHECK") return "warning";
+  if (status === "SENSITIVE") return "risk";
   return "muted";
 }
 
