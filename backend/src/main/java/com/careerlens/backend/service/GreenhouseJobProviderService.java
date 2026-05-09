@@ -184,8 +184,8 @@ public class GreenhouseJobProviderService {
         String location = locationFor(job);
         String sourceUrl = text(job.path("absolute_url"));
         String textForAnalysis = (title + " " + content + " " + location).toLowerCase(Locale.ROOT);
-        String country = blankToDefault(defaultCountry, inferCountry(location));
-        String jobFamily = blankToDefault(defaultJobFamily, inferJobFamily(textForAnalysis));
+        String country = fallback(inferCountry(location), defaultCountry, "United States");
+        String jobFamily = fallback(inferJobFamily(textForAnalysis), defaultJobFamily, "Backend");
         List<String> requiredSkills = extractSkills(textForAnalysis, jobFamily, true);
         List<String> preferredSkills = extractSkills(textForAnalysis, jobFamily, false);
         List<String> languages = extractLanguages(textForAnalysis, country);
@@ -413,6 +413,15 @@ public class GreenhouseJobProviderService {
     }
 
     private String inferJobFamily(String text) {
+        if (text.contains("machine learning") || text.contains(" ai ") || text.contains("artificial intelligence")
+                || text.contains("ml engineer") || text.contains("llm") || text.contains("deep learning")
+                || text.contains("pytorch") || text.contains("tensorflow") || text.contains("model training")) {
+            return "AI/ML";
+        }
+        if (text.contains("data engineer") || text.contains("analytics engineer") || text.contains("data platform")
+                || text.contains("warehouse") || text.contains("etl") || text.contains("spark")) {
+            return "Data";
+        }
         if (text.contains("frontend") || text.contains("front-end") || text.contains("react") || text.contains("ui engineer")) {
             return "Frontend";
         }
@@ -420,7 +429,7 @@ public class GreenhouseJobProviderService {
                 || text.contains("distributed systems") || text.contains("api")) {
             return "Backend";
         }
-        return "Backend";
+        return "";
     }
 
     private String inferDegree(String text) {
@@ -503,8 +512,14 @@ public class GreenhouseJobProviderService {
         return node.asText("");
     }
 
-    private String blankToDefault(String value, String defaultValue) {
-        return value == null || value.isBlank() ? defaultValue : value.trim();
+    private String fallback(String primary, String secondary, String defaultValue) {
+        if (primary != null && !primary.isBlank()) {
+            return primary.trim();
+        }
+        if (secondary != null && !secondary.isBlank()) {
+            return secondary.trim();
+        }
+        return defaultValue;
     }
 
     private String humanizeBoardToken(String boardToken) {

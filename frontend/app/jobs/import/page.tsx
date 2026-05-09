@@ -136,6 +136,8 @@ export default function JobImportPage() {
               >
                 <option value="Backend">백엔드</option>
                 <option value="Frontend">프론트엔드</option>
+                <option value="AI/ML">AI/ML</option>
+                <option value="Data">데이터</option>
               </SelectInput>
               <TextInput
                 label="가져올 개수"
