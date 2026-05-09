@@ -8,13 +8,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class AiExplanationService {
 
+    private static final int SUMMARY_MATCHED_SKILL_LIMIT = 3;
+    private static final int SUMMARY_MISSING_ITEM_LIMIT = 2;
+
     public String buildRecommendationSummary(JobPosting job, int totalScore, List<String> matchedSkills, List<String> missingItems) {
-        String skillText = matchedSkills.isEmpty()
-                ? "아직 강하게 일치하는 핵심 기술은 적지만"
-                : String.join(", ", matchedSkills.subList(0, Math.min(3, matchedSkills.size()))) + " 역량이 공고 패턴과 맞고";
-        String gapText = missingItems.isEmpty()
-                ? "큰 결격 요소가 적습니다"
-                : "보완할 항목은 " + String.join(", ", missingItems.subList(0, Math.min(2, missingItems.size()))) + "입니다";
+        String skillText = recommendationSkillText(matchedSkills);
+        String gapText = recommendationGapText(missingItems);
         return "%s의 %s 포지션은 %s 총 적합도 %d점으로 추천됩니다. %s."
                 .formatted(job.getCompanyName(), job.getJobTitle(), skillText, totalScore, gapText);
     }
@@ -29,5 +28,23 @@ public class AiExplanationService {
         }
         String focus = missingItems.isEmpty() ? "핵심 역량" : missingItems.get(0);
         return "현재는 장기 준비가 필요합니다. " + focus + "부터 로드맵에 넣고 기초 역량과 검증 자료를 쌓는 것이 우선입니다.";
+    }
+
+    private String recommendationSkillText(List<String> matchedSkills) {
+        if (matchedSkills.isEmpty()) {
+            return "아직 강하게 일치하는 핵심 기술은 적지만";
+        }
+        return String.join(", ", firstItems(matchedSkills, SUMMARY_MATCHED_SKILL_LIMIT)) + " 역량이 공고 패턴과 맞고";
+    }
+
+    private String recommendationGapText(List<String> missingItems) {
+        if (missingItems.isEmpty()) {
+            return "큰 결격 요소가 적습니다";
+        }
+        return "보완할 항목은 " + String.join(", ", firstItems(missingItems, SUMMARY_MISSING_ITEM_LIMIT)) + "입니다";
+    }
+
+    private List<String> firstItems(List<String> values, int limit) {
+        return values.subList(0, Math.min(limit, values.size()));
     }
 }

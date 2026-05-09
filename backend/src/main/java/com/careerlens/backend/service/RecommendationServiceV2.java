@@ -33,6 +33,57 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RecommendationServiceV2 {
 
+    private static final int MAX_RECOMMENDATIONS = 5;
+    private static final int MAX_MISSING_CORE_SKILLS = 4;
+    private static final int MAX_LANGUAGE_LEVEL_GAP = 1;
+    private static final int MAX_EXPERIENCE_YEAR_GAP = 2;
+
+    private static final int DEFAULT_LANGUAGE_RANK = 1;
+    private static final int DEFAULT_TOTAL_WEIGHT = 20;
+    private static final int PRIORITY_WEIGHT_BONUS = 12;
+
+    private static final int FULL_SCORE = 100;
+    private static final int DEFAULT_SALARY_SCORE = 60;
+    private static final int DEFAULT_WORK_LIFE_BALANCE_SCORE = 60;
+    private static final int DEFAULT_COMPANY_VALUE_SCORE = 75;
+
+    private static final int DEFAULT_PROBABILITY_WEIGHT = 30;
+    private static final int DEFAULT_SALARY_WEIGHT = 15;
+    private static final int DEFAULT_WORK_LIFE_BALANCE_WEIGHT = 15;
+    private static final int DEFAULT_COMPANY_VALUE_WEIGHT = 15;
+    private static final int DEFAULT_JOB_FIT_WEIGHT = 25;
+
+    private static final double CORE_SKILL_SCORE_WEIGHT = 0.75;
+    private static final double PREFERRED_SKILL_SCORE_WEIGHT = 0.25;
+    private static final double JOB_FIT_SKILL_WEIGHT = 0.55;
+    private static final double JOB_FIT_EXPERIENCE_WEIGHT = 0.30;
+    private static final double JOB_FIT_PORTFOLIO_WEIGHT = 0.15;
+    private static final double ACCEPTANCE_JOB_FIT_WEIGHT = 0.55;
+    private static final double ACCEPTANCE_LANGUAGE_WEIGHT = 0.20;
+    private static final double ACCEPTANCE_EDUCATION_WEIGHT = 0.15;
+    private static final double ACCEPTANCE_PORTFOLIO_WEIGHT = 0.10;
+
+    private static final int EXPERIENCE_GAP_PENALTY = 22;
+    private static final int LANGUAGE_GAP_PENALTY = 25;
+    private static final int LANGUAGE_MISSING_THRESHOLD = 75;
+    private static final int EDUCATION_MISSING_THRESHOLD = 80;
+    private static final int PORTFOLIO_MISSING_THRESHOLD = 80;
+
+    private static final int IMMEDIATE_APPLY_THRESHOLD = 80;
+    private static final int PREPARE_THEN_APPLY_THRESHOLD = 60;
+    private static final int GRADE_A_THRESHOLD = 85;
+    private static final int GRADE_B_THRESHOLD = 70;
+    private static final int GRADE_C_THRESHOLD = 55;
+
+    private static final String DEMO_EMAIL = "demo@careerlens.local";
+    private static final String DEMO_DISPLAY_NAME = "CareerLens Demo User";
+    private static final String DEFAULT_EDUCATION = "Bachelor";
+    private static final String CATEGORY_SALARY = "연봉";
+    private static final String CATEGORY_ACCEPTANCE_PROBABILITY = "합격 가능성";
+    private static final String CATEGORY_WORK_LIFE_BALANCE = "워라밸";
+    private static final String CATEGORY_COMPANY_VALUE = "기업 가치";
+    private static final String CATEGORY_JOB_FIT = "직무 적합도";
+
     private static final Map<String, Integer> LANGUAGE_RANK = Map.of(
             "BASIC", 1,
             "CONVERSATIONAL", 2,
@@ -74,34 +125,24 @@ public class RecommendationServiceV2 {
 
     @Transactional(readOnly = true)
     public RecommendationDiagnosisResponseDto getLatestRecommendations(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
-        UserProfile profile = userProfileRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User profile not found: " + userId));
-        List<DiagnosisResult> results = diagnosisResultRepository.findTop5ByUserIdOrderByCreatedAtDesc(userId).stream()
-                .filter(this::hasUsableRecommendationResult)
-                .sorted(Comparator.comparing(DiagnosisResult::getTotalScore).reversed())
-                .collect(Collectors.toCollection(ArrayList::new));
+        User user = findUser(userId);
+        UserProfile profile = findProfile(userId);
+        List<DiagnosisResult> results = findLatestUsableResults(userId);
         return buildResponse(user, profile, results.size(), results, LocalDateTime.now());
     }
 
     @Transactional
     public RecommendationDiagnosisResponseDto diagnoseStoredProfile(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
-        UserProfile profile = userProfileRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User profile not found: " + userId));
+        User user = findUser(userId);
+        UserProfile profile = findProfile(userId);
         return diagnoseProfile(user, profile);
     }
 
     @Transactional
     public RecommendationDiagnosisResponseDto diagnoseStoredProfileForJob(Long userId, Long jobId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
-        UserProfile profile = userProfileRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User profile not found: " + userId));
-        JobPosting job = jobPostingRepository.findById(jobId)
-                .orElseThrow(() -> new IllegalArgumentException("Job posting not found: " + jobId));
+        User user = findUser(userId);
+        UserProfile profile = findProfile(userId);
+        JobPosting job = findJob(jobId);
         DiagnosisResult result = diagnoseJob(user, profile, job);
         if (result == null) {
             throw new IllegalStateException("PatternProfile not found for job posting: " + jobId);
@@ -112,22 +153,48 @@ public class RecommendationServiceV2 {
         return buildResponse(user, profile, 1, results, LocalDateTime.now());
     }
 
+    private User findUser(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+    }
+
+    private UserProfile findProfile(Long userId) {
+        return userProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User profile not found: " + userId));
+    }
+
+    private JobPosting findJob(Long jobId) {
+        return jobPostingRepository.findById(jobId)
+                .orElseThrow(() -> new IllegalArgumentException("Job posting not found: " + jobId));
+    }
+
+    private List<DiagnosisResult> findLatestUsableResults(Long userId) {
+        return diagnosisResultRepository.findTop5ByUserIdOrderByCreatedAtDesc(userId).stream()
+                .filter(this::hasUsableRecommendationResult)
+                .sorted(Comparator.comparing(DiagnosisResult::getTotalScore).reversed())
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
+
     private User upsertUser(UserProfileRequestDto request) {
         if (request.userId() != null) {
-            return userRepository.findById(request.userId())
-                    .orElseThrow(() -> new IllegalArgumentException("User not found: " + request.userId()));
+            return findUser(request.userId());
         }
 
-        String email = valueOrDefault(request.email(), "demo@careerlens.local");
+        String email = valueOrDefault(request.email(), DEMO_EMAIL);
         User user = userRepository.findByEmail(email).orElseGet(User::new);
         user.setEmail(email);
-        user.setDisplayName(valueOrDefault(request.displayName(), "CareerLens Demo User"));
+        user.setDisplayName(valueOrDefault(request.displayName(), DEMO_DISPLAY_NAME));
         return userRepository.save(user);
     }
 
     private UserProfile upsertProfile(User user, UserProfileRequestDto request) {
         Optional<UserProfile> existingProfile = userProfileRepository.findByUserId(user.getId());
         UserProfile profile = existingProfile.orElseGet(UserProfile::new);
+        applyProfileRequest(profile, user, request);
+        return existingProfile.isPresent() ? profile : userProfileRepository.save(profile);
+    }
+
+    private void applyProfileRequest(UserProfile profile, User user, UserProfileRequestDto request) {
         profile.setUser(user);
         profile.setTargetCountry(request.targetCountry());
         profile.setTargetCity(request.targetCity());
@@ -140,7 +207,7 @@ public class RecommendationServiceV2 {
         profile.setLanguageLevel(valueOrDefault(request.languageLevel(), request.englishLevel()));
         profile.setEnglishLevel(request.englishLevel());
         profile.setJapaneseLevel(request.japaneseLevel());
-        profile.setEducation(valueOrDefault(request.education(), "Bachelor"));
+        profile.setEducation(valueOrDefault(request.education(), DEFAULT_EDUCATION));
         profile.setMajor(request.major());
         profile.setGraduationStatus(request.graduationStatus());
         profile.setPreferredWorkType(request.preferredWorkType());
@@ -165,60 +232,81 @@ public class RecommendationServiceV2 {
         profile.setDeploymentExperience(request.deploymentExperience());
         profile.setLanguageTestScores(request.languageTestScores());
         profile.setPreferences(normalizeList(request.preferences()));
-        return existingProfile.isPresent() ? profile : userProfileRepository.save(profile);
     }
 
     private RecommendationDiagnosisResponseDto diagnoseProfile(User user, UserProfile profile) {
-        List<JobPosting> candidates = jobPostingRepository.findByCountryIgnoreCaseAndJobFamilyIgnoreCase(
-                profile.getTargetCountry(),
-                profile.getTargetJobFamily()
-        ).stream()
+        List<JobPosting> candidates = findCandidateJobs(profile);
+        List<DiagnosisResult> savedResults = diagnoseAndSaveTopResults(user, profile, candidates);
+        return buildResponse(user, profile, candidates.size(), savedResults, LocalDateTime.now());
+    }
+
+    private List<JobPosting> findCandidateJobs(UserProfile profile) {
+        return jobPostingRepository.findByCountryIgnoreCaseAndJobFamilyIgnoreCase(
+                        profile.getTargetCountry(),
+                        profile.getTargetJobFamily()
+                ).stream()
                 .filter(job -> passesHardFilter(profile, job))
                 .collect(Collectors.toCollection(ArrayList::new));
+    }
 
-        List<DiagnosisResult> savedResults = candidates.stream()
+    private List<DiagnosisResult> diagnoseAndSaveTopResults(User user, UserProfile profile, List<JobPosting> candidates) {
+        return candidates.stream()
                 .map(job -> diagnoseJob(user, profile, job))
                 .filter(result -> result != null)
                 .sorted(Comparator.comparing(DiagnosisResult::getTotalScore).reversed())
-                .limit(5)
+                .limit(MAX_RECOMMENDATIONS)
                 .map(diagnosisResultRepository::save)
                 .collect(Collectors.toCollection(ArrayList::new));
-
-        return buildResponse(user, profile, candidates.size(), savedResults, LocalDateTime.now());
     }
 
     private boolean passesHardFilter(UserProfile profile, JobPosting job) {
         if (!same(profile.getTargetCountry(), job.getCountry()) || !same(profile.getTargetJobFamily(), job.getJobFamily())) {
             return false;
         }
-        int userLanguage = languageRank(profile.getLanguageLevel());
-        int requiredLanguage = job.getRequiredLanguages().stream()
-                .mapToInt(this::languageRankFromRequirement)
-                .max()
-                .orElse(1);
-        if (requiredLanguage - userLanguage > 1) {
+        if (languageGap(profile, job) > MAX_LANGUAGE_LEVEL_GAP) {
             return false;
         }
         int userExperience = safe(profile.getExperienceYears());
         int minExperience = safe(job.getMinExperienceYears());
-        return minExperience - userExperience <= 2;
+        return minExperience - userExperience <= MAX_EXPERIENCE_YEAR_GAP;
+    }
+
+    private int languageGap(UserProfile profile, JobPosting job) {
+        int userLanguage = languageRank(profile.getLanguageLevel());
+        int requiredLanguage = requiredLanguageRank(job);
+        return requiredLanguage - userLanguage;
+    }
+
+    private int requiredLanguageRank(JobPosting job) {
+        return job.getRequiredLanguages().stream()
+                .mapToInt(this::languageRankFromRequirement)
+                .max()
+                .orElse(DEFAULT_LANGUAGE_RANK);
     }
 
     private DiagnosisResult diagnoseJob(User user, UserProfile profile, JobPosting job) {
+        PatternScore bestScore = findBestPatternScore(profile, job);
+        if (bestScore == null) {
+            return null;
+        }
+
+        return buildDiagnosisResult(user, profile, job, bestScore);
+    }
+
+    private PatternScore findBestPatternScore(UserProfile profile, JobPosting job) {
         List<PatternProfile> patterns = patternProfileRepository.findByJobPostingId(job.getId());
         if (patterns.isEmpty()) {
             patterns = new ArrayList<>();
             patterns.add(createFallbackPattern(job));
         }
 
-        PatternScore bestScore = patterns.stream()
+        return patterns.stream()
                 .map(pattern -> scorePattern(profile, job, pattern))
                 .max(Comparator.comparing(PatternScore::totalScore))
                 .orElse(null);
-        if (bestScore == null) {
-            return null;
-        }
+    }
 
+    private DiagnosisResult buildDiagnosisResult(User user, UserProfile profile, JobPosting job, PatternScore bestScore) {
         ReadinessStatus readinessStatus = readinessStatus(bestScore.totalScore());
         DiagnosisResult result = new DiagnosisResult();
         result.setUser(user);
@@ -285,72 +373,47 @@ public class RecommendationServiceV2 {
         List<String> coreSkills = normalizeList(pattern.getCoreSkills());
         List<String> preferredSkills = normalizeList(pattern.getPreferredSkills());
 
-        List<String> matchedCore = coreSkills.stream()
-                .filter(skill -> containsIgnoreCase(userSkills, skill))
-                .collect(Collectors.toCollection(ArrayList::new));
-        List<String> matchedPreferred = preferredSkills.stream()
-                .filter(skill -> containsIgnoreCase(userSkills, skill))
-                .collect(Collectors.toCollection(ArrayList::new));
+        List<String> matchedCore = matchingSkills(coreSkills, userSkills);
+        List<String> matchedPreferred = matchingSkills(preferredSkills, userSkills);
         List<String> missingItems = new ArrayList<>();
 
-        coreSkills.stream()
-                .filter(skill -> !containsIgnoreCase(userSkills, skill))
-                .limit(4)
-                .forEach(skill -> missingItems.add("핵심 기술 보완: " + skill));
+        addMissingCoreSkills(missingItems, coreSkills, userSkills);
 
-        int coreScore = coreSkills.isEmpty() ? 100 : (matchedCore.size() * 100) / coreSkills.size();
-        int preferredScore = preferredSkills.isEmpty() ? 100 : (matchedPreferred.size() * 100) / preferredSkills.size();
-        int skillScore = clamp((int) Math.round(coreScore * 0.75 + preferredScore * 0.25));
+        int skillScore = skillScore(coreSkills, matchedCore, preferredSkills, matchedPreferred);
 
-        int profileExperienceYears = profile.getRelatedExperienceYears() == null
-                ? safe(profile.getExperienceYears())
-                : profile.getRelatedExperienceYears();
-        int experienceGap = Math.max(0, safe(pattern.getTargetExperienceYears()) - profileExperienceYears);
-        int experienceScore = clamp(100 - experienceGap * 22);
-        if (experienceGap > 0) {
-            missingItems.add("직무 관련 경력 보완: " + experienceGap + "년 이상 추가 경험 필요");
-        }
+        int experienceGap = experienceGap(profile, pattern);
+        int experienceScore = clamp(FULL_SCORE - experienceGap * EXPERIENCE_GAP_PENALTY);
+        addExperienceMissingItem(missingItems, experienceGap);
 
         int languageScore = languageScore(profile.getLanguageLevel(), pattern.getLanguageBenchmark());
-        if (languageScore < 75) {
-            missingItems.add("언어 수준 보완: " + pattern.getLanguageBenchmark() + " 기준 필요");
-        }
+        addLanguageMissingItem(missingItems, pattern, languageScore);
 
         int educationScore = educationScore(profile, pattern);
-        if (educationScore < 80) {
-            missingItems.add("학력/자격 보완: " + pattern.getEducationBenchmark() + " 또는 관련 자격 필요");
-        }
+        addEducationMissingItem(missingItems, pattern, educationScore);
 
         int portfolioScore = portfolioScore(profile, job, pattern);
-        if (portfolioScore < 80) {
-            if (Boolean.TRUE.equals(pattern.getGithubExpected()) && !Boolean.TRUE.equals(profile.getGithubPresent())) {
-                missingItems.add("GitHub 공개 저장소 보완");
-            }
-            if ((Boolean.TRUE.equals(pattern.getPortfolioExpected()) || Boolean.TRUE.equals(job.getPortfolioRequired()))
-                    && !Boolean.TRUE.equals(profile.getPortfolioPresent())) {
-                missingItems.add("포트폴리오 대표 프로젝트 정리");
-            }
-        }
+        addPortfolioMissingItems(missingItems, profile, job, pattern, portfolioScore);
 
-        int jobFitScore = clamp((int) Math.round(skillScore * 0.55 + experienceScore * 0.30 + portfolioScore * 0.15));
-        int acceptanceProbabilityScore = clamp((int) Math.round(
-                jobFitScore * 0.55
-                        + languageScore * 0.20
-                        + educationScore * 0.15
-                        + portfolioScore * 0.10
-        ));
-        int salaryScore = scoreOrDefault(job.getSalaryScore(), 60);
-        int workLifeBalanceScore = scoreOrDefault(job.getWorkLifeBalanceScore(), 60);
-        int companyValueScore = scoreOrDefault(job.getCompanyValueScore(), 75);
+        int jobFitScore = jobFitScore(skillScore, experienceScore, portfolioScore);
+        int acceptanceProbabilityScore = acceptanceProbabilityScore(
+                jobFitScore,
+                languageScore,
+                educationScore,
+                portfolioScore
+        );
+        int salaryScore = scoreOrDefault(job.getSalaryScore(), DEFAULT_SALARY_SCORE);
+        int workLifeBalanceScore = scoreOrDefault(job.getWorkLifeBalanceScore(), DEFAULT_WORK_LIFE_BALANCE_SCORE);
+        int companyValueScore = scoreOrDefault(job.getCompanyValueScore(), DEFAULT_COMPANY_VALUE_SCORE);
         WeightSet weights = adjustedWeights(profile, job);
 
-        int totalScore = clamp((int) Math.round(
-                acceptanceProbabilityScore * weights.probabilityWeight() / 100.0
-                        + salaryScore * weights.salaryWeight() / 100.0
-                        + workLifeBalanceScore * weights.workLifeBalanceWeight() / 100.0
-                        + companyValueScore * weights.companyValueWeight() / 100.0
-                        + jobFitScore * weights.jobFitWeight() / 100.0
-        ));
+        int totalScore = totalScore(
+                acceptanceProbabilityScore,
+                salaryScore,
+                workLifeBalanceScore,
+                companyValueScore,
+                jobFitScore,
+                weights
+        );
 
         return new PatternScore(
                 pattern,
@@ -369,6 +432,123 @@ public class RecommendationServiceV2 {
                 deduplicate(missingItems),
                 deduplicateSkills(matchedCore, matchedPreferred)
         );
+    }
+
+    private List<String> matchingSkills(List<String> candidateSkills, Set<String> userSkills) {
+        return candidateSkills.stream()
+                .filter(skill -> containsIgnoreCase(userSkills, skill))
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
+
+    private void addMissingCoreSkills(List<String> missingItems, List<String> coreSkills, Set<String> userSkills) {
+        coreSkills.stream()
+                .filter(skill -> !containsIgnoreCase(userSkills, skill))
+                .limit(MAX_MISSING_CORE_SKILLS)
+                .forEach(skill -> missingItems.add("핵심 기술 보완: " + skill));
+    }
+
+    private int skillScore(
+            List<String> coreSkills,
+            List<String> matchedCore,
+            List<String> preferredSkills,
+            List<String> matchedPreferred
+    ) {
+        int coreScore = listMatchScore(matchedCore.size(), coreSkills.size());
+        int preferredScore = listMatchScore(matchedPreferred.size(), preferredSkills.size());
+        return clamp((int) Math.round(
+                coreScore * CORE_SKILL_SCORE_WEIGHT
+                        + preferredScore * PREFERRED_SKILL_SCORE_WEIGHT
+        ));
+    }
+
+    private int listMatchScore(int matchedCount, int totalCount) {
+        return totalCount == 0 ? FULL_SCORE : (matchedCount * FULL_SCORE) / totalCount;
+    }
+
+    private int experienceGap(UserProfile profile, PatternProfile pattern) {
+        return Math.max(0, safe(pattern.getTargetExperienceYears()) - relatedExperienceYears(profile));
+    }
+
+    private int relatedExperienceYears(UserProfile profile) {
+        return profile.getRelatedExperienceYears() == null
+                ? safe(profile.getExperienceYears())
+                : profile.getRelatedExperienceYears();
+    }
+
+    private void addExperienceMissingItem(List<String> missingItems, int experienceGap) {
+        if (experienceGap > 0) {
+            missingItems.add("직무 관련 경력 보완: " + experienceGap + "년 이상 추가 경험 필요");
+        }
+    }
+
+    private void addLanguageMissingItem(List<String> missingItems, PatternProfile pattern, int languageScore) {
+        if (languageScore < LANGUAGE_MISSING_THRESHOLD) {
+            missingItems.add("언어 수준 보완: " + pattern.getLanguageBenchmark() + " 기준 필요");
+        }
+    }
+
+    private void addEducationMissingItem(List<String> missingItems, PatternProfile pattern, int educationScore) {
+        if (educationScore < EDUCATION_MISSING_THRESHOLD) {
+            missingItems.add("학력/자격 보완: " + pattern.getEducationBenchmark() + " 또는 관련 자격 필요");
+        }
+    }
+
+    private void addPortfolioMissingItems(
+            List<String> missingItems,
+            UserProfile profile,
+            JobPosting job,
+            PatternProfile pattern,
+            int portfolioScore
+    ) {
+        if (portfolioScore >= PORTFOLIO_MISSING_THRESHOLD) {
+            return;
+        }
+        if (Boolean.TRUE.equals(pattern.getGithubExpected()) && !Boolean.TRUE.equals(profile.getGithubPresent())) {
+            missingItems.add("GitHub 공개 저장소 보완");
+        }
+        if ((Boolean.TRUE.equals(pattern.getPortfolioExpected()) || Boolean.TRUE.equals(job.getPortfolioRequired()))
+                && !Boolean.TRUE.equals(profile.getPortfolioPresent())) {
+            missingItems.add("포트폴리오 대표 프로젝트 정리");
+        }
+    }
+
+    private int jobFitScore(int skillScore, int experienceScore, int portfolioScore) {
+        return clamp((int) Math.round(
+                skillScore * JOB_FIT_SKILL_WEIGHT
+                        + experienceScore * JOB_FIT_EXPERIENCE_WEIGHT
+                        + portfolioScore * JOB_FIT_PORTFOLIO_WEIGHT
+        ));
+    }
+
+    private int acceptanceProbabilityScore(
+            int jobFitScore,
+            int languageScore,
+            int educationScore,
+            int portfolioScore
+    ) {
+        return clamp((int) Math.round(
+                jobFitScore * ACCEPTANCE_JOB_FIT_WEIGHT
+                        + languageScore * ACCEPTANCE_LANGUAGE_WEIGHT
+                        + educationScore * ACCEPTANCE_EDUCATION_WEIGHT
+                        + portfolioScore * ACCEPTANCE_PORTFOLIO_WEIGHT
+        ));
+    }
+
+    private int totalScore(
+            int acceptanceProbabilityScore,
+            int salaryScore,
+            int workLifeBalanceScore,
+            int companyValueScore,
+            int jobFitScore,
+            WeightSet weights
+    ) {
+        return clamp((int) Math.round(
+                acceptanceProbabilityScore * weights.probabilityWeight() / 100.0
+                        + salaryScore * weights.salaryWeight() / 100.0
+                        + workLifeBalanceScore * weights.workLifeBalanceWeight() / 100.0
+                        + companyValueScore * weights.companyValueWeight() / 100.0
+                        + jobFitScore * weights.jobFitWeight() / 100.0
+        ));
     }
 
     private RecommendationDiagnosisResponseDto buildResponse(
@@ -437,11 +617,11 @@ public class RecommendationServiceV2 {
                 result.getWorkLifeBalanceScore(),
                 result.getCompanyValueScore(),
                 result.getJobFitScore(),
-                scoreOrDefault(result.getProbabilityWeight(), scoreOrDefault(job.getProbabilityWeight(), 30)),
-                scoreOrDefault(result.getSalaryWeight(), scoreOrDefault(job.getSalaryWeight(), 15)),
-                scoreOrDefault(result.getWorkLifeBalanceWeight(), scoreOrDefault(job.getWorkLifeBalanceWeight(), 15)),
-                scoreOrDefault(result.getCompanyValueWeight(), scoreOrDefault(job.getCompanyValueWeight(), 15)),
-                scoreOrDefault(result.getJobFitWeight(), scoreOrDefault(job.getJobFitWeight(), 25)),
+                scoreOrDefault(result.getProbabilityWeight(), scoreOrDefault(job.getProbabilityWeight(), DEFAULT_PROBABILITY_WEIGHT)),
+                scoreOrDefault(result.getSalaryWeight(), scoreOrDefault(job.getSalaryWeight(), DEFAULT_SALARY_WEIGHT)),
+                scoreOrDefault(result.getWorkLifeBalanceWeight(), scoreOrDefault(job.getWorkLifeBalanceWeight(), DEFAULT_WORK_LIFE_BALANCE_WEIGHT)),
+                scoreOrDefault(result.getCompanyValueWeight(), scoreOrDefault(job.getCompanyValueWeight(), DEFAULT_COMPANY_VALUE_WEIGHT)),
+                scoreOrDefault(result.getJobFitWeight(), scoreOrDefault(job.getJobFitWeight(), DEFAULT_JOB_FIT_WEIGHT)),
                 job.getEvaluationRationale()
         );
     }
@@ -497,7 +677,7 @@ public class RecommendationServiceV2 {
 
     private int languageScore(String userLevel, String benchmark) {
         int gap = Math.max(0, languageRank(benchmark) - languageRank(userLevel));
-        return clamp(100 - gap * 25);
+        return clamp(FULL_SCORE - gap * LANGUAGE_GAP_PENALTY);
     }
 
     private String criteriaSummary(UserProfile profile) {
@@ -539,26 +719,26 @@ public class RecommendationServiceV2 {
     }
 
     private WeightSet adjustedWeights(UserProfile profile, JobPosting job) {
-        int probability = scoreOrDefault(job.getProbabilityWeight(), 30);
-        int salary = scoreOrDefault(job.getSalaryWeight(), 15);
-        int workLife = scoreOrDefault(job.getWorkLifeBalanceWeight(), 15);
-        int company = scoreOrDefault(job.getCompanyValueWeight(), 15);
-        int fit = scoreOrDefault(job.getJobFitWeight(), 25);
+        int probability = scoreOrDefault(job.getProbabilityWeight(), DEFAULT_PROBABILITY_WEIGHT);
+        int salary = scoreOrDefault(job.getSalaryWeight(), DEFAULT_SALARY_WEIGHT);
+        int workLife = scoreOrDefault(job.getWorkLifeBalanceWeight(), DEFAULT_WORK_LIFE_BALANCE_WEIGHT);
+        int company = scoreOrDefault(job.getCompanyValueWeight(), DEFAULT_COMPANY_VALUE_WEIGHT);
+        int fit = scoreOrDefault(job.getJobFitWeight(), DEFAULT_JOB_FIT_WEIGHT);
 
         if (Boolean.TRUE.equals(profile.getPrioritizeAcceptanceProbability())) {
-            probability += 12;
+            probability += PRIORITY_WEIGHT_BONUS;
         }
         if (Boolean.TRUE.equals(profile.getPrioritizeSalary())) {
-            salary += 12;
+            salary += PRIORITY_WEIGHT_BONUS;
         }
         if (Boolean.TRUE.equals(profile.getPrioritizeWorkLifeBalance())) {
-            workLife += 12;
+            workLife += PRIORITY_WEIGHT_BONUS;
         }
         if (Boolean.TRUE.equals(profile.getPrioritizeCompanyValue())) {
-            company += 12;
+            company += PRIORITY_WEIGHT_BONUS;
         }
         if (Boolean.TRUE.equals(profile.getPrioritizeJobFit())) {
-            fit += 12;
+            fit += PRIORITY_WEIGHT_BONUS;
         }
 
         int total = probability + salary + workLife + company + fit;
@@ -571,15 +751,15 @@ public class RecommendationServiceV2 {
                 normalizedSalary,
                 normalizedWorkLife,
                 normalizedCompany,
-                Math.max(1, 100 - normalizedProbability - normalizedSalary - normalizedWorkLife - normalizedCompany)
+                Math.max(1, FULL_SCORE - normalizedProbability - normalizedSalary - normalizedWorkLife - normalizedCompany)
         );
     }
 
     private int normalizeWeight(int value, int total) {
         if (total <= 0) {
-            return 20;
+            return DEFAULT_TOTAL_WEIGHT;
         }
-        return Math.max(1, (int) Math.round(value * 100.0 / total));
+        return Math.max(1, (int) Math.round(value * (double) FULL_SCORE / total));
     }
 
     private int scoreOrDefault(Integer value, int fallback) {
@@ -587,56 +767,74 @@ public class RecommendationServiceV2 {
     }
 
     private String primaryCategory(UserProfile profile, PatternScore score) {
+        String prioritizedCategory = prioritizedCategory(profile);
+        if (prioritizedCategory != null) {
+            return prioritizedCategory;
+        }
+
+        int highestCategoryScore = highestCategoryScore(score);
+        if (highestCategoryScore == score.acceptanceProbabilityScore()) {
+            return CATEGORY_ACCEPTANCE_PROBABILITY;
+        }
+        if (highestCategoryScore == score.salaryScore()) {
+            return CATEGORY_SALARY;
+        }
+        if (highestCategoryScore == score.workLifeBalanceScore()) {
+            return CATEGORY_WORK_LIFE_BALANCE;
+        }
+        if (highestCategoryScore == score.companyValueScore()) {
+            return CATEGORY_COMPANY_VALUE;
+        }
+        return CATEGORY_JOB_FIT;
+    }
+
+    private String prioritizedCategory(UserProfile profile) {
         if (Boolean.TRUE.equals(profile.getPrioritizeSalary())) {
-            return "연봉";
+            return CATEGORY_SALARY;
         }
         if (Boolean.TRUE.equals(profile.getPrioritizeAcceptanceProbability())) {
-            return "합격 가능성";
+            return CATEGORY_ACCEPTANCE_PROBABILITY;
         }
         if (Boolean.TRUE.equals(profile.getPrioritizeWorkLifeBalance())) {
-            return "워라밸";
+            return CATEGORY_WORK_LIFE_BALANCE;
         }
         if (Boolean.TRUE.equals(profile.getPrioritizeCompanyValue())) {
-            return "기업 가치";
+            return CATEGORY_COMPANY_VALUE;
         }
         if (Boolean.TRUE.equals(profile.getPrioritizeJobFit())) {
-            return "직무 적합도";
+            return CATEGORY_JOB_FIT;
         }
-        int max = Math.max(score.acceptanceProbabilityScore(),
-                Math.max(score.salaryScore(), Math.max(score.workLifeBalanceScore(), Math.max(score.companyValueScore(), score.jobFitScore()))));
-        if (max == score.acceptanceProbabilityScore()) {
-            return "합격 가능성";
-        }
-        if (max == score.salaryScore()) {
-            return "연봉";
-        }
-        if (max == score.workLifeBalanceScore()) {
-            return "워라밸";
-        }
-        if (max == score.companyValueScore()) {
-            return "기업 가치";
-        }
-        return "직무 적합도";
+        return null;
+    }
+
+    private int highestCategoryScore(PatternScore score) {
+        return Math.max(
+                score.acceptanceProbabilityScore(),
+                Math.max(
+                        score.salaryScore(),
+                        Math.max(score.workLifeBalanceScore(), Math.max(score.companyValueScore(), score.jobFitScore()))
+                )
+        );
     }
 
     private ReadinessStatus readinessStatus(int totalScore) {
-        if (totalScore >= 80) {
+        if (totalScore >= IMMEDIATE_APPLY_THRESHOLD) {
             return ReadinessStatus.IMMEDIATE_APPLY;
         }
-        if (totalScore >= 60) {
+        if (totalScore >= PREPARE_THEN_APPLY_THRESHOLD) {
             return ReadinessStatus.PREPARE_THEN_APPLY;
         }
         return ReadinessStatus.LONG_TERM_PREPARE;
     }
 
     private String grade(int totalScore) {
-        if (totalScore >= 85) {
+        if (totalScore >= GRADE_A_THRESHOLD) {
             return "A";
         }
-        if (totalScore >= 70) {
+        if (totalScore >= GRADE_B_THRESHOLD) {
             return "B";
         }
-        if (totalScore >= 55) {
+        if (totalScore >= GRADE_C_THRESHOLD) {
             return "C";
         }
         return "D";
@@ -660,7 +858,7 @@ public class RecommendationServiceV2 {
 
     private int languageRankFromRequirement(String requirement) {
         if (requirement == null) {
-            return 1;
+            return DEFAULT_LANGUAGE_RANK;
         }
         String[] tokens = requirement.split(":");
         return languageRank(tokens[tokens.length - 1].trim());
@@ -668,9 +866,9 @@ public class RecommendationServiceV2 {
 
     private int languageRank(String value) {
         if (value == null) {
-            return 1;
+            return DEFAULT_LANGUAGE_RANK;
         }
-        return LANGUAGE_RANK.getOrDefault(value.trim().toUpperCase(Locale.ROOT), 1);
+        return LANGUAGE_RANK.getOrDefault(value.trim().toUpperCase(Locale.ROOT), DEFAULT_LANGUAGE_RANK);
     }
 
     private boolean same(String left, String right) {
