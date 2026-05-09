@@ -14,6 +14,26 @@ import {
 } from "@/lib/external-jobs";
 import { jobFamilies } from "@/lib/job-families";
 
+const countryFilters = [
+  "ALL",
+  "United States",
+  "Japan",
+  "South Korea",
+  "United Kingdom",
+  "Singapore",
+  "Italy",
+  "Brazil",
+  "India",
+  "China",
+  "Canada",
+  "Australia",
+  "Germany",
+  "France",
+  "Spain",
+  "Ireland",
+  "Netherlands"
+];
+
 type FormState = {
   boardToken: string;
   defaultCountry: string;
@@ -95,7 +115,7 @@ export default function JobImportPage() {
       <PageHeader
         kicker="JOB PROVIDER"
         title="외부 공고 API 가져오기"
-        description="Greenhouse 공개 Job Board API에서 공고를 읽어 CareerLens의 JobPosting과 기본 PatternProfile로 정규화합니다. 무단 크롤링이 아니라 공개 API provider 구조를 검증하는 시연용 화면입니다."
+        description="관리자용 데이터 관리 화면입니다. Greenhouse 공개 Job Board API에서 공고를 읽어 CareerLens의 JobPosting과 기본 PatternProfile로 정규화합니다."
         actions={
           <>
             <Link href="/jobs" className="border border-line bg-white px-4 py-2 text-sm font-semibold text-night hover:border-night">
@@ -114,7 +134,7 @@ export default function JobImportPage() {
             <p className="text-xs font-bold tracking-[0.16em] text-brand">PROVIDER CONFIG</p>
             <h2 className="mt-2 text-lg font-semibold text-night">Greenhouse Board Token</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              예시로 `airbnb`, `doordash`, `reddit`처럼 Greenhouse 채용 페이지의 board token을 넣어 확인합니다.
+              예시로 `airbnb`, `doordash`, `reddit`처럼 Greenhouse 채용 페이지의 board token을 넣어 확인합니다. 국가/직무군은 실제 필터로 적용됩니다.
             </p>
             <div className="mt-5 space-y-4">
               <TextInput
@@ -123,18 +143,22 @@ export default function JobImportPage() {
                 onChange={(event) => setForm((current) => ({ ...current, boardToken: event.target.value }))}
               />
               <SelectInput
-                label="기본 국가"
+                label="국가 필터"
                 value={form.defaultCountry}
                 onChange={(event) => setForm((current) => ({ ...current, defaultCountry: event.target.value }))}
               >
-                <option value="United States">미국</option>
-                <option value="Japan">일본</option>
+                {countryFilters.map((country) => (
+                  <option key={country} value={country}>
+                    {country === "ALL" ? "전체 국가" : country}
+                  </option>
+                ))}
               </SelectInput>
               <SelectInput
-                label="기본 직무군"
+                label="직무군 필터"
                 value={form.defaultJobFamily}
                 onChange={(event) => setForm((current) => ({ ...current, defaultJobFamily: event.target.value }))}
               >
+                <option value="ALL">전체 직무군</option>
                 {jobFamilies.map((family) => (
                   <option key={family} value={family}>
                     {family}
@@ -206,6 +230,7 @@ export default function JobImportPage() {
             <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
               <li>공개 GET API만 사용합니다.</li>
               <li>지원서 제출 API는 사용하지 않습니다.</li>
+              <li>관리자가 검수 후 DB에 등록하는 흐름을 전제로 합니다.</li>
               <li>추천 엔진은 외부 API가 아니라 내부 JobPosting만 봅니다.</li>
               <li>실제 발표에서는 seed-data와 API provider를 병행 구조로 설명합니다.</li>
             </ul>

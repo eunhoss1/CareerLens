@@ -190,7 +190,7 @@ public class GreenhouseJobProviderService {
         String sourceUrl = text(job.path("absolute_url"));
         String textForAnalysis = (title + " " + content + " " + location).toLowerCase(Locale.ROOT);
         String classificationText = (title + " " + department).toLowerCase(Locale.ROOT);
-        String country = fallback(inferCountry(location), defaultCountry, "United States");
+        String country = valueOrDefault(inferCountry(location), "Not specified");
         if (isExcludedNonEngineeringPosting(classificationText)) {
             return null;
         }
@@ -201,7 +201,10 @@ public class GreenhouseJobProviderService {
         if (inferredJobFamily.isBlank()) {
             return null;
         }
-        String jobFamily = fallback(inferredJobFamily, defaultJobFamily, "Backend");
+        String jobFamily = inferredJobFamily;
+        if (!matchesFilter(country, defaultCountry) || !matchesFilter(jobFamily, defaultJobFamily)) {
+            return null;
+        }
         List<String> requiredSkills = extractSkills(textForAnalysis, jobFamily, true);
         List<String> preferredSkills = extractSkills(textForAnalysis, jobFamily, false);
         List<String> languages = extractLanguages(textForAnalysis, country);
@@ -225,7 +228,7 @@ public class GreenhouseJobProviderService {
                 inferVisaRequirement(textForAnalysis),
                 inferSalaryRange(content),
                 inferWorkType(textForAnalysis),
-                summarize(content),
+                summarize(content, title),
                 false
         );
     }
@@ -387,35 +390,64 @@ public class GreenhouseJobProviderService {
     private void addSkillCandidates(List<String> candidates) {
         candidates.add("Java");
         candidates.add("Spring Boot");
+        candidates.add("JVM");
         candidates.add("Kotlin");
+        candidates.add("Android");
+        candidates.add("iOS");
+        candidates.add("Swift");
+        candidates.add("Objective-C");
         candidates.add("Python");
         candidates.add("Go");
+        candidates.add("Ruby");
+        candidates.add("Rails");
         candidates.add("Node.js");
         candidates.add("TypeScript");
         candidates.add("JavaScript");
         candidates.add("React");
         candidates.add("Next.js");
         candidates.add("Vue");
+        candidates.add("Redux");
+        candidates.add("HTML");
+        candidates.add("CSS");
         candidates.add("AWS");
         candidates.add("GCP");
+        candidates.add("Azure");
         candidates.add("Docker");
         candidates.add("Kubernetes");
         candidates.add("MySQL");
         candidates.add("PostgreSQL");
         candidates.add("Redis");
+        candidates.add("DynamoDB");
+        candidates.add("MongoDB");
+        candidates.add("Elasticsearch");
         candidates.add("GraphQL");
         candidates.add("REST API");
         candidates.add("API");
         candidates.add("Distributed Systems");
+        candidates.add("Microservices");
+        candidates.add("System Design");
         candidates.add("Machine Learning");
         candidates.add("PyTorch");
         candidates.add("TensorFlow");
         candidates.add("LLM");
         candidates.add("MLOps");
+        candidates.add("NLP");
+        candidates.add("Computer Vision");
+        candidates.add("Vector DB");
         candidates.add("SQL");
         candidates.add("Spark");
+        candidates.add("Airflow");
+        candidates.add("dbt");
+        candidates.add("BigQuery");
+        candidates.add("Snowflake");
+        candidates.add("Kafka");
+        candidates.add("Flink");
         candidates.add("Data Pipeline");
         candidates.add("CI/CD");
+        candidates.add("Terraform");
+        candidates.add("Observability");
+        candidates.add("Monitoring");
+        candidates.add("Testing");
     }
 
     private List<String> extractLanguages(String text, String country) {
@@ -453,6 +485,31 @@ public class GreenhouseJobProviderService {
         }
         if (normalized.contains("singapore")) {
             return "Singapore";
+        }
+        if (normalized.contains("brazil") || normalized.contains("são paulo") || normalized.contains("sao paulo")) {
+            return "Brazil";
+        }
+        if (normalized.contains("india") || normalized.contains("bangalore") || normalized.contains("bengaluru")
+                || normalized.contains("gurugram") || normalized.contains("hyderabad")) {
+            return "India";
+        }
+        if (normalized.contains("china") || normalized.contains("beijing") || normalized.contains("shanghai")) {
+            return "China";
+        }
+        if (normalized.contains("germany") || normalized.contains("berlin") || normalized.contains("munich")) {
+            return "Germany";
+        }
+        if (normalized.contains("france") || normalized.contains("paris")) {
+            return "France";
+        }
+        if (normalized.contains("spain") || normalized.contains("barcelona") || normalized.contains("madrid")) {
+            return "Spain";
+        }
+        if (normalized.contains("ireland") || normalized.contains("dublin")) {
+            return "Ireland";
+        }
+        if (normalized.contains("netherlands") || normalized.contains("amsterdam")) {
+            return "Netherlands";
         }
         if (normalized.contains("italy") || normalized.contains("milan")) {
             return "Italy";
@@ -594,12 +651,52 @@ public class GreenhouseJobProviderService {
         return preview.jobFamily() + " 직무 공고의 핵심 기술을 사용한 실무형 프로젝트 1개 이상, README와 API/화면 설계 근거 제출";
     }
 
-    private String summarize(String content) {
+    private String summarize(String content, String title) {
         String normalized = SPACE_PATTERN.matcher(content == null ? "" : content.trim()).replaceAll(" ");
+        normalized = removeRepeatedCompanyIntro(normalized);
+        normalized = prioritizeRoleSection(normalized);
+        if (normalized.isBlank()) {
+            normalized = valueOrDefault(title, "Greenhouse public job posting");
+        }
         if (normalized.length() <= 260) {
             return normalized;
         }
         return normalized.substring(0, 260) + "...";
+    }
+
+    private String removeRepeatedCompanyIntro(String content) {
+        String marker = "Every day, hosts offer unique stays";
+        int markerIndex = content.indexOf(marker);
+        if (content.startsWith("Airbnb was born in 2007") && markerIndex >= 0) {
+            int nextSentence = content.indexOf('.', markerIndex);
+            if (nextSentence >= 0 && nextSentence + 1 < content.length()) {
+                return content.substring(nextSentence + 1).trim();
+            }
+        }
+        return content;
+    }
+
+    private String prioritizeRoleSection(String content) {
+        String[] markers = {
+                "The Difference You Will Make",
+                "A Typical Day",
+                "Your Expertise",
+                "About the role",
+                "About the Role",
+                "In this role",
+                "What you will do",
+                "Responsibilities",
+                "Minimum Qualifications",
+                "Basic Qualifications",
+                "Qualifications"
+        };
+        for (String marker : markers) {
+            int index = content.indexOf(marker);
+            if (index >= 0) {
+                return content.substring(index).trim();
+            }
+        }
+        return content;
     }
 
     private String stripHtml(String value) {
@@ -615,14 +712,15 @@ public class GreenhouseJobProviderService {
         return node.asText("");
     }
 
-    private String fallback(String primary, String secondary, String defaultValue) {
-        if (primary != null && !primary.isBlank()) {
-            return primary.trim();
+    private boolean matchesFilter(String value, String filter) {
+        if (filter == null || filter.isBlank() || "ALL".equalsIgnoreCase(filter)) {
+            return true;
         }
-        if (secondary != null && !secondary.isBlank()) {
-            return secondary.trim();
-        }
-        return defaultValue;
+        return value != null && value.equalsIgnoreCase(filter.trim());
+    }
+
+    private String valueOrDefault(String value, String defaultValue) {
+        return value == null || value.isBlank() ? defaultValue : value.trim();
     }
 
     private String humanizeBoardToken(String boardToken) {

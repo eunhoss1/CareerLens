@@ -24,7 +24,6 @@ export const mainMenus: MenuItem[] = [
     summary: "수동 조사 기반 공고를 국가, 직무, 기술스택, 비자 조건으로 탐색합니다.",
     children: [
       { title: "전체 공고 조회", href: "/jobs", status: "next", description: "등록된 공고 전체를 필터로 조회하고 로드맵을 생성합니다." },
-      { title: "외부 공고 API", href: "/jobs/import", status: "next", description: "Greenhouse 공개 Job Board API 공고를 내부 JobPosting 형식으로 정규화합니다." },
       { title: "인기 공고 조회", href: "/jobs/popular", status: "planned", description: "조회수와 추천 빈도 기반 인기 공고를 보여줍니다." },
       { title: "기업 상세", href: "/companies", status: "planned", description: "기업별 공고, 직원 표본, 패턴 근거를 묶어 보여줍니다." }
     ]

@@ -95,10 +95,10 @@ GREENHOUSE_SYNC_INITIAL_DELAY_MILLIS=60000
 ## 프론트 화면
 
 - URL: `/jobs/import`
-- 메뉴: `채용공고 > 외부 공고 API`
+- 성격: 관리자용 데이터 관리 화면
 - 기능:
   - board token 입력
-  - 기본 국가/직무군 지정
+  - 국가/직무군 필터 지정
   - 미리보기
   - DB 등록
   - 기본 PatternProfile 생성 여부 선택
@@ -132,6 +132,8 @@ POST /api/jobs/external/greenhouse/sync/run
 - Software Engineer처럼 넓은 제목으로 올라오는 경우가 많아서 본문 키워드 기반 직무군 추론이 필요하다. 현재 기본 추론 범위는 `Backend`, `Frontend`, `AI/ML`, `Data`다.
 - Policy, Finance, Business Operations, Marketing, Sales, Recruiting 등 비기술 공고는 미리보기/import 단계에서 제외한다.
 - 위치가 명확한 공고는 `Seoul -> South Korea`, `Milan -> Italy`, `Singapore -> Singapore`처럼 실제 국가로 정규화한다. 미국/일본 추천 진단에는 사용자의 희망 국가 필터가 적용된다.
+- `/jobs/import`의 국가/직무군 선택은 fallback이 아니라 실제 필터로 동작한다. 전체 국가/전체 직무군을 보고 싶으면 `ALL` 값을 사용한다.
+- Airbnb처럼 회사 소개 문장이 모든 공고 본문 앞에 반복되는 경우, 요약에서는 반복 소개 문장을 제거하고 역할/자격 섹션을 우선 표시한다.
 - 현재 PatternProfile은 공고 키워드 기반 기본 패턴이다.
 - 실제 서비스 수준에서는 직원 표본/합격자 패턴 검수 또는 관리자 승인 플로우가 필요하다.
 - Greenhouse 외 Workday, Lever 등은 별도 provider로 추가하는 구조가 적합하다.
