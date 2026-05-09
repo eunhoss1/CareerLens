@@ -392,6 +392,37 @@ AI_PLANNER_ENABLED=true
 
 현재 마이페이지 프로필 입력 화면 자체에는 AI를 바로 붙이지 않는 것이 좋습니다. 사용자가 직접 입력한 정형 데이터가 추천 진단의 기준이 되어야 하기 때문입니다. AI는 입력값을 자동 판단하는 쪽보다, 입력 이후 해석/요약/검증/로드맵 생성에 붙이는 편이 더 설득력 있습니다.
 
+## 인증/JWT 설정
+
+로그인/회원가입 성공 시 백엔드는 JWT access token을 발급합니다. 프론트는 사용자 정보와 함께 token을 저장하고, 관리자 API 요청에는 `Authorization: Bearer {token}` 헤더를 보냅니다.
+
+환경변수 예시:
+
+```properties
+JWT_SECRET=충분히_긴_랜덤_문자열
+JWT_ISSUER=careerlens
+JWT_EXPIRATION_MINUTES=480
+ADMIN_LOGIN_IDS=admin,careerlens-admin
+```
+
+현재 JWT로 보호하는 API:
+
+```txt
+/api/jobs/external/**
+```
+
+주의:
+
+- 기존 브라우저 localStorage에 저장된 로그인 정보에는 token이 없을 수 있습니다.
+- `/jobs/import`에서 401이 뜨면 로그아웃하거나 localStorage를 지운 뒤 다시 로그인해야 합니다.
+- 공유 서버나 배포 환경에서는 `JWT_SECRET` 기본값을 그대로 쓰면 안 됩니다.
+
+관련 문서:
+
+```txt
+docs/auth-jwt-security-update.md
+```
+
 ## Greenhouse 자동 동기화 설정
 
 ```properties

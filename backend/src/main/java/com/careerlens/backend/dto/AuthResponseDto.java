@@ -7,6 +7,9 @@ public record AuthResponseDto(
         String email,
         String role,
         Boolean admin,
-        Boolean profileCompleted
+        Boolean profileCompleted,
+        String accessToken,
+        String tokenType,
+        Long expiresAt
 ) {
 }

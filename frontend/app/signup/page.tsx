@@ -24,6 +24,7 @@ export default function SignupPage() {
       { label: "8자 이상", passed: password.length >= 8 },
       { label: "영문 포함", passed: /[a-zA-Z]/.test(password) },
       { label: "숫자 포함", passed: /\d/.test(password) },
+      { label: "특수문자 포함", passed: /[^A-Za-z0-9]/.test(password) },
       { label: "비밀번호 확인 일치", passed: password.length > 0 && password === passwordConfirm }
     ],
     [password, passwordConfirm]
@@ -32,13 +33,13 @@ export default function SignupPage() {
   const canSubmit =
     /^[a-zA-Z0-9._-]{4,30}$/.test(loginId) &&
     displayName.trim().length > 0 &&
-    email.includes("@") &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
     passwordChecks.every((check) => check.passed) &&
     termsAccepted;
 
   async function submit() {
     if (!canSubmit) {
-      setErrorMessage("입력값을 다시 확인해주세요.");
+      setErrorMessage("입력값과 비밀번호 조건을 다시 확인해주세요.");
       return;
     }
     setIsLoading(true);
@@ -69,19 +70,47 @@ export default function SignupPage() {
           <Badge tone="brand">CREATE ACCOUNT</Badge>
           <h1 className="mt-4 text-3xl font-semibold text-night">회원가입</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            계정을 만든 뒤 마이페이지에서 해외취업 프로필을 입력하면 추천 진단과 커리어 플래너가 사용자별 기록으로 저장됩니다.
+            계정을 만든 뒤 마이페이지에서 해외취업 프로필을 입력하면 추천 진단과 로드맵이 사용자별 기록으로 저장됩니다.
           </p>
 
           <div className="mt-6 grid gap-4">
-            <TextInput label="아이디" helper="4~30자, 영문/숫자/._-" value={loginId} onChange={(event) => setLoginId(event.target.value)} />
-            <TextInput label="이름" value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
-            <TextInput label="이메일" value={email} onChange={(event) => setEmail(event.target.value)} />
-            <TextInput label="비밀번호" value={password} onChange={(event) => setPassword(event.target.value)} type="password" />
-            <TextInput label="비밀번호 확인" value={passwordConfirm} onChange={(event) => setPasswordConfirm(event.target.value)} type="password" />
+            <TextInput
+              label="아이디"
+              helper="4~30자, 영문/숫자/._-"
+              value={loginId}
+              onChange={(event) => setLoginId(event.target.value)}
+              autoComplete="username"
+            />
+            <TextInput
+              label="이름"
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              autoComplete="name"
+            />
+            <TextInput
+              label="이메일"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              autoComplete="email"
+            />
+            <TextInput
+              label="비밀번호"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              type="password"
+              autoComplete="new-password"
+            />
+            <TextInput
+              label="비밀번호 확인"
+              value={passwordConfirm}
+              onChange={(event) => setPasswordConfirm(event.target.value)}
+              type="password"
+              autoComplete="new-password"
+            />
           </div>
 
           <div className="mt-4 border border-line bg-panel p-4">
-            <p className="text-sm font-semibold text-night">비밀번호 조건</p>
+            <p className="text-sm font-semibold text-night">비밀번호 정책</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {passwordChecks.map((check) => (
                 <span key={check.label} className={`px-3 py-1 text-xs font-semibold ${check.passed ? "bg-emerald-50 text-mint" : "bg-slate-100 text-slate-500"}`}>
@@ -94,7 +123,8 @@ export default function SignupPage() {
           <label className="mt-4 flex items-start gap-3 border border-line bg-white p-3 text-sm text-slate-700">
             <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} className="mt-1" />
             <span>
-              캡스톤 시연용 서비스 이용에 동의합니다. 실제 직원 개인정보와 원본 조사 파일은 업로드하지 않고, 익명화·정규화된 데이터만 사용합니다.
+              CareerLens 캡스톤 시연용 서비스 이용에 동의합니다. 실제 지원자 개인정보나 외부 직원의 민감정보를 입력하지 않고,
+              정규화된 시연 데이터와 본인 입력 데이터만 사용합니다.
             </span>
           </label>
 
@@ -132,7 +162,7 @@ export default function SignupPage() {
 function flowCopy(index: number) {
   const copies = [
     "계정을 만들고 사용자별 기록을 시작합니다.",
-    "추천 진단에 필요한 기준 데이터를 입력합니다.",
+    "추천 진단에 필요한 해외취업 프로필을 입력합니다.",
     "공고별 패턴과 사용자 프로필을 비교합니다.",
     "부족 요소를 준비 과제로 바꿉니다.",
     "지원 단계와 서류 상태를 관리합니다.",

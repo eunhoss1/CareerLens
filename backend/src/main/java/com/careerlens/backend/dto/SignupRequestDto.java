@@ -12,7 +12,10 @@ public record SignupRequestDto(
         String loginId,
         @NotBlank @Size(max = 40) String displayName,
         @Email @NotBlank String email,
-        @NotBlank @Size(min = 8, message = "Password must be at least 8 characters.") String password,
+        @NotBlank
+        @Size(min = 8, message = "Password must be at least 8 characters.")
+        @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d)(?=.*[^A-Za-z0-9]).+$", message = "Password must include letters, numbers, and special characters.")
+        String password,
         @NotBlank String passwordConfirm,
         @AssertTrue(message = "Terms must be accepted.") Boolean termsAccepted
 ) {

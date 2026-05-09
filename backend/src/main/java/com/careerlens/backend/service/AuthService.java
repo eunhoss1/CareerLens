@@ -6,6 +6,8 @@ import com.careerlens.backend.dto.SignupRequestDto;
 import com.careerlens.backend.entity.User;
 import com.careerlens.backend.repository.UserProfileRepository;
 import com.careerlens.backend.repository.UserRepository;
+import com.careerlens.backend.security.JwtTokenService;
+import com.careerlens.backend.security.JwtTokenService.TokenIssue;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Locale;
@@ -21,16 +23,19 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
+    private final JwtTokenService jwtTokenService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final Set<String> adminLoginIds;
 
     public AuthService(
             UserRepository userRepository,
             UserProfileRepository userProfileRepository,
+            JwtTokenService jwtTokenService,
             @Value("${app.auth.admin-login-ids:admin,careerlens-admin}") String adminLoginIds
     ) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
+        this.jwtTokenService = jwtTokenService;
         this.adminLoginIds = Arrays.stream(adminLoginIds.split(","))
                 .map(value -> value.trim().toLowerCase(Locale.ROOT))
                 .filter(value -> !value.isBlank())
@@ -39,19 +44,20 @@ public class AuthService {
 
     @Transactional
     public AuthResponseDto signup(SignupRequestDto request) {
-        String loginId = request.loginId().trim().toLowerCase();
-        String email = request.email().trim().toLowerCase();
+        String loginId = request.loginId().trim().toLowerCase(Locale.ROOT);
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
         String displayName = request.displayName().trim();
 
         if (!request.password().equals(request.passwordConfirm())) {
             throw new IllegalArgumentException("비밀번호 확인이 일치하지 않습니다.");
         }
+        validatePasswordPolicy(request.password());
 
         userRepository.findByLoginId(loginId).ifPresent(user -> {
-            throw new IllegalArgumentException("이미 사용 중인 아이디입니다: " + loginId);
+            throw new IllegalArgumentException("이미 사용 중인 아이디입니다.");
         });
         userRepository.findByEmail(email).ifPresent(user -> {
-            throw new IllegalArgumentException("이미 사용 중인 이메일입니다: " + email);
+            throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
         });
 
         User user = new User();
@@ -68,7 +74,7 @@ public class AuthService {
 
     @Transactional
     public AuthResponseDto login(LoginRequestDto request) {
-        String loginIdentifier = request.loginId().trim().toLowerCase();
+        String loginIdentifier = request.loginId().trim().toLowerCase(Locale.ROOT);
         User user = userRepository.findByLoginId(loginIdentifier)
                 .or(() -> userRepository.findByEmail(loginIdentifier))
                 .orElseThrow(() -> new IllegalArgumentException("아이디 또는 비밀번호가 올바르지 않습니다."));
@@ -83,14 +89,19 @@ public class AuthService {
     }
 
     private AuthResponseDto toResponse(User user) {
+        String role = normalizedRole(user);
+        TokenIssue token = jwtTokenService.issue(user, role);
         return new AuthResponseDto(
                 user.getId(),
                 user.getLoginId(),
                 user.getDisplayName(),
                 user.getEmail(),
-                normalizedRole(user),
-                "ADMIN".equals(normalizedRole(user)),
-                userProfileRepository.findByUserId(user.getId()).isPresent()
+                role,
+                "ADMIN".equals(role),
+                userProfileRepository.findByUserId(user.getId()).isPresent(),
+                token.accessToken(),
+                "Bearer",
+                token.expiresAt()
         );
     }
 
@@ -104,5 +115,16 @@ public class AuthService {
             return roleFor(user.getLoginId());
         }
         return user.getRole().trim().toUpperCase(Locale.ROOT);
+    }
+
+    private void validatePasswordPolicy(String password) {
+        if (password == null || password.length() < 8) {
+            throw new IllegalArgumentException("비밀번호는 8자 이상이어야 합니다.");
+        }
+        if (!password.matches(".*[A-Za-z].*")
+                || !password.matches(".*\\d.*")
+                || !password.matches(".*[^A-Za-z0-9].*")) {
+            throw new IllegalArgumentException("비밀번호는 영문, 숫자, 특수문자를 모두 포함해야 합니다.");
+        }
     }
 }

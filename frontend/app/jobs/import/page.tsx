@@ -190,6 +190,14 @@ export default function JobImportPage() {
             action={<LinkButton href="/login">관리자 로그인</LinkButton>}
           />
         </div>
+      ) : !user?.access_token ? (
+        <div className="lens-container py-8">
+          <EmptyState
+            title="다시 로그인이 필요합니다"
+            description="관리자 공고 API는 JWT 토큰으로 보호됩니다. 이전 버전에서 저장된 로그인 정보에는 토큰이 없을 수 있으니 admin 계정으로 다시 로그인해주세요."
+            action={<LinkButton href="/login">관리자 로그인</LinkButton>}
+          />
+        </div>
       ) : (
       <div className="lens-container grid gap-6 py-8 lg:grid-cols-[360px_1fr]">
         <aside className="space-y-4">

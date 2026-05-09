@@ -1,5 +1,5 @@
 import type { JobPosting } from "@/lib/jobs";
-import { getStoredUser } from "@/lib/auth";
+import { authHeaders } from "@/lib/auth";
 
 export type ExternalJobPreview = {
   provider: string;
@@ -119,10 +119,7 @@ export async function runGreenhouseSync(): Promise<ExternalJobSyncStatus> {
 }
 
 function adminHeaders() {
-  const user = getStoredUser();
-  return {
-    "X-Careerlens-User-Role": user?.role ?? "USER"
-  };
+  return authHeaders();
 }
 
 async function readApiError(response: Response, fallback: string) {

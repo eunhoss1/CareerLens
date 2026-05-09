@@ -6,6 +6,9 @@ export type AuthUser = {
   role?: string;
   admin?: boolean;
   profile_completed: boolean;
+  access_token?: string;
+  token_type?: string;
+  expires_at?: number;
 };
 
 const STORAGE_KEY = "careerlens_user";
@@ -28,6 +31,16 @@ export function clearStoredUser() {
 
 export function isAdminUser(user: AuthUser | null) {
   return Boolean(user?.admin) || user?.role === "ADMIN";
+}
+
+export function authHeaders(): HeadersInit {
+  const user = getStoredUser();
+  if (!user?.access_token) {
+    return {};
+  }
+  return {
+    Authorization: `${user.token_type ?? "Bearer"} ${user.access_token}`
+  };
 }
 
 export async function signup(input: {
@@ -57,9 +70,21 @@ async function authRequest(path: string, input: object): Promise<AuthUser> {
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Authentication request failed.");
+    throw new Error(await readApiError(response, "Authentication request failed."));
   }
 
   return response.json();
+}
+
+async function readApiError(response: Response, fallback: string) {
+  const text = await response.text();
+  if (!text) {
+    return fallback;
+  }
+  try {
+    const parsed = JSON.parse(text) as { message?: string; error?: string };
+    return parsed.message || parsed.error || fallback;
+  } catch {
+    return text;
+  }
 }
