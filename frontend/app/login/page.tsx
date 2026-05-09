@@ -9,8 +9,8 @@ import { login, storeUser } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [loginId, setLoginId] = useState("careerlens-demo");
-  const [password, setPassword] = useState("Career1234!");
+  const [loginId, setLoginId] = useState("");
+  const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);

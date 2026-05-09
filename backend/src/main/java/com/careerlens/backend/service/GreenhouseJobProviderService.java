@@ -16,6 +16,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -248,16 +249,16 @@ public class GreenhouseJobProviderService {
         job.setVisaRequirement(preview.visaRequirement());
         job.setSalaryRange(preview.salaryRange());
         job.setWorkType(preview.workType());
-        job.setApplicationDeadline(request.defaultDeadline());
-        job.setSalaryScore(scoreSalary(preview.salaryRange()));
-        job.setWorkLifeBalanceScore(scoreWorkLife(preview.workType()));
-        job.setCompanyValueScore(72);
+        job.setApplicationDeadline(resolveDeadline(preview, request.defaultDeadline()));
+        job.setSalaryScore(scoreSalary(preview));
+        job.setWorkLifeBalanceScore(scoreWorkLife(preview));
+        job.setCompanyValueScore(scoreCompanyValue(preview));
         job.setProbabilityWeight(30);
         job.setSalaryWeight(15);
         job.setWorkLifeBalanceWeight(15);
         job.setCompanyValueWeight(15);
         job.setJobFitWeight(25);
-        job.setEvaluationRationale("Greenhouse 공개 Job Board API에서 가져온 공고를 CareerLens 내부 JobPosting 형식으로 정규화했습니다. 직원 표본/패턴 데이터는 별도 검수 또는 자동 생성 후보로 보강해야 합니다.");
+        job.setEvaluationRationale(buildCandidateFacingSummary(preview));
     }
 
     private void upsertImportedPattern(JobPosting job, ExternalJobPreviewDto preview) {
@@ -273,7 +274,8 @@ public class GreenhouseJobProviderService {
         pattern.setGithubExpected(true);
         pattern.setPortfolioExpected(preview.portfolioRequired());
         pattern.setProjectExperienceBenchmark(projectBenchmark(preview));
-        pattern.setEvidenceSummary("Greenhouse 공개 공고의 직무명, 본문, 위치, 기술 키워드를 기반으로 생성한 기본 PatternProfile입니다. 실제 서비스에서는 직원 표본과 가상 합격자 패턴 검수를 거쳐 보강합니다.");
+        pattern.setEvidenceSummary(preview.companyName() + " " + preview.jobTitle()
+                + " 공고의 직무명, 위치, 요구 기술 키워드를 바탕으로 만든 기본 직무 패턴입니다. 직원 표본과 가상 합격자 패턴이 보강되면 추천 근거가 더 정밀해집니다.");
         pattern.setCoreSkills(preview.requiredSkills());
         pattern.setPreferredSkills(preview.preferredSkills());
         pattern.setCertifications(new ArrayList<>());
@@ -623,21 +625,104 @@ public class GreenhouseJobProviderService {
         return "On-site / Not specified";
     }
 
-    private int scoreSalary(String salaryRange) {
-        return salaryRange == null || salaryRange.equals("Not disclosed") ? 60 : 78;
+    private LocalDate resolveDeadline(ExternalJobPreviewDto preview, LocalDate requestedDeadline) {
+        if (requestedDeadline != null) {
+            return requestedDeadline;
+        }
+        int spreadDays = 21 + stableBucket(preview.externalRef(), 50);
+        return LocalDate.now().plusDays(spreadDays);
     }
 
-    private int scoreWorkLife(String workType) {
-        if (workType == null) {
-            return 60;
+    private int scoreSalary(ExternalJobPreviewDto preview) {
+        String salaryRange = preview.salaryRange();
+        if (salaryRange != null && !salaryRange.equals("Not disclosed")) {
+            return 72 + stableBucket(preview.externalRef() + ":salary", 18);
         }
-        if (workType.contains("Remote")) {
-            return 78;
+        int baseline = switch (preview.country()) {
+            case "United States" -> 64;
+            case "United Kingdom", "Canada", "Australia", "Singapore" -> 61;
+            case "Japan", "South Korea", "Germany", "France", "Netherlands", "Ireland" -> 58;
+            default -> 55;
+        };
+        return clampScore(baseline + stableBucket(preview.externalRef() + ":salary-missing", 9) - 4);
+    }
+
+    private int scoreWorkLife(ExternalJobPreviewDto preview) {
+        String workType = preview.workType();
+        int baseline = 62;
+        if (workType != null && workType.contains("Remote")) {
+            baseline = 77;
+        } else if (workType != null && workType.contains("Hybrid")) {
+            baseline = 72;
+        } else if (workType != null && workType.contains("On-site")) {
+            baseline = 61;
         }
-        if (workType.contains("Hybrid")) {
-            return 72;
+        if (preview.minExperienceYears() != null && preview.minExperienceYears() >= 7) {
+            baseline -= 4;
         }
-        return 62;
+        return clampScore(baseline + stableBucket(preview.externalRef() + ":work-life", 7) - 3);
+    }
+
+    private int scoreCompanyValue(ExternalJobPreviewDto preview) {
+        String companyName = valueOrDefault(preview.companyName(), "Unknown company");
+        int baseline = switch (companyName) {
+            case "Airbnb" -> 84;
+            case "DoorDash" -> 80;
+            case "Reddit" -> 78;
+            case "Stripe" -> 85;
+            default -> 72 + stableBucket(preview.boardToken() + ":company", 10);
+        };
+        if ("AI/ML".equals(preview.jobFamily()) || "Data".equals(preview.jobFamily())) {
+            baseline += 2;
+        }
+        return clampScore(baseline + stableBucket(preview.externalRef() + ":company", 7) - 3);
+    }
+
+    private String buildCandidateFacingSummary(ExternalJobPreviewDto preview) {
+        String skills = firstSkills(preview.requiredSkills());
+        String companyIntro = companyIntro(preview.companyName());
+        return companyIntro + " " + preview.jobTitle() + " 포지션은 " + preview.country()
+                + " 기준 " + preview.jobFamily() + " 직무로 분류되며, 핵심 확인 역량은 " + skills
+                + "입니다. 공고 원문에서 세부 자격요건과 근무 조건을 함께 확인하는 것을 권장합니다.";
+    }
+
+    private String companyIntro(String companyName) {
+        String normalizedCompanyName = valueOrDefault(companyName, "해당 기업");
+        if ("Airbnb".equals(normalizedCompanyName)) {
+            return "Airbnb는 전 세계 숙박과 여행 경험을 연결하는 글로벌 플랫폼 기업입니다.";
+        }
+        if ("DoorDash".equals(normalizedCompanyName)) {
+            return "DoorDash는 지역 상거래와 물류 경험을 연결하는 온디맨드 플랫폼 기업입니다.";
+        }
+        if ("Reddit".equals(normalizedCompanyName)) {
+            return "Reddit은 커뮤니티 기반 대화와 콘텐츠를 운영하는 글로벌 플랫폼 기업입니다.";
+        }
+        if ("Stripe".equals(normalizedCompanyName)) {
+            return "Stripe는 온라인 결제와 금융 인프라를 제공하는 글로벌 핀테크 기업입니다.";
+        }
+        return normalizedCompanyName + "는 글로벌 채용 공고를 공개하고 있는 기술 중심 기업입니다.";
+    }
+
+    private String firstSkills(List<String> skills) {
+        if (skills == null || skills.isEmpty()) {
+            return "공고 본문에서 확인되는 직무 역량";
+        }
+        List<String> firstSkills = new ArrayList<>();
+        for (String skill : skills) {
+            if (firstSkills.size() >= 4) {
+                break;
+            }
+            firstSkills.add(skill);
+        }
+        return String.join(", ", firstSkills);
+    }
+
+    private int stableBucket(String value, int modulo) {
+        return Math.floorMod((value == null ? "" : value).hashCode(), Math.max(1, modulo));
+    }
+
+    private int clampScore(int value) {
+        return Math.max(45, Math.min(95, value));
     }
 
     private String languageBenchmark(List<String> languages) {

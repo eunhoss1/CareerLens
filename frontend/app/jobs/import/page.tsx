@@ -192,7 +192,7 @@ export default function JobImportPage() {
               />
               <TextInput
                 label="기본 마감일"
-                helper="선택"
+                helper="비워두면 공고별 내부 검토 마감일 자동 산정"
                 type="date"
                 value={form.defaultDeadline}
                 onChange={(event) => setForm((current) => ({ ...current, defaultDeadline: event.target.value }))}
