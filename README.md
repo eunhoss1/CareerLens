@@ -381,6 +381,13 @@ DB_DDL_AUTO=update
 테이블은 직접 만들지 않습니다.
 `careerlens` DB만 만들어두면 백엔드 실행 시 JPA가 엔티티 기준으로 테이블을 자동 생성합니다.
 
+프론트 포트가 조원마다 다르면 CORS 허용 origin을 환경변수로 설정할 수 있습니다.
+
+```env
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
+```
+
 자세한 내용:
 
 ```txt
