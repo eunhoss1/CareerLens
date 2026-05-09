@@ -6,19 +6,16 @@ import { useEffect, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Button, Card, MetricCard, PageHeader, PageShell, SelectInput, TextInput } from "@/components/ui";
 import { getStoredUser, storeUser, type AuthUser } from "@/lib/auth";
+import { domainSuggestionsFor, jobFamilies, projectSuggestionsFor, skillSuggestionsFor } from "@/lib/job-families";
 import { demoProfile, fetchUserProfile, saveUserProfile, type UserProfileRequest } from "@/lib/recommendation";
 
 const countries = ["United States", "Japan"];
 const cities = ["Seattle", "Redmond", "New York", "Tokyo", "Osaka", "Not specified"];
-const jobFamilies = ["Backend", "Frontend"];
 const languageLevels = ["BASIC", "CONVERSATIONAL", "BUSINESS", "FLUENT", "NATIVE"];
 const workTypes = ["Onsite", "Hybrid", "Remote", "Not specified"];
 const startDates = ["Immediately", "Within 1 month", "Within 3 months", "After 6 months"];
-const skillSuggestions = ["Java", "Spring Boot", "Python", "AWS", "Docker", "Kubernetes", "CI/CD", "React", "Next.js", "TypeScript", "MySQL", "OpenSearch"];
 const certSuggestions = ["AWS Cloud Practitioner", "AWS SAA", "TOEIC", "JLPT N2", "JLPT N1", "정보처리기사", "PMP"];
 const preferenceSuggestions = ["Visa support", "Hybrid", "Remote", "Relocation support", "Global team", "High salary"];
-const projectSuggestions = ["REST API", "분산 시스템", "클라우드 배포", "검색 플랫폼", "보안 서비스", "커머스", "AI 프로젝트"];
-const domainSuggestions = ["클라우드", "커머스", "광고", "보안", "B2B SaaS", "AI 서비스", "게임"];
 
 export default function ProfileOnboardingPage() {
   const router = useRouter();
@@ -161,9 +158,9 @@ export default function ProfileOnboardingPage() {
           <Section step="02" title="경력과 역량" description="추천 점수에서 가장 크게 쓰이는 직무 관련 데이터를 입력합니다.">
             <NumberField label="총 경력 연차" value={profile.experience_years ?? 0} onChange={(value) => setProfile({ ...profile, experience_years: value })} />
             <NumberField label="직무 관련 경력 연차" value={profile.related_experience_years ?? 0} onChange={(value) => setProfile({ ...profile, related_experience_years: value })} />
-            <TextTagInput label="대표 프로젝트 경험" value={profile.project_experience_summary ?? ""} suggestions={projectSuggestions} onChange={(value) => setProfile({ ...profile, project_experience_summary: value })} />
-            <TextTagInput label="산업/도메인 경험" value={profile.domain_experience ?? ""} suggestions={domainSuggestions} onChange={(value) => setProfile({ ...profile, domain_experience: value })} />
-            <TagInput label="기술 스택" tags={profile.tech_stack} suggestions={skillSuggestions} onChange={(tags) => setProfile({ ...profile, tech_stack: tags })} />
+            <TextTagInput label="대표 프로젝트 경험" value={profile.project_experience_summary ?? ""} suggestions={projectSuggestionsFor(profile.target_job_family)} onChange={(value) => setProfile({ ...profile, project_experience_summary: value })} />
+            <TextTagInput label="산업/도메인 경험" value={profile.domain_experience ?? ""} suggestions={domainSuggestionsFor(profile.target_job_family)} onChange={(value) => setProfile({ ...profile, domain_experience: value })} />
+            <TagInput label="기술 스택" tags={profile.tech_stack} suggestions={skillSuggestionsFor(profile.target_job_family)} onChange={(tags) => setProfile({ ...profile, tech_stack: tags })} />
             <TagInput label="자격증/시험" tags={profile.certifications} suggestions={certSuggestions} onChange={(tags) => setProfile({ ...profile, certifications: tags })} />
           </Section>
 

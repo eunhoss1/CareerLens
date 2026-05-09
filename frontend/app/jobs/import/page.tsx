@@ -12,6 +12,7 @@ import {
   type ExternalJobPreview,
   type ExternalJobSyncStatus
 } from "@/lib/external-jobs";
+import { jobFamilies } from "@/lib/job-families";
 
 type FormState = {
   boardToken: string;
@@ -134,10 +135,11 @@ export default function JobImportPage() {
                 value={form.defaultJobFamily}
                 onChange={(event) => setForm((current) => ({ ...current, defaultJobFamily: event.target.value }))}
               >
-                <option value="Backend">백엔드</option>
-                <option value="Frontend">프론트엔드</option>
-                <option value="AI/ML">AI/ML</option>
-                <option value="Data">데이터</option>
+                {jobFamilies.map((family) => (
+                  <option key={family} value={family}>
+                    {family}
+                  </option>
+                ))}
               </SelectInput>
               <TextInput
                 label="가져올 개수"
