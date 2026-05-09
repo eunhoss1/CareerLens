@@ -1,5 +1,7 @@
 package com.careerlens.backend.dto;
 
+import java.time.LocalDateTime;
+
 public record AuthResponseDto(
         Long userId,
         String loginId,
@@ -7,6 +9,12 @@ public record AuthResponseDto(
         String email,
         String role,
         Boolean admin,
-        Boolean profileCompleted
+        Boolean profileCompleted,
+        String accountStatus,
+        Boolean emailVerified,
+        LocalDateTime lastLoginAt,
+        String accessToken,
+        String tokenType,
+        Long expiresAt
 ) {
 }

@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LinkButton } from "@/components/ui";
-import { getStoredUser, isAdminUser, type AuthUser } from "@/lib/auth";
+import { clearStoredUser, getStoredUser, isAdminUser, type AuthUser } from "@/lib/auth";
 import { mainMenus, statusLabel, type MenuChild } from "@/lib/menu";
 
 export function SiteHeader() {
   const pathname = usePathname();
+  const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
@@ -20,6 +20,12 @@ export function SiteHeader() {
     ...menu,
     children: filterVisibleChildren(menu.children, isAdmin)
   }));
+
+  function logout() {
+    clearStoredUser();
+    setUser(null);
+    router.push("/login");
+  }
 
   return (
     <header className="sticky top-0 z-30 border-b border-[#24343a] bg-night text-white">
@@ -68,11 +74,16 @@ export function SiteHeader() {
                             <span className="text-sm font-semibold text-night">{child.title}</span>
                             <span className="text-[11px] font-bold text-slate-400">{statusLabel(child.status)}</span>
                           </span>
-                          {child.description && <span className="mt-1 block text-xs leading-5 text-slate-500">{child.description}</span>}
+                          {child.description && (
+                            <span className="mt-1 block text-xs leading-5 text-slate-500">{child.description}</span>
+                          )}
                           {child.children && (
                             <span className="mt-2 flex flex-wrap gap-1.5">
                               {child.children.map((grandChild) => (
-                                <span key={grandChild.title} className="border border-line bg-white px-2 py-1 text-[11px] font-semibold text-slate-500">
+                                <span
+                                  key={grandChild.title}
+                                  className="border border-line bg-white px-2 py-1 text-[11px] font-semibold text-slate-500"
+                                >
                                   {grandChild.title}
                                 </span>
                               ))}
@@ -91,14 +102,42 @@ export function SiteHeader() {
         <div className="flex items-center gap-2">
           <div className="hidden max-w-[52vw] gap-2 overflow-x-auto md:flex xl:hidden">
             {visibleMenus.map((menu) => (
-              <Link key={menu.title} href={menu.href} className="whitespace-nowrap border border-white/15 px-2.5 py-1.5 text-xs font-semibold text-slate-100">
+              <Link
+                key={menu.title}
+                href={menu.href}
+                className="whitespace-nowrap border border-white/15 px-2.5 py-1.5 text-xs font-semibold text-slate-100"
+              >
                 {menu.title}
               </Link>
             ))}
           </div>
-          <LinkButton href={user ? "/mypage" : "/login"} variant="secondary" className="border-white/25 bg-white text-night hover:bg-slate-100">
-            {user ? user.display_name : "로그인"}
-          </LinkButton>
+
+          {user ? (
+            <div className="flex items-center gap-2">
+              <Link
+                href="/mypage"
+                className="hidden border border-white/20 px-2.5 py-1.5 text-xs font-semibold text-slate-100 hover:bg-white/10 sm:inline-flex"
+                title={`${user.display_name} 계정으로 로그인 중`}
+              >
+                {user.display_name}
+                <span className="ml-2 text-cyan-200">{isAdmin ? "ADMIN" : "USER"}</span>
+              </Link>
+              <button
+                type="button"
+                onClick={logout}
+                className="inline-flex min-h-10 items-center justify-center border border-white/25 bg-white px-4 py-2 text-sm font-semibold text-night transition hover:bg-slate-100"
+              >
+                로그아웃
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="inline-flex min-h-10 items-center justify-center border border-white/25 bg-white px-4 py-2 text-sm font-semibold text-night transition hover:bg-slate-100"
+            >
+              로그인
+            </Link>
+          )}
         </div>
       </div>
     </header>
