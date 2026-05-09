@@ -1,43 +1,63 @@
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Card, LinkButton, PageHeader, PageShell, SectionHeader, StepCard } from "@/components/ui";
-import { countryGuides, resourceDisclaimer, visaGuides } from "@/lib/resource-guides";
+import { countryGuides, noticeItems, qnaItems, resourceDisclaimer, visaGuides } from "@/lib/resource-guides";
 
 const resourceSections = [
   {
+    title: "공지사항",
+    description: "팀 작업, 데이터 정책, 시연 범위, 주요 변경사항을 한 곳에서 확인합니다.",
+    href: "/resources/notices",
+    badge: "TEAM"
+  },
+  {
+    title: "Q&A",
+    description: "추천 진단, PatternProfile, AI 활용, 권한 정책에 대한 자주 묻는 질문을 정리합니다.",
+    href: "/resources/qna",
+    badge: "FAQ"
+  },
+  {
     title: "국가정보",
-    description: "미국/일본 취업 시장, 언어, 비자, 정착 준비를 한 번에 확인합니다.",
-    href: "/resources/countries"
+    description: "국가별 채용시장, 언어, 정착 준비 포인트를 추천 흐름과 연결합니다.",
+    href: "/resources/countries",
+    badge: "COUNTRY"
   },
   {
     title: "비자정보",
-    description: "공식기관 확인 원칙과 국가별 기본 체크리스트를 행정로드맵으로 연결합니다.",
-    href: "/resources/visas"
-  },
-  {
-    title: "맞춤 피드",
-    description: "사용자 프로필과 추천 부족 요소를 준비 자료로 연결하는 확장 화면입니다.",
-    href: "/recommendations/feed"
+    description: "공식 기관 링크와 준비 체크리스트를 행정 로드맵으로 이어줍니다.",
+    href: "/resources/visas",
+    badge: "VISA"
   }
 ];
 
 export default function ResourcesPage() {
+  const urgentNotices = noticeItems.slice(0, 3);
+  const featuredQuestions = qnaItems.slice(0, 4);
+
   return (
     <PageShell>
       <SiteHeader />
       <PageHeader
         kicker="RESOURCE CENTER"
         title="자료실"
-        description="해외취업 준비 정보가 파편화되어 있다는 문제를 해결하기 위해 국가, 비자, 정착, 추천 피드를 하나의 흐름으로 연결합니다."
-        actions={<LinkButton href="/resources/visas">비자정보 보기</LinkButton>}
+        description="해외취업 준비에서 흩어지는 공고, 비자, 정책, 추천 진단 정보를 하나의 흐름으로 정리합니다. 자료실은 법률 판단이 아니라 공식 출처 확인과 서비스 사용을 돕는 정보 허브입니다."
+        actions={
+          <>
+            <LinkButton href="/resources/notices" variant="secondary">공지 보기</LinkButton>
+            <LinkButton href="/resources/visas">비자정보 보기</LinkButton>
+          </>
+        }
       />
 
       <section className="lens-container py-6">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {resourceSections.map((section, index) => (
             <Card key={section.title} className="p-5">
-              <span className="text-xs font-bold text-brand">0{index + 1}</span>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-bold text-brand">0{index + 1}</span>
+                <Badge tone="muted">{section.badge}</Badge>
+              </div>
               <h2 className="mt-3 text-lg font-semibold text-night">{section.title}</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-600">{section.description}</p>
+              <p className="mt-2 min-h-16 text-sm leading-6 text-slate-600">{section.description}</p>
               <div className="mt-4">
                 <LinkButton href={section.href} variant="secondary">열기</LinkButton>
               </div>
@@ -45,11 +65,62 @@ export default function ResourcesPage() {
           ))}
         </div>
 
+        <section className="mt-8 grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+          <Card className="p-5">
+            <SectionHeader
+              kicker="NOTICE BRIEF"
+              title="최근 공지"
+              description="조원들이 dev pull 전 확인해야 할 작업 변경사항과 시연 정책을 정리했습니다."
+              actions={<LinkButton href="/resources/notices" variant="subtle">전체 공지</LinkButton>}
+            />
+            <div className="mt-5 grid gap-3">
+              {urgentNotices.map((notice) => (
+                <article key={notice.id} className="border border-line bg-panel p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={notice.priority === "높음" ? "warning" : "muted"}>{notice.priority}</Badge>
+                    <Badge tone="brand">{notice.category}</Badge>
+                    <span className="text-xs font-semibold text-slate-500">{notice.date}</span>
+                  </div>
+                  <h3 className="mt-3 text-base font-semibold text-night">{notice.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{notice.summary}</p>
+                </article>
+              ))}
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <SectionHeader
+              kicker="SERVICE Q&A"
+              title="자주 묻는 질문"
+              description="추천 엔진과 AI 활용 방식처럼 발표 때 질문받기 쉬운 항목을 먼저 정리했습니다."
+              actions={<LinkButton href="/resources/qna" variant="subtle">Q&A 전체</LinkButton>}
+            />
+            <div className="mt-5 space-y-3">
+              {featuredQuestions.map((item) => (
+                <details key={item.question} className="group border border-line bg-panel p-4">
+                  <summary className="cursor-pointer text-sm font-semibold text-night">{item.question}</summary>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">{item.answer}</p>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {item.tags.map((tag) => (
+                      <Badge key={tag} tone="muted">{tag}</Badge>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </Card>
+        </section>
+
         <section className="mt-8 grid gap-5 lg:grid-cols-[1fr_1fr]">
           <Card className="p-5">
-            <SectionHeader kicker="COUNTRY SNAPSHOT" title="국가별 준비 포인트" />
+            <SectionHeader
+              kicker="COUNTRY SNAPSHOT"
+              title="국가별 준비 포인트"
+              description="추천 진단 이후 국가별 행정/정착 준비로 이어지는 핵심 기준입니다."
+              actions={<LinkButton href="/resources/countries" variant="secondary">국가정보</LinkButton>}
+            />
             <div className="mt-5 grid gap-3">
-              {countryGuides.map((guide) => (
+              {countryGuides.slice(0, 3).map((guide) => (
                 <div key={guide.country} className="border border-line bg-panel p-4">
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="text-lg font-semibold text-night">{guide.country}</h3>
@@ -62,15 +133,20 @@ export default function ResourcesPage() {
           </Card>
 
           <Card className="p-5">
-            <SectionHeader kicker="VISA TO ROADMAP" title="비자정보 연결 흐름" />
+            <SectionHeader
+              kicker="VISA TO ROADMAP"
+              title="비자정보 연결 흐름"
+              description="비자 페이지는 법률 판단 대신 공식 링크 확인과 행정 로드맵 체크리스트로 연결됩니다."
+              actions={<LinkButton href="/resources/visas" variant="secondary">비자정보</LinkButton>}
+            />
             <div className="mt-5 grid gap-3">
-              {visaGuides.map((guide) => (
-                <StepCard key={guide.country} index={guide.country === "미국" ? 1 : 2} title={`${guide.country} ${guide.category}`} description={guide.officialReminder} />
+              {visaGuides.slice(0, 2).map((guide, index) => (
+                <StepCard key={guide.country} index={index + 1} title={`${guide.country} ${guide.category}`} description={guide.summary} />
               ))}
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
               <LinkButton href="/roadmap/administration" variant="secondary">행정로드맵</LinkButton>
-              <LinkButton href="/settlement" variant="subtle">정착지원</LinkButton>
+              <LinkButton href="/settlement" variant="subtle">정착 지원</LinkButton>
             </div>
           </Card>
         </section>
@@ -85,6 +161,6 @@ export default function ResourcesPage() {
 
 function difficultyLabel(value: string) {
   if (value === "HIGH") return "준비 난이도 높음";
-  if (value === "MEDIUM") return "준비 난이도 중간";
+  if (value === "MEDIUM") return "준비 난이도 보통";
   return "준비 난이도 낮음";
 }
