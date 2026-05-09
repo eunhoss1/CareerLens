@@ -7,15 +7,35 @@ import { SiteHeader } from "@/components/site-header";
 import { Badge, Button, Card, PageShell, StatusPill, TextInput } from "@/components/ui";
 import { login, storeUser } from "@/lib/auth";
 
+const securityNotes = [
+  {
+    label: "인증 방식",
+    value: "로그인 성공 시 JWT access token을 발급하고 브라우저에 저장합니다."
+  },
+  {
+    label: "로그인 보호",
+    value: "비밀번호 실패가 5회 누적되면 계정이 15분 동안 잠깁니다."
+  },
+  {
+    label: "권한 정책",
+    value: "외부 공고 수집 같은 관리자 기능은 ADMIN 토큰이 있을 때만 접근됩니다."
+  }
+];
+
 export default function LoginPage() {
   const router = useRouter();
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   async function submit() {
-    if (!loginId.trim() || !password) return;
+    if (!loginId.trim() || !password) {
+      setErrorMessage("아이디 또는 이메일과 비밀번호를 입력해주세요.");
+      return;
+    }
+
     setIsLoading(true);
     setErrorMessage(null);
     try {
@@ -37,12 +57,13 @@ export default function LoginPage() {
           <span className="lens-kicker border-white/30 bg-white text-night">SECURE ACCESS</span>
           <h1 className="mt-5 text-3xl font-semibold">CareerLens 계정으로 이어서 준비하기</h1>
           <p className="mt-3 text-sm leading-6 text-slate-300">
-            로그인하면 사용자별 프로필, 추천 진단 결과, 커리어 로드맵, 지원 관리 기록을 이어서 확인할 수 있습니다.
+            로그인하면 사용자별 해외취업 프로필, 추천 진단 결과, 커리어 로드맵, 지원 관리 기록을 이어서
+            확인할 수 있습니다.
           </p>
           <div className="mt-8 space-y-3 text-sm">
-            <StatusRow label="인증 방식" value="로그인 성공 시 JWT access token을 발급합니다." />
-            <StatusRow label="권한 정책" value="관리자 API는 ADMIN 토큰이 있어야 접근할 수 있습니다." />
-            <StatusRow label="프로필 연결" value="로그인한 사용자 id 기준으로 프로필과 진단 기록을 불러옵니다." />
+            {securityNotes.map((note) => (
+              <StatusRow key={note.label} label={note.label} value={note.value} />
+            ))}
           </div>
         </aside>
 
@@ -50,7 +71,8 @@ export default function LoginPage() {
           <Badge tone="brand">ACCOUNT LOGIN</Badge>
           <h2 className="mt-4 text-3xl font-semibold text-night">로그인</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            아이디 또는 이메일로 로그인합니다. 로그인 토큰은 브라우저에 저장되어 관리자 기능과 사용자별 API 요청에 사용됩니다.
+            아이디 또는 이메일로 로그인합니다. 로그인 토큰은 추천 진단, 마이페이지, 관리자 API 호출에
+            사용됩니다.
           </p>
 
           <div className="mt-6 space-y-4">
@@ -64,12 +86,20 @@ export default function LoginPage() {
               label="비밀번호"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              type="password"
+              type={showPassword ? "text" : "password"}
               autoComplete="current-password"
               onKeyDown={(event) => {
                 if (event.key === "Enter") submit();
               }}
             />
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <label className="flex min-h-9 items-center gap-2 text-sm text-slate-600">
+              <input type="checkbox" checked={showPassword} onChange={(event) => setShowPassword(event.target.checked)} />
+              비밀번호 표시
+            </label>
+            <span className="text-xs text-slate-500">비밀번호 재설정은 후속 기능에서 이메일 인증과 함께 연결 예정</span>
           </div>
 
           {errorMessage && (
@@ -89,7 +119,9 @@ export default function LoginPage() {
 
           <p className="mt-4 text-center text-sm text-slate-600">
             아직 계정이 없나요?{" "}
-            <Link href="/signup" className="font-semibold text-brand underline-offset-4 hover:underline">회원가입</Link>
+            <Link href="/signup" className="font-semibold text-brand underline-offset-4 hover:underline">
+              회원가입
+            </Link>
           </p>
         </Card>
       </section>

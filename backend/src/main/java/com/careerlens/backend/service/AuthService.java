@@ -6,6 +6,7 @@ import com.careerlens.backend.dto.SignupRequestDto;
 import com.careerlens.backend.entity.User;
 import com.careerlens.backend.repository.UserProfileRepository;
 import com.careerlens.backend.repository.UserRepository;
+import com.careerlens.backend.security.JwtClaims;
 import com.careerlens.backend.security.JwtTokenService;
 import com.careerlens.backend.security.JwtTokenService.TokenIssue;
 import java.time.LocalDateTime;
@@ -20,6 +21,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
+
+    private static final String ACTIVE_STATUS = "ACTIVE";
+    private static final String SUSPENDED_STATUS = "SUSPENDED";
+    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final int LOCK_MINUTES = 15;
 
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
@@ -60,13 +66,25 @@ public class AuthService {
             throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
         });
 
+        LocalDateTime now = LocalDateTime.now();
         User user = new User();
         user.setLoginId(loginId);
         user.setDisplayName(displayName);
         user.setEmail(email);
+        user.setCountryDialCode(blankToNull(request.countryDialCode()));
+        user.setPhoneNumber(blankToNull(request.phoneNumber()));
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setRole(roleFor(loginId));
-        user.setCreatedAt(LocalDateTime.now());
+        user.setAccountStatus(ACTIVE_STATUS);
+        user.setEmailVerified(false);
+        user.setFailedLoginAttempts(0);
+        user.setMarketingOptIn(Boolean.TRUE.equals(request.marketingOptIn()));
+        user.setTermsAcceptedAt(now);
+        user.setPrivacyAcceptedAt(now);
+        user.setSecurityNoticeAcceptedAt(now);
+        user.setPasswordChangedAt(now);
+        user.setCreatedAt(now);
+        user.setUpdatedAt(now);
         User savedUser = userRepository.save(user);
 
         return toResponse(savedUser);
@@ -78,14 +96,57 @@ public class AuthService {
         User user = userRepository.findByLoginId(loginIdentifier)
                 .or(() -> userRepository.findByEmail(loginIdentifier))
                 .orElseThrow(() -> new IllegalArgumentException("아이디 또는 비밀번호가 올바르지 않습니다."));
+
+        ensureLoginAllowed(user);
         if (user.getPasswordHash() == null || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            registerFailedLogin(user);
             throw new IllegalArgumentException("아이디 또는 비밀번호가 올바르지 않습니다.");
         }
+
         String role = roleFor(user.getLoginId());
         if (user.getRole() == null || user.getRole().isBlank() || "ADMIN".equals(role)) {
             user.setRole(role);
         }
+        user.setFailedLoginAttempts(0);
+        user.setLockedUntil(null);
+        user.setLastLoginAt(LocalDateTime.now());
+        user.setUpdatedAt(LocalDateTime.now());
         return toResponse(user);
+    }
+
+    @Transactional(readOnly = true)
+    public AuthResponseDto currentUser(JwtClaims claims) {
+        User user = userRepository.findById(claims.userId())
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        return toResponse(user);
+    }
+
+    private void ensureLoginAllowed(User user) {
+        String status = user.getAccountStatus() == null || user.getAccountStatus().isBlank()
+                ? ACTIVE_STATUS
+                : user.getAccountStatus();
+        if (SUSPENDED_STATUS.equalsIgnoreCase(status)) {
+            throw new IllegalArgumentException("정지된 계정입니다. 관리자에게 문의해주세요.");
+        }
+
+        LocalDateTime lockedUntil = user.getLockedUntil();
+        if (lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now())) {
+            throw new IllegalArgumentException("로그인 실패가 반복되어 계정이 잠시 잠겼습니다. 잠시 후 다시 시도해주세요.");
+        }
+        if (lockedUntil != null && lockedUntil.isBefore(LocalDateTime.now())) {
+            user.setLockedUntil(null);
+            user.setFailedLoginAttempts(0);
+        }
+    }
+
+    private void registerFailedLogin(User user) {
+        int attempts = user.getFailedLoginAttempts() == null ? 0 : user.getFailedLoginAttempts();
+        attempts += 1;
+        user.setFailedLoginAttempts(attempts);
+        user.setUpdatedAt(LocalDateTime.now());
+        if (attempts >= MAX_FAILED_ATTEMPTS) {
+            user.setLockedUntil(LocalDateTime.now().plusMinutes(LOCK_MINUTES));
+        }
     }
 
     private AuthResponseDto toResponse(User user) {
@@ -99,6 +160,9 @@ public class AuthService {
                 role,
                 "ADMIN".equals(role),
                 userProfileRepository.findByUserId(user.getId()).isPresent(),
+                user.getAccountStatus() == null ? ACTIVE_STATUS : user.getAccountStatus(),
+                Boolean.TRUE.equals(user.getEmailVerified()),
+                user.getLastLoginAt(),
                 token.accessToken(),
                 "Bearer",
                 token.expiresAt()
@@ -126,5 +190,9 @@ public class AuthService {
                 || !password.matches(".*[^A-Za-z0-9].*")) {
             throw new IllegalArgumentException("비밀번호는 영문, 숫자, 특수문자를 모두 포함해야 합니다.");
         }
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }
