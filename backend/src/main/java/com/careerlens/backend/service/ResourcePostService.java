@@ -2,6 +2,7 @@ package com.careerlens.backend.service;
 
 import com.careerlens.backend.dto.ResourcePostDto;
 import com.careerlens.backend.dto.ResourcePostRequestDto;
+import com.careerlens.backend.dto.ResourceQuestionRequestDto;
 import com.careerlens.backend.entity.ResourcePost;
 import com.careerlens.backend.repository.ResourcePostRepository;
 import java.time.LocalDateTime;
@@ -48,6 +49,27 @@ public class ResourcePostService {
         applyRequest(post, request);
         post.setCreatedAt(LocalDateTime.now());
         post.setUpdatedAt(LocalDateTime.now());
+        return toDto(resourcePostRepository.save(post));
+    }
+
+    @Transactional
+    public ResourcePostDto createQuestion(ResourceQuestionRequestDto request) {
+        ResourcePost post = new ResourcePost();
+        LocalDateTime now = LocalDateTime.now();
+        post.setType("QNA");
+        post.setCategory(firstPresent(request.category(), "사용자 질문"));
+        post.setTitle(request.title().trim());
+        post.setSummary(request.content().trim());
+        post.setContent(request.content().trim());
+        post.setAuthor(firstPresent(request.author(), "익명 사용자"));
+        post.setPriority("참고");
+        post.setStatus("답변대기");
+        post.setPinned(false);
+        post.setViewCount(0);
+        post.setRelatedHref("/resources/qna");
+        post.setTags(mutableList(request.tags()));
+        post.setCreatedAt(now);
+        post.setUpdatedAt(now);
         return toDto(resourcePostRepository.save(post));
     }
 

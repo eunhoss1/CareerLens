@@ -2,6 +2,7 @@ package com.careerlens.backend.controller;
 
 import com.careerlens.backend.dto.ResourcePostDto;
 import com.careerlens.backend.dto.ResourcePostRequestDto;
+import com.careerlens.backend.dto.ResourceQuestionRequestDto;
 import com.careerlens.backend.service.ResourcePostService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -40,6 +41,11 @@ public class ResourcePostController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResourcePostDto createPost(@Valid @RequestBody ResourcePostRequestDto request) {
         return resourcePostService.createPost(request);
+    }
+
+    @PostMapping("/qna/questions")
+    public ResourcePostDto createQuestion(@Valid @RequestBody ResourceQuestionRequestDto request) {
+        return resourcePostService.createQuestion(request);
     }
 
     @PutMapping("/{id}")
