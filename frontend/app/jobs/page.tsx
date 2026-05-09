@@ -204,9 +204,9 @@ function JobCard({ job, creating, onCreateRoadmap }: { job: JobPosting; creating
           </p>
         </div>
         <div className="space-y-3 border border-line bg-panel p-3">
-          <ScoreBar label="연봉 매력도" value={job.salary_score ?? 60} />
-          <ScoreBar label="워라밸" value={job.work_life_balance_score ?? 60} tone="success" />
-          <ScoreBar label="기업 가치" value={job.company_value_score ?? 70} tone="warning" />
+          <EvidenceScore label="연봉 매력도" value={job.salary_score} emptyText={job.salary_range === "Not disclosed" ? "연봉 미기재" : "평가 보류"} />
+          <EvidenceScore label="워라밸" value={job.work_life_balance_score} tone="success" emptyText="근거 부족" />
+          <EvidenceScore label="기업 가치" value={job.company_value_score} tone="warning" emptyText="검수 필요" />
         </div>
       </div>
 
@@ -231,6 +231,33 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+function EvidenceScore({
+  label,
+  value,
+  tone,
+  emptyText
+}: {
+  label: string;
+  value: number | null;
+  tone?: "brand" | "success" | "warning";
+  emptyText: string;
+}) {
+  if (value === null || value === undefined) {
+    return (
+      <div>
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span className="font-medium text-slate-700">{label}</span>
+          <span className="font-semibold text-slate-500">{emptyText}</span>
+        </div>
+        <div className="mt-2 h-2 border border-line bg-white">
+          <div className="h-full w-0 bg-slate-200" />
+        </div>
+      </div>
+    );
+  }
+  return <ScoreBar label={label} value={value} tone={tone} />;
+}
+
 function uniqueValues(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort();
 }
@@ -253,12 +280,12 @@ function deadlineText(job: JobPosting) {
 }
 
 function formatDate(value: string | null) {
-  if (!value) return "상시";
+  if (!value) return "미기재";
   return value.replaceAll("-", ".");
 }
 
 function daysText(job: JobPosting) {
-  if (job.days_until_deadline === null) return "상시 채용";
+  if (job.days_until_deadline === null) return "공개 API 미제공";
   if (job.days_until_deadline < 0) return "마감된 공고";
   if (job.days_until_deadline === 0) return "오늘 마감";
   return `D-${job.days_until_deadline}`;

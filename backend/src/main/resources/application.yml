@@ -25,6 +25,8 @@ careerlens:
     processed-path: ../seed-data/processed
 
 app:
+  auth:
+    admin-login-ids: ${ADMIN_LOGIN_IDS:admin,careerlens-admin}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001}
     allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}
@@ -60,12 +62,12 @@ app:
       timeout-seconds: ${GREENHOUSE_TIMEOUT_SECONDS:12}
       sync:
         enabled: ${GREENHOUSE_SYNC_ENABLED:false}
-        board-tokens: ${GREENHOUSE_SYNC_BOARD_TOKENS:}
-        default-country: ${GREENHOUSE_SYNC_DEFAULT_COUNTRY:United States}
-        default-job-family: ${GREENHOUSE_SYNC_DEFAULT_JOB_FAMILY:Backend}
-        limit-per-board: ${GREENHOUSE_SYNC_LIMIT_PER_BOARD:20}
+        board-tokens: ${GREENHOUSE_SYNC_BOARD_TOKENS:airbnb,stripe,reddit,databricks,figma,greenhouse,anthropic,doordashusa,asana,discord,duolingo,gitlab,mixpanel,webflow}
+        default-country: ${GREENHOUSE_SYNC_DEFAULT_COUNTRY:ALL}
+        default-job-family: ${GREENHOUSE_SYNC_DEFAULT_JOB_FAMILY:ALL}
+        limit-per-board: ${GREENHOUSE_SYNC_LIMIT_PER_BOARD:50}
         create-pattern-profile: ${GREENHOUSE_SYNC_CREATE_PATTERN_PROFILE:true}
-        default-deadline-offset-days: ${GREENHOUSE_SYNC_DEFAULT_DEADLINE_OFFSET_DAYS:45}
+        default-deadline-offset-days: ${GREENHOUSE_SYNC_DEFAULT_DEADLINE_OFFSET_DAYS:0}
         fixed-delay-minutes: ${GREENHOUSE_SYNC_FIXED_DELAY_MINUTES:360}
         fixed-delay-millis: ${GREENHOUSE_SYNC_FIXED_DELAY_MILLIS:21600000}
         initial-delay-millis: ${GREENHOUSE_SYNC_INITIAL_DELAY_MILLIS:60000}

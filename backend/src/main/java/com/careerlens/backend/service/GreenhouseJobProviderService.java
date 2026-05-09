@@ -15,8 +15,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.text.DecimalFormat;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -27,6 +29,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.util.HtmlUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -36,7 +39,48 @@ public class GreenhouseJobProviderService {
     private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]+>");
     private static final Pattern SPACE_PATTERN = Pattern.compile("\\s+");
     private static final Pattern EXPERIENCE_PATTERN = Pattern.compile("(\\d+)\\+?\\s*(?:years|yrs|year)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern SALARY_PATTERN = Pattern.compile("\\$\\s?[0-9][0-9,]*(?:k|K)?\\s*(?:-|to|~)\\s*\\$?\\s?[0-9][0-9,]*(?:k|K)?", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SALARY_RANGE_PATTERN = Pattern.compile(
+            "\\$\\s?[0-9][0-9,]*(?:\\.\\d+)?\\s*(?:k|K)?\\s*(?:-|–|—|to|~|and)\\s*(?:\\$\\s?)?[0-9][0-9,]*(?:\\.\\d+)?\\s*(?:k|K)?\\s*(?:USD|CAD|AUD|GBP|EUR)?",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern SALARY_BETWEEN_PATTERN = Pattern.compile(
+            "between\\s+\\$\\s?[0-9][0-9,]*(?:\\.\\d+)?\\s*(?:k|K)?\\s+and\\s+\\$?\\s?[0-9][0-9,]*(?:\\.\\d+)?\\s*(?:k|K)?\\s*(?:USD|CAD|AUD|GBP|EUR)?",
+            Pattern.CASE_INSENSITIVE
+    );
+
+    private static final String BROAD_CURRENCY_MARKER = "(?:\\$|\\x{00A3}|\\x{20B9}|\\x{00A5}|\\x{20AC}|USD|CAD|AUD|GBP|EUR|INR|JPY|KRW|SGD)";
+    private static final String BROAD_SALARY_AMOUNT = "[0-9][0-9,]*(?:\\.\\d+)?\\s*(?:k|K|m|M|lakh|crore)?";
+    private static final String BROAD_SALARY_SEPARATOR = "(?:-|\\x{2013}|\\x{2014}|to|~|and)";
+    private static final Pattern BROAD_SALARY_RANGE_PATTERN = Pattern.compile(
+            BROAD_CURRENCY_MARKER + "\\s*" + BROAD_SALARY_AMOUNT + "\\s*" + BROAD_SALARY_SEPARATOR
+                    + "\\s*(?:" + BROAD_CURRENCY_MARKER + "\\s*)?" + BROAD_SALARY_AMOUNT + "\\s*(?:" + BROAD_CURRENCY_MARKER + ")?",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern BROAD_SALARY_TRAILING_CURRENCY_PATTERN = Pattern.compile(
+            BROAD_SALARY_AMOUNT + "\\s*" + BROAD_SALARY_SEPARATOR + "\\s*" + BROAD_SALARY_AMOUNT + "\\s*" + BROAD_CURRENCY_MARKER,
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern BROAD_SALARY_BETWEEN_PATTERN = Pattern.compile(
+            "between\\s+" + BROAD_CURRENCY_MARKER + "\\s*" + BROAD_SALARY_AMOUNT
+                    + "\\s+and\\s+(?:" + BROAD_CURRENCY_MARKER + "\\s*)?" + BROAD_SALARY_AMOUNT
+                    + "\\s*(?:" + BROAD_CURRENCY_MARKER + ")?",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final String SALARY_CODE = "(USD|CAD|AUD|GBP|EUR|INR|JPY|KRW|SGD)";
+    private static final String SALARY_AMOUNT = "([0-9][0-9,]*(?:\\.\\d+)?\\s*(?:k|K|m|M|lakh|crore)?)";
+    private static final Pattern NORMALIZED_SALARY_BETWEEN_PATTERN = Pattern.compile(
+            "between\\s+(?:" + SALARY_CODE + "\\s*)?" + SALARY_AMOUNT
+                    + "\\s+and\\s+(?:" + SALARY_CODE + "\\s*)?" + SALARY_AMOUNT
+                    + "\\s*(?:" + SALARY_CODE + ")?",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern NORMALIZED_SALARY_RANGE_PATTERN = Pattern.compile(
+            "(?:" + SALARY_CODE + "\\s*)?" + SALARY_AMOUNT
+                    + "\\s*(?:-|to|~|and)\\s*(?:" + SALARY_CODE + "\\s*)?" + SALARY_AMOUNT
+                    + "\\s*(?:" + SALARY_CODE + ")?",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final String SALARY_FORMAT_PATTERN = "#,###.##";
 
     private final ObjectMapper objectMapper;
     private final JobPostingRepository jobPostingRepository;
@@ -81,6 +125,10 @@ public class GreenhouseJobProviderService {
     @Transactional
     public ExternalJobImportResponseDto importJobs(ExternalJobImportRequestDto request) {
         boolean createPatterns = request.createPatternProfile() == null || request.createPatternProfile();
+        boolean importNew = request.importNew() == null || request.importNew();
+        Set<String> selectedRefs = request.selectedExternalRefs() == null
+                ? new HashSet<>()
+                : new HashSet<>(request.selectedExternalRefs());
         List<ExternalJobPreviewDto> previews = fetchPreviews(
                 request.boardToken(),
                 request.defaultCountry(),
@@ -92,7 +140,13 @@ public class GreenhouseJobProviderService {
         int updated = 0;
         List<JobPostingDto> savedJobs = new ArrayList<>();
         for (ExternalJobPreviewDto preview : previews) {
+            if (!selectedRefs.isEmpty() && !selectedRefs.contains(preview.externalRef())) {
+                continue;
+            }
             boolean exists = jobPostingRepository.findByExternalRef(preview.externalRef()).isPresent();
+            if (!exists && !importNew) {
+                continue;
+            }
             JobPosting job = jobPostingRepository.findByExternalRef(preview.externalRef()).orElseGet(JobPosting::new);
             applyPreview(job, preview, request);
             JobPosting saved = jobPostingRepository.save(job);
@@ -185,14 +239,26 @@ public class GreenhouseJobProviderService {
         String title = text(job.path("title"));
         String content = stripHtml(text(job.path("content")));
         String location = locationFor(job);
+        String department = departmentFor(job);
         String sourceUrl = text(job.path("absolute_url"));
+        String effectiveCompanyName = valueOrDefault(text(job.path("company_name")), companyName);
         String textForAnalysis = (title + " " + content + " " + location).toLowerCase(Locale.ROOT);
-        String country = fallback(inferCountry(location), defaultCountry, "United States");
-        String inferredJobFamily = inferJobFamily(textForAnalysis);
-        if (inferredJobFamily.isBlank() && !isRelevantEngineeringPosting(textForAnalysis)) {
+        String classificationText = (title + " " + department).toLowerCase(Locale.ROOT);
+        String country = valueOrDefault(inferCountry(location), "Not specified");
+        if (isExcludedNonEngineeringPosting(classificationText)) {
             return null;
         }
-        String jobFamily = fallback(inferredJobFamily, defaultJobFamily, "Backend");
+        String inferredJobFamily = inferJobFamily(classificationText);
+        if (inferredJobFamily.isBlank() && isRelevantEngineeringPosting(classificationText)) {
+            inferredJobFamily = "Backend";
+        }
+        if (inferredJobFamily.isBlank()) {
+            return null;
+        }
+        String jobFamily = inferredJobFamily;
+        if (!matchesFilter(country, defaultCountry) || !matchesFilter(jobFamily, defaultJobFamily)) {
+            return null;
+        }
         List<String> requiredSkills = extractSkills(textForAnalysis, jobFamily, true);
         List<String> preferredSkills = extractSkills(textForAnalysis, jobFamily, false);
         List<String> languages = extractLanguages(textForAnalysis, country);
@@ -201,7 +267,7 @@ public class GreenhouseJobProviderService {
                 "greenhouse",
                 boardToken,
                 "greenhouse:" + boardToken + ":" + jobId,
-                companyName,
+                effectiveCompanyName,
                 country,
                 title,
                 jobFamily,
@@ -214,9 +280,9 @@ public class GreenhouseJobProviderService {
                 inferDegree(textForAnalysis),
                 textForAnalysis.contains("portfolio"),
                 inferVisaRequirement(textForAnalysis),
-                inferSalaryRange(content),
+                inferSalaryRange(job, content, country),
                 inferWorkType(textForAnalysis),
-                summarize(content),
+                summarize(content, title),
                 false
         );
     }
@@ -237,15 +303,15 @@ public class GreenhouseJobProviderService {
         job.setSalaryRange(preview.salaryRange());
         job.setWorkType(preview.workType());
         job.setApplicationDeadline(request.defaultDeadline());
-        job.setSalaryScore(scoreSalary(preview.salaryRange()));
-        job.setWorkLifeBalanceScore(scoreWorkLife(preview.workType()));
-        job.setCompanyValueScore(72);
+        job.setSalaryScore(scoreSalary(preview));
+        job.setWorkLifeBalanceScore(scoreWorkLife(preview));
+        job.setCompanyValueScore(null);
         job.setProbabilityWeight(30);
         job.setSalaryWeight(15);
         job.setWorkLifeBalanceWeight(15);
         job.setCompanyValueWeight(15);
         job.setJobFitWeight(25);
-        job.setEvaluationRationale("Greenhouse 공개 Job Board API에서 가져온 공고를 CareerLens 내부 JobPosting 형식으로 정규화했습니다. 직원 표본/패턴 데이터는 별도 검수 또는 자동 생성 후보로 보강해야 합니다.");
+        job.setEvaluationRationale(buildCandidateFacingSummary(preview));
     }
 
     private void upsertImportedPattern(JobPosting job, ExternalJobPreviewDto preview) {
@@ -261,7 +327,8 @@ public class GreenhouseJobProviderService {
         pattern.setGithubExpected(true);
         pattern.setPortfolioExpected(preview.portfolioRequired());
         pattern.setProjectExperienceBenchmark(projectBenchmark(preview));
-        pattern.setEvidenceSummary("Greenhouse 공개 공고의 직무명, 본문, 위치, 기술 키워드를 기반으로 생성한 기본 PatternProfile입니다. 실제 서비스에서는 직원 표본과 가상 합격자 패턴 검수를 거쳐 보강합니다.");
+        pattern.setEvidenceSummary(preview.companyName() + " " + preview.jobTitle()
+                + " 공고의 직무명, 위치, 요구 기술 키워드를 바탕으로 만든 기본 직무 패턴입니다. 직원 표본과 가상 합격자 패턴이 보강되면 추천 근거가 더 정밀해집니다.");
         pattern.setCoreSkills(preview.requiredSkills());
         pattern.setPreferredSkills(preview.preferredSkills());
         pattern.setCertifications(new ArrayList<>());
@@ -322,6 +389,21 @@ public class GreenhouseJobProviderService {
         return "Remote / Not specified";
     }
 
+    private String departmentFor(JsonNode job) {
+        JsonNode departments = job.path("departments");
+        if (!departments.isArray()) {
+            return "";
+        }
+        List<String> names = new ArrayList<>();
+        for (JsonNode department : departments) {
+            String name = text(department.path("name"));
+            if (!name.isBlank()) {
+                names.add(name);
+            }
+        }
+        return String.join(" ", names);
+    }
+
     private List<String> extractSkills(String text, String jobFamily, boolean core) {
         List<String> candidates = new ArrayList<>();
         addSkillCandidates(candidates);
@@ -363,35 +445,64 @@ public class GreenhouseJobProviderService {
     private void addSkillCandidates(List<String> candidates) {
         candidates.add("Java");
         candidates.add("Spring Boot");
+        candidates.add("JVM");
         candidates.add("Kotlin");
+        candidates.add("Android");
+        candidates.add("iOS");
+        candidates.add("Swift");
+        candidates.add("Objective-C");
         candidates.add("Python");
         candidates.add("Go");
+        candidates.add("Ruby");
+        candidates.add("Rails");
         candidates.add("Node.js");
         candidates.add("TypeScript");
         candidates.add("JavaScript");
         candidates.add("React");
         candidates.add("Next.js");
         candidates.add("Vue");
+        candidates.add("Redux");
+        candidates.add("HTML");
+        candidates.add("CSS");
         candidates.add("AWS");
         candidates.add("GCP");
+        candidates.add("Azure");
         candidates.add("Docker");
         candidates.add("Kubernetes");
         candidates.add("MySQL");
         candidates.add("PostgreSQL");
         candidates.add("Redis");
+        candidates.add("DynamoDB");
+        candidates.add("MongoDB");
+        candidates.add("Elasticsearch");
         candidates.add("GraphQL");
         candidates.add("REST API");
         candidates.add("API");
         candidates.add("Distributed Systems");
+        candidates.add("Microservices");
+        candidates.add("System Design");
         candidates.add("Machine Learning");
         candidates.add("PyTorch");
         candidates.add("TensorFlow");
         candidates.add("LLM");
         candidates.add("MLOps");
+        candidates.add("NLP");
+        candidates.add("Computer Vision");
+        candidates.add("Vector DB");
         candidates.add("SQL");
         candidates.add("Spark");
+        candidates.add("Airflow");
+        candidates.add("dbt");
+        candidates.add("BigQuery");
+        candidates.add("Snowflake");
+        candidates.add("Kafka");
+        candidates.add("Flink");
         candidates.add("Data Pipeline");
         candidates.add("CI/CD");
+        candidates.add("Terraform");
+        candidates.add("Observability");
+        candidates.add("Monitoring");
+        candidates.add("Testing");
     }
 
     private List<String> extractLanguages(String text, String country) {
@@ -424,6 +535,49 @@ public class GreenhouseJobProviderService {
 
     private String inferCountry(String location) {
         String normalized = location.toLowerCase(Locale.ROOT);
+        if (normalized.contains("south korea") || normalized.contains("korea") || normalized.contains("seoul")) {
+            return "South Korea";
+        }
+        if (normalized.contains("singapore")) {
+            return "Singapore";
+        }
+        if (normalized.contains("brazil") || normalized.contains("são paulo") || normalized.contains("sao paulo")) {
+            return "Brazil";
+        }
+        if (normalized.contains("india") || normalized.contains("bangalore") || normalized.contains("bengaluru")
+                || normalized.contains("gurugram") || normalized.contains("hyderabad")) {
+            return "India";
+        }
+        if (normalized.contains("china") || normalized.contains("beijing") || normalized.contains("shanghai")) {
+            return "China";
+        }
+        if (normalized.contains("germany") || normalized.contains("berlin") || normalized.contains("munich")) {
+            return "Germany";
+        }
+        if (normalized.contains("france") || normalized.contains("paris")) {
+            return "France";
+        }
+        if (normalized.contains("spain") || normalized.contains("barcelona") || normalized.contains("madrid")) {
+            return "Spain";
+        }
+        if (normalized.contains("ireland") || normalized.contains("dublin")) {
+            return "Ireland";
+        }
+        if (normalized.contains("netherlands") || normalized.contains("amsterdam")) {
+            return "Netherlands";
+        }
+        if (normalized.contains("italy") || normalized.contains("milan")) {
+            return "Italy";
+        }
+        if (normalized.contains("united kingdom") || normalized.contains("uk") || normalized.contains("london")) {
+            return "United Kingdom";
+        }
+        if (normalized.contains("canada") || normalized.contains("toronto") || normalized.contains("vancouver")) {
+            return "Canada";
+        }
+        if (normalized.contains("australia") || normalized.contains("sydney") || normalized.contains("melbourne")) {
+            return "Australia";
+        }
         if (normalized.contains("japan") || normalized.contains("tokyo") || normalized.contains("osaka")) {
             return "Japan";
         }
@@ -431,7 +585,7 @@ public class GreenhouseJobProviderService {
                 || normalized.contains("san francisco") || normalized.contains("seattle") || normalized.contains("california")) {
             return "United States";
         }
-        return "United States";
+        return "";
     }
 
     private String inferJobFamily(String text) {
@@ -456,17 +610,40 @@ public class GreenhouseJobProviderService {
 
     private boolean isRelevantEngineeringPosting(String text) {
         return text.contains("software engineer")
-                || text.contains("engineer")
+                || text.contains("software engineering")
+                || text.contains("backend engineer")
+                || text.contains("frontend engineer")
+                || text.contains("full stack engineer")
+                || text.contains("platform engineer")
+                || text.contains("infrastructure engineer")
+                || text.contains("data engineer")
+                || text.contains("machine learning engineer")
+                || text.contains("ml engineer")
                 || text.contains("developer")
                 || text.contains("swe")
-                || text.contains("engineering")
                 || text.contains("backend")
                 || text.contains("frontend")
                 || text.contains("full stack")
                 || text.contains("platform")
-                || text.contains("infrastructure")
-                || text.contains("machine learning")
-                || text.contains("data engineer");
+                || text.contains("infrastructure");
+    }
+
+    private boolean isExcludedNonEngineeringPosting(String text) {
+        return text.contains("policy")
+                || text.contains("business operations")
+                || text.contains("operations lead")
+                || text.contains("strategic finance")
+                || text.contains("finance")
+                || text.contains("legal")
+                || text.contains("recruit")
+                || text.contains("talent")
+                || text.contains("marketing")
+                || text.contains("sales")
+                || text.contains("product manager")
+                || text.contains("program manager")
+                || text.contains("community support")
+                || text.contains("customer support")
+                || text.contains("trust & safety");
     }
 
     private String inferDegree(String text) {
@@ -480,15 +657,210 @@ public class GreenhouseJobProviderService {
     }
 
     private String inferVisaRequirement(String text) {
-        if (text.contains("visa sponsorship") || text.contains("sponsorship")) {
+        String normalized = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        if (containsAny(normalized,
+                "without sponsorship",
+                "do not sponsor",
+                "does not sponsor",
+                "unable to sponsor",
+                "cannot sponsor",
+                "not sponsor",
+                "no visa sponsorship",
+                "not eligible for sponsorship",
+                "must be authorized to work",
+                "must have work authorization")) {
+            return "Work authorization required / sponsorship not indicated";
+        }
+        if (containsAny(normalized,
+                "visa sponsorship is available",
+                "sponsorship available",
+                "will sponsor",
+                "eligible for visa sponsorship",
+                "visa sponsorship provided",
+                "relocation and visa")) {
             return "Visa sponsorship mentioned";
+        }
+        if (normalized.contains("visa sponsorship") || normalized.contains("sponsorship")) {
+            return "Sponsorship mentioned - verify details";
+        }
+        if (normalized.contains("work authorization") || normalized.contains("right to work")) {
+            return "Work authorization mentioned";
         }
         return "Not specified in public posting";
     }
 
-    private String inferSalaryRange(String content) {
-        Matcher matcher = SALARY_PATTERN.matcher(content);
-        return matcher.find() ? matcher.group().replaceAll("\\s+", "") : "Not disclosed";
+    private String inferSalaryRange(JsonNode job, String content, String country) {
+        String metadataSalary = salaryFromMetadata(job.path("metadata"), country);
+        if (!metadataSalary.isBlank()) {
+            return metadataSalary;
+        }
+
+        String normalized = normalizeSalarySearchText(content);
+        String compensationSection = sectionAfter(normalized, "Compensation", 2200);
+        String matched = firstSalaryMatch(compensationSection);
+        if (!matched.isBlank()) {
+            return matched;
+        }
+        matched = firstSalaryMatch(normalized);
+        return matched.isBlank() ? "Not disclosed" : matched;
+    }
+
+    private String salaryFromMetadata(JsonNode metadata, String country) {
+        if (!metadata.isArray()) {
+            return "";
+        }
+        String preferredCurrency = preferredCurrency(country);
+        String fallback = "";
+        for (JsonNode item : metadata) {
+            String valueType = text(item.path("value_type"));
+            JsonNode value = item.path("value");
+            if (!"currency_range".equalsIgnoreCase(valueType) || !value.isObject()) {
+                continue;
+            }
+            String unit = text(value.path("unit"));
+            String min = text(value.path("min_value"));
+            String max = text(value.path("max_value"));
+            if (unit.isBlank() || isZeroAmount(min) || isZeroAmount(max)) {
+                continue;
+            }
+            String candidate = unit.toUpperCase(Locale.ROOT) + " " + formatSalaryAmount(min)
+                    + " - " + formatSalaryAmount(max);
+            if (unit.equalsIgnoreCase(preferredCurrency)) {
+                return candidate;
+            }
+            if (fallback.isBlank()) {
+                fallback = candidate;
+            }
+        }
+        return fallback;
+    }
+
+    private String preferredCurrency(String country) {
+        if ("United Kingdom".equalsIgnoreCase(country)) return "GBP";
+        if ("Canada".equalsIgnoreCase(country)) return "CAD";
+        if ("Australia".equalsIgnoreCase(country)) return "AUD";
+        if ("India".equalsIgnoreCase(country)) return "INR";
+        if ("Japan".equalsIgnoreCase(country)) return "JPY";
+        if ("South Korea".equalsIgnoreCase(country)) return "KRW";
+        if ("Singapore".equalsIgnoreCase(country)) return "SGD";
+        if ("Germany".equalsIgnoreCase(country) || "France".equalsIgnoreCase(country)
+                || "Spain".equalsIgnoreCase(country) || "Ireland".equalsIgnoreCase(country)
+                || "Netherlands".equalsIgnoreCase(country) || "Italy".equalsIgnoreCase(country)) {
+            return "EUR";
+        }
+        return "USD";
+    }
+
+    private boolean isZeroAmount(String value) {
+        if (value == null || value.isBlank()) {
+            return true;
+        }
+        try {
+            return Double.parseDouble(value.replace(",", "")) <= 0;
+        } catch (NumberFormatException exception) {
+            return false;
+        }
+    }
+
+    private String formatSalaryAmount(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        try {
+            return new DecimalFormat(SALARY_FORMAT_PATTERN).format(Double.parseDouble(value.replace(",", "")));
+        } catch (NumberFormatException exception) {
+            return value.trim();
+        }
+    }
+
+    private String firstSalaryMatch(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        Matcher betweenMatcher = NORMALIZED_SALARY_BETWEEN_PATTERN.matcher(text);
+        while (betweenMatcher.find()) {
+            String salary = canonicalSalaryRange(betweenMatcher);
+            if (!salary.isBlank()) {
+                return salary;
+            }
+        }
+        Matcher rangeMatcher = NORMALIZED_SALARY_RANGE_PATTERN.matcher(text);
+        while (rangeMatcher.find()) {
+            String salary = canonicalSalaryRange(rangeMatcher);
+            if (!salary.isBlank()) {
+                return salary;
+            }
+        }
+        return "";
+    }
+
+    private String canonicalSalaryRange(Matcher matcher) {
+        String currency = firstNonBlank(matcher.group(1), matcher.group(3), matcher.group(5));
+        if (currency.isBlank()) {
+            return "";
+        }
+        return currency.toUpperCase(Locale.ROOT) + " "
+                + cleanSalaryAmount(matcher.group(2)) + " - " + cleanSalaryAmount(matcher.group(4));
+    }
+
+    private String cleanSalaryAmount(String amount) {
+        return SPACE_PATTERN.matcher(amount == null ? "" : amount.trim()).replaceAll(" ");
+    }
+
+    private String normalizeSalarySearchText(String value) {
+        String normalized = htmlUnescapeRepeated(value == null ? "" : value);
+        normalized = normalized.replace("&mdash;", "-")
+                .replace("&ndash;", "-")
+                .replace(String.valueOf((char) 0x2013), "-")
+                .replace(String.valueOf((char) 0x2014), "-")
+                .replace(String.valueOf((char) 0x00A3), " GBP ")
+                .replace(String.valueOf(Character.toChars(0x20B9)), " INR ")
+                .replace(String.valueOf((char) 0x00A5), " JPY ")
+                .replace(String.valueOf(Character.toChars(0x20AC)), " EUR ")
+                .replace("$", " USD ");
+        return SPACE_PATTERN.matcher(normalized).replaceAll(" ").trim();
+    }
+
+    private String normalizeSalaryRange(String value) {
+        if (value == null || value.isBlank()) {
+            return "Not disclosed";
+        }
+        String safeNormalized = normalizeSalaryRangeSafely(value);
+        if (!safeNormalized.isBlank()) {
+            return safeNormalized;
+        }
+        String normalized = SPACE_PATTERN.matcher(value == null ? "" : value).replaceAll(" ").trim();
+        normalized = normalized.replace("between ", "")
+                .replace("Between ", "")
+                .replaceAll("\\s+and\\s+", " - ")
+                .replaceAll("\\s*(?:–|—|~|to)\\s*", " - ")
+                .replaceAll("\\s*-\\s*", " - ")
+                .replaceAll("\\s+", " ");
+        return normalized.isBlank() ? "Not disclosed" : normalized;
+    }
+
+    private String normalizeSalaryRangeSafely(String value) {
+        String normalized = SPACE_PATTERN.matcher(value == null ? "" : value).replaceAll(" ").trim();
+        normalized = normalized.replace("between ", "")
+                .replace("Between ", "")
+                .replaceAll("\\s+and\\s+", " - ")
+                .replaceAll("\\s*(?:" + BROAD_SALARY_SEPARATOR + ")\\s*", " - ")
+                .replaceAll("\\s*-\\s*", " - ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        return normalized;
+    }
+
+    private String sectionAfter(String content, String marker, int maxLength) {
+        if (content == null || content.isBlank()) {
+            return "";
+        }
+        int index = content.toLowerCase(Locale.ROOT).indexOf(marker.toLowerCase(Locale.ROOT));
+        if (index < 0) {
+            return "";
+        }
+        int end = Math.min(content.length(), index + Math.max(marker.length(), maxLength));
+        return content.substring(index, end);
     }
 
     private String inferWorkType(String text) {
@@ -501,21 +873,108 @@ public class GreenhouseJobProviderService {
         return "On-site / Not specified";
     }
 
-    private int scoreSalary(String salaryRange) {
-        return salaryRange == null || salaryRange.equals("Not disclosed") ? 60 : 78;
+    private Integer scoreSalary(ExternalJobPreviewDto preview) {
+        String salaryRange = preview.salaryRange();
+        if (salaryRange != null && !salaryRange.equals("Not disclosed")) {
+            return scoreSalaryFromRange(salaryRange);
+        }
+        return null;
     }
 
-    private int scoreWorkLife(String workType) {
-        if (workType == null) {
-            return 60;
+    private int scoreSalaryFromRange(String salaryRange) {
+        Matcher matcher = Pattern.compile("[0-9][0-9,]*(?:\\.\\d+)?").matcher(salaryRange == null ? "" : salaryRange);
+        List<Double> values = new ArrayList<>();
+        double currencyFactor = salaryCurrencyFactor(salaryRange);
+        while (matcher.find()) {
+            String raw = matcher.group().replace(",", "");
+            try {
+                double parsed = Double.parseDouble(raw);
+                if (salaryRange.toLowerCase(Locale.ROOT).contains("k") && parsed < 1000) {
+                    parsed *= 1000;
+                }
+                parsed *= currencyFactor;
+                values.add(parsed);
+            } catch (NumberFormatException ignored) {
+                // Ignore malformed numeric salary fragments.
+            }
         }
-        if (workType.contains("Remote")) {
+        if (values.isEmpty()) {
+            return 70;
+        }
+        double max = values.stream().mapToDouble(Double::doubleValue).max().orElse(0);
+        if (max >= 220000) return 92;
+        if (max >= 180000) return 86;
+        if (max >= 140000) return 78;
+        if (max >= 100000) return 70;
+        if (max >= 70000) return 62;
+        return 55;
+    }
+
+    private double salaryCurrencyFactor(String salaryRange) {
+        String normalized = salaryRange == null ? "" : salaryRange.toUpperCase(Locale.ROOT);
+        if (normalized.contains("GBP") || containsCodePoint(salaryRange, 0x00A3)) return 1.25;
+        if (normalized.contains("EUR") || containsCodePoint(salaryRange, 0x20AC)) return 1.08;
+        if (normalized.contains("CAD")) return 0.73;
+        if (normalized.contains("AUD")) return 0.66;
+        if (normalized.contains("SGD")) return 0.74;
+        if (normalized.contains("INR") || containsCodePoint(salaryRange, 0x20B9)) return 0.012;
+        if (normalized.contains("JPY") || containsCodePoint(salaryRange, 0x00A5)) return 0.0067;
+        if (normalized.contains("KRW")) return 0.00075;
+        return 1.0;
+    }
+
+    private boolean containsCodePoint(String value, int codePoint) {
+        return value != null && value.codePoints().anyMatch(current -> current == codePoint);
+    }
+
+    private Integer scoreWorkLife(ExternalJobPreviewDto preview) {
+        String workType = preview.workType();
+        if (workType != null && workType.contains("Remote")) {
             return 78;
         }
-        if (workType.contains("Hybrid")) {
+        if (workType != null && workType.contains("Hybrid")) {
             return 72;
         }
-        return 62;
+        return null;
+    }
+
+    private String buildCandidateFacingSummary(ExternalJobPreviewDto preview) {
+        String skills = firstSkills(preview.requiredSkills());
+        String companyIntro = companyIntro(preview.companyName());
+        return companyIntro + " " + preview.jobTitle() + " 포지션은 " + preview.country()
+                + " 기준 " + preview.jobFamily() + " 직무로 분류되며, 핵심 확인 역량은 " + skills
+                + "입니다. 공고 원문에서 세부 자격요건과 근무 조건을 함께 확인하는 것을 권장합니다.";
+    }
+
+    private String companyIntro(String companyName) {
+        String normalizedCompanyName = valueOrDefault(companyName, "해당 기업");
+        if ("Airbnb".equals(normalizedCompanyName)) {
+            return "Airbnb는 전 세계 숙박과 여행 경험을 연결하는 글로벌 플랫폼 기업입니다.";
+        }
+        if ("DoorDash".equals(normalizedCompanyName)) {
+            return "DoorDash는 지역 상거래와 물류 경험을 연결하는 온디맨드 플랫폼 기업입니다.";
+        }
+        if ("Reddit".equals(normalizedCompanyName)) {
+            return "Reddit은 커뮤니티 기반 대화와 콘텐츠를 운영하는 글로벌 플랫폼 기업입니다.";
+        }
+        if ("Stripe".equals(normalizedCompanyName)) {
+            return "Stripe는 온라인 결제와 금융 인프라를 제공하는 글로벌 핀테크 기업입니다.";
+        }
+        return normalizedCompanyName + "는 글로벌 채용 공고를 공개하고 있는 기술 중심 기업입니다.";
+    }
+
+    private String firstSkills(List<String> skills) {
+        if (skills == null || skills.isEmpty()) {
+            return "공고 본문에서 확인되는 직무 역량";
+        }
+        List<String> firstSkills = new ArrayList<>();
+        for (String skill : skills) {
+            if (firstSkills.size() >= 4) {
+                break;
+            }
+            firstSkills.add(skill);
+        }
+        return String.join(", ", firstSkills);
     }
 
     private String languageBenchmark(List<String> languages) {
@@ -529,17 +988,91 @@ public class GreenhouseJobProviderService {
         return preview.jobFamily() + " 직무 공고의 핵심 기술을 사용한 실무형 프로젝트 1개 이상, README와 API/화면 설계 근거 제출";
     }
 
-    private String summarize(String content) {
+    private String summarize(String content, String title) {
         String normalized = SPACE_PATTERN.matcher(content == null ? "" : content.trim()).replaceAll(" ");
+        normalized = removeRepeatedCompanyIntro(normalized);
+        normalized = prioritizeRoleSection(normalized);
+        if (normalized.isBlank()) {
+            normalized = valueOrDefault(title, "Greenhouse public job posting");
+        }
         if (normalized.length() <= 260) {
             return normalized;
         }
         return normalized.substring(0, 260) + "...";
     }
 
+    private String removeRepeatedCompanyIntro(String content) {
+        String marker = "Every day, hosts offer unique stays";
+        int markerIndex = content.indexOf(marker);
+        if (content.startsWith("Airbnb was born in 2007") && markerIndex >= 0) {
+            int nextSentence = content.indexOf('.', markerIndex);
+            if (nextSentence >= 0 && nextSentence + 1 < content.length()) {
+                return content.substring(nextSentence + 1).trim();
+            }
+        }
+        return content;
+    }
+
+    private String prioritizeRoleSection(String content) {
+        String[] markers = {
+                "The Difference You Will Make",
+                "A Typical Day",
+                "Your Expertise",
+                "About the role",
+                "About the Role",
+                "In this role",
+                "What you will do",
+                "Responsibilities",
+                "Minimum Qualifications",
+                "Basic Qualifications",
+                "Qualifications"
+        };
+        for (String marker : markers) {
+            int index = content.indexOf(marker);
+            if (index >= 0) {
+                return content.substring(index).trim();
+            }
+        }
+        return content;
+    }
+
     private String stripHtml(String value) {
-        String withoutTags = HTML_TAG_PATTERN.matcher(value == null ? "" : value).replaceAll(" ");
-        return SPACE_PATTERN.matcher(withoutTags.replace("&amp;", "&").replace("&nbsp;", " ")).replaceAll(" ").trim();
+        String unescaped = htmlUnescapeRepeated(value == null ? "" : value);
+        String withoutTags = HTML_TAG_PATTERN.matcher(unescaped).replaceAll(" ");
+        return SPACE_PATTERN.matcher(withoutTags.replace("&nbsp;", " ")).replaceAll(" ").trim();
+    }
+
+    private String htmlUnescapeRepeated(String value) {
+        String current = value == null ? "" : value;
+        for (int i = 0; i < 3; i++) {
+            String next = HtmlUtils.htmlUnescape(current);
+            if (next.equals(current)) {
+                return next;
+            }
+            current = next;
+        }
+        return current;
+    }
+
+    private boolean containsAny(String value, String... candidates) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        for (String candidate : candidates) {
+            if (candidate != null && !candidate.isBlank() && value.contains(candidate)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return "";
     }
 
     private String text(JsonNode node) {
@@ -549,14 +1082,15 @@ public class GreenhouseJobProviderService {
         return node.asText("");
     }
 
-    private String fallback(String primary, String secondary, String defaultValue) {
-        if (primary != null && !primary.isBlank()) {
-            return primary.trim();
+    private boolean matchesFilter(String value, String filter) {
+        if (filter == null || filter.isBlank() || "ALL".equalsIgnoreCase(filter)) {
+            return true;
         }
-        if (secondary != null && !secondary.isBlank()) {
-            return secondary.trim();
-        }
-        return defaultValue;
+        return value != null && value.equalsIgnoreCase(filter.trim());
+    }
+
+    private String valueOrDefault(String value, String defaultValue) {
+        return value == null || value.isBlank() ? defaultValue : value.trim();
     }
 
     private String humanizeBoardToken(String boardToken) {

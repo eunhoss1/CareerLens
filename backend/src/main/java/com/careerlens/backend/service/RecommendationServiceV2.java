@@ -207,7 +207,8 @@ public class RecommendationServiceV2 {
     private DiagnosisResult diagnoseJob(User user, UserProfile profile, JobPosting job) {
         List<PatternProfile> patterns = patternProfileRepository.findByJobPostingId(job.getId());
         if (patterns.isEmpty()) {
-            return null;
+            patterns = new ArrayList<>();
+            patterns.add(createFallbackPattern(job));
         }
 
         PatternScore bestScore = patterns.stream()
@@ -255,6 +256,28 @@ public class RecommendationServiceV2 {
         result.setNextActionSummary(aiExplanationService.buildNextActionSummary(readinessStatus, bestScore.missingItems()));
         result.setCreatedAt(LocalDateTime.now());
         return result;
+    }
+
+    private PatternProfile createFallbackPattern(JobPosting job) {
+        PatternProfile pattern = new PatternProfile();
+        pattern.setPatternRef("fallback-pattern:job:" + job.getId());
+        pattern.setJobPosting(job);
+        pattern.setPatternTitle(valueOrDefault(job.getCompanyName(), "회사 미기재") + " "
+                + valueOrDefault(job.getJobFamily(), "직무") + " 공고 기반 기본 패턴");
+        pattern.setJobFamily(job.getJobFamily());
+        pattern.setTargetExperienceYears(job.getMinExperienceYears() == null ? 0 : job.getMinExperienceYears());
+        pattern.setLanguageBenchmark(job.getRequiredLanguages() == null || job.getRequiredLanguages().isEmpty()
+                ? "English Business"
+                : String.join(", ", job.getRequiredLanguages()));
+        pattern.setEducationBenchmark(valueOrDefault(job.getDegreeRequirement(), "Degree not explicitly required"));
+        pattern.setGithubExpected(true);
+        pattern.setPortfolioExpected(Boolean.TRUE.equals(job.getPortfolioRequired()));
+        pattern.setProjectExperienceBenchmark(valueOrDefault(job.getJobFamily(), "직무") + " 직무의 핵심 기술을 활용한 프로젝트 경험");
+        pattern.setEvidenceSummary("이 공고는 연결된 직원 표본/가상 합격자 패턴이 아직 없어 공고의 요구 기술과 경력 조건을 기반으로 임시 진단 패턴을 생성했습니다.");
+        pattern.setCoreSkills(normalizeList(job.getRequiredSkills()));
+        pattern.setPreferredSkills(normalizeList(job.getPreferredSkills()));
+        pattern.setCertifications(new ArrayList<>());
+        return patternProfileRepository.save(pattern);
     }
 
     private PatternScore scorePattern(UserProfile profile, JobPosting job, PatternProfile pattern) {
@@ -366,7 +389,7 @@ public class RecommendationServiceV2 {
         return new RecommendationDiagnosisResponseDto(
                 user.getId(),
                 toProfileDto(user, profile),
-                "국가, 직무군, 언어, 최소 경력으로 공고를 1차 필터링한 뒤 공고별 PatternProfile과 사용자 프로필을 비교했습니다. 최종 점수는 공고별 평가 가중치와 사용자가 선택한 우선순위를 함께 반영합니다.",
+                criteriaSummary(profile),
                 candidateCount,
                 recommendations.size(),
                 overall.name(),
@@ -475,6 +498,15 @@ public class RecommendationServiceV2 {
     private int languageScore(String userLevel, String benchmark) {
         int gap = Math.max(0, languageRank(benchmark) - languageRank(userLevel));
         return clamp(100 - gap * 25);
+    }
+
+    private String criteriaSummary(UserProfile profile) {
+        String jobFamily = valueOrDefault(profile.getTargetJobFamily(), "직무군");
+        if ("AI/ML".equalsIgnoreCase(jobFamily) || "Data".equalsIgnoreCase(jobFamily)) {
+            return "국가, 직무군, 언어, 최소 경력으로 공고를 1차 필터링한 뒤 " + jobFamily
+                    + " 공고의 PatternProfile과 사용자 프로필을 비교했습니다. 외부 API 공고는 공개 공고 본문 기반 기본 패턴을 사용하므로, 직원 표본 기반 seed-data보다 추천 근거가 제한될 수 있습니다.";
+        }
+        return "국가, 직무군, 언어, 최소 경력으로 공고를 1차 필터링한 뒤 공고별 PatternProfile과 사용자 프로필을 비교했습니다. 최종 점수는 공고별 평가 가중치와 사용자가 선택한 우선순위를 함께 반영합니다.";
     }
 
     private int educationScore(UserProfile profile, PatternProfile pattern) {

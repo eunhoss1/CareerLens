@@ -5,6 +5,8 @@ public record AuthResponseDto(
         String loginId,
         String displayName,
         String email,
+        String role,
+        Boolean admin,
         Boolean profileCompleted
 ) {
 }

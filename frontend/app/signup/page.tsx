@@ -10,12 +10,12 @@ import { menuFlow } from "@/lib/menu";
 
 export default function SignupPage() {
   const router = useRouter();
-  const [loginId, setLoginId] = useState("careerlens-demo");
-  const [displayName, setDisplayName] = useState("김시연");
-  const [email, setEmail] = useState("demo@careerlens.local");
-  const [password, setPassword] = useState("Career1234!");
-  const [passwordConfirm, setPasswordConfirm] = useState("Career1234!");
-  const [termsAccepted, setTermsAccepted] = useState(true);
+  const [loginId, setLoginId] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 

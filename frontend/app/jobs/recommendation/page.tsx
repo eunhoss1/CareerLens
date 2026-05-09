@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Button, Card, EmptyState, LinkButton, MetricCard, PageHeader, PageShell, ScoreBar, SelectInput } from "@/components/ui";
 import { getStoredUser, type AuthUser } from "@/lib/auth";
+import { jobFamilies } from "@/lib/job-families";
 import {
   demoProfile,
   diagnoseRecommendations,
@@ -17,7 +18,6 @@ import {
 import { createPlannerRoadmap } from "@/lib/planner";
 
 const countries = ["United States", "Japan"];
-const jobFamilies = ["Backend", "Frontend"];
 const languageLevels = ["BASIC", "CONVERSATIONAL", "BUSINESS", "FLUENT", "NATIVE"];
 
 export default function RecommendationPage() {
@@ -358,7 +358,7 @@ function NoCandidateState() {
   return (
     <EmptyState
       title="조건에 맞는 공고가 없습니다."
-      description="희망 국가, 직무군, 언어 수준, 경력 조건을 완화해 다시 진단하세요."
+      description="희망 국가, 직무군, 언어 수준, 경력 조건을 확인하세요. AI/ML, Data 공고는 Greenhouse import 또는 별도 seed-data에 PatternProfile이 있어야 추천 결과로 표시됩니다."
     />
   );
 }

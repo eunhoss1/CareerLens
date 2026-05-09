@@ -1,4 +1,5 @@
 import type { JobPosting } from "@/lib/jobs";
+import { getStoredUser } from "@/lib/auth";
 
 export type ExternalJobPreview = {
   provider: string;
@@ -30,6 +31,8 @@ export type ExternalJobImportRequest = {
   limit?: number;
   default_deadline?: string;
   create_pattern_profile?: boolean;
+  selected_external_refs?: string[];
+  import_new?: boolean;
 };
 
 export type ExternalJobImportResponse = {
@@ -64,12 +67,12 @@ export async function previewGreenhouseJobs(params: ExternalJobImportRequest): P
   if (params.limit) query.set("limit", String(params.limit));
 
   const response = await fetch(`${baseUrl}/api/jobs/external/greenhouse/preview?${query.toString()}`, {
+    headers: adminHeaders(),
     cache: "no-store"
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Greenhouse preview request failed.");
+    throw new Error(await readApiError(response, "Greenhouse preview request failed."));
   }
 
   return response.json();
@@ -78,13 +81,12 @@ export async function previewGreenhouseJobs(params: ExternalJobImportRequest): P
 export async function importGreenhouseJobs(request: ExternalJobImportRequest): Promise<ExternalJobImportResponse> {
   const response = await fetch(`${baseUrl}/api/jobs/external/greenhouse/import`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify(request)
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Greenhouse import request failed.");
+    throw new Error(await readApiError(response, "Greenhouse import request failed."));
   }
 
   return response.json();
@@ -92,12 +94,12 @@ export async function importGreenhouseJobs(request: ExternalJobImportRequest): P
 
 export async function fetchGreenhouseSyncStatus(): Promise<ExternalJobSyncStatus> {
   const response = await fetch(`${baseUrl}/api/jobs/external/greenhouse/sync/status`, {
+    headers: adminHeaders(),
     cache: "no-store"
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Greenhouse sync status request failed.");
+    throw new Error(await readApiError(response, "Greenhouse sync status request failed."));
   }
 
   return response.json();
@@ -105,13 +107,36 @@ export async function fetchGreenhouseSyncStatus(): Promise<ExternalJobSyncStatus
 
 export async function runGreenhouseSync(): Promise<ExternalJobSyncStatus> {
   const response = await fetch(`${baseUrl}/api/jobs/external/greenhouse/sync/run`, {
-    method: "POST"
+    method: "POST",
+    headers: adminHeaders()
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Greenhouse sync request failed.");
+    throw new Error(await readApiError(response, "Greenhouse sync request failed."));
   }
 
   return response.json();
+}
+
+function adminHeaders() {
+  const user = getStoredUser();
+  return {
+    "X-Careerlens-User-Role": user?.role ?? "USER"
+  };
+}
+
+async function readApiError(response: Response, fallback: string) {
+  const text = await response.text();
+  if (response.status === 404) {
+    return "Greenhouse 공개 Job Board API에서 해당 board token을 찾을 수 없습니다. 회사 채용 페이지가 Greenhouse여도 공개 API를 닫았거나 새 job-boards 도메인만 쓰는 경우가 있습니다.";
+  }
+  if (!text) {
+    return fallback;
+  }
+  try {
+    const parsed = JSON.parse(text) as { message?: string; error?: string };
+    return parsed.message || parsed.error || fallback;
+  } catch {
+    return text;
+  }
 }

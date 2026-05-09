@@ -2,6 +2,7 @@ package com.careerlens.backend.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDate;
+import java.util.List;
 
 public record ExternalJobImportRequestDto(
         @NotBlank String boardToken,
@@ -9,6 +10,8 @@ public record ExternalJobImportRequestDto(
         String defaultJobFamily,
         Integer limit,
         LocalDate defaultDeadline,
-        Boolean createPatternProfile
+        Boolean createPatternProfile,
+        List<String> selectedExternalRefs,
+        Boolean importNew
 ) {
 }

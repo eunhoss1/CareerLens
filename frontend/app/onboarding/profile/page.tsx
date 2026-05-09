@@ -6,19 +6,50 @@ import { useEffect, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Button, Card, MetricCard, PageHeader, PageShell, SelectInput, TextInput } from "@/components/ui";
 import { getStoredUser, storeUser, type AuthUser } from "@/lib/auth";
+import { domainSuggestionsFor, jobFamilies, projectSuggestionsFor, skillSuggestionsFor } from "@/lib/job-families";
 import { demoProfile, fetchUserProfile, saveUserProfile, type UserProfileRequest } from "@/lib/recommendation";
 
-const countries = ["United States", "Japan"];
-const cities = ["Seattle", "Redmond", "New York", "Tokyo", "Osaka", "Not specified"];
-const jobFamilies = ["Backend", "Frontend"];
+const countries = [
+  "United States",
+  "Japan",
+  "South Korea",
+  "United Kingdom",
+  "Singapore",
+  "Canada",
+  "Australia",
+  "Germany",
+  "France",
+  "Netherlands",
+  "Ireland",
+  "Italy",
+  "Brazil",
+  "India",
+  "China",
+  "Not specified"
+];
+const citiesByCountry: Record<string, string[]> = {
+  "United States": ["San Francisco", "Seattle", "New York", "Austin", "Los Angeles", "Remote", "Not specified"],
+  Japan: ["Tokyo", "Osaka", "Fukuoka", "Nagoya", "Remote", "Not specified"],
+  "South Korea": ["Seoul", "Pangyo", "Remote", "Not specified"],
+  "United Kingdom": ["London", "Manchester", "Remote", "Not specified"],
+  Singapore: ["Singapore", "Remote", "Not specified"],
+  Canada: ["Toronto", "Vancouver", "Montreal", "Remote", "Not specified"],
+  Australia: ["Sydney", "Melbourne", "Remote", "Not specified"],
+  Germany: ["Berlin", "Munich", "Hamburg", "Remote", "Not specified"],
+  France: ["Paris", "Remote", "Not specified"],
+  Netherlands: ["Amsterdam", "Remote", "Not specified"],
+  Ireland: ["Dublin", "Remote", "Not specified"],
+  Italy: ["Milan", "Rome", "Remote", "Not specified"],
+  Brazil: ["Sao Paulo", "Remote", "Not specified"],
+  India: ["Bengaluru", "Hyderabad", "Gurugram", "Remote", "Not specified"],
+  China: ["Shanghai", "Beijing", "Shenzhen", "Remote", "Not specified"],
+  "Not specified": ["Not specified"]
+};
 const languageLevels = ["BASIC", "CONVERSATIONAL", "BUSINESS", "FLUENT", "NATIVE"];
 const workTypes = ["Onsite", "Hybrid", "Remote", "Not specified"];
 const startDates = ["Immediately", "Within 1 month", "Within 3 months", "After 6 months"];
-const skillSuggestions = ["Java", "Spring Boot", "Python", "AWS", "Docker", "Kubernetes", "CI/CD", "React", "Next.js", "TypeScript", "MySQL", "OpenSearch"];
 const certSuggestions = ["AWS Cloud Practitioner", "AWS SAA", "TOEIC", "JLPT N2", "JLPT N1", "정보처리기사", "PMP"];
 const preferenceSuggestions = ["Visa support", "Hybrid", "Remote", "Relocation support", "Global team", "High salary"];
-const projectSuggestions = ["REST API", "분산 시스템", "클라우드 배포", "검색 플랫폼", "보안 서비스", "커머스", "AI 프로젝트"];
-const domainSuggestions = ["클라우드", "커머스", "광고", "보안", "B2B SaaS", "AI 서비스", "게임"];
 
 export default function ProfileOnboardingPage() {
   const router = useRouter();
@@ -89,6 +120,16 @@ export default function ProfileOnboardingPage() {
 
   const completion = profileCompletion(profile);
   const priorities = priorityLabels(profile);
+  const availableCities = cityOptionsFor(profile.target_country);
+
+  function handleTargetCountryChange(value: string) {
+    const nextCities = cityOptionsFor(value);
+    setProfile((current) => ({
+      ...current,
+      target_country: value,
+      target_city: nextCities.includes(current.target_city ?? "") ? current.target_city : nextCities[0]
+    }));
+  }
 
   return (
     <PageShell>
@@ -150,8 +191,8 @@ export default function ProfileOnboardingPage() {
           <Section step="01" title="기본 정보" description="회원 정보와 해외 취업 기준을 입력합니다.">
             <TextInput label="이름" value={profile.display_name} onChange={(event) => setProfile({ ...profile, display_name: event.target.value })} />
             <TextInput label="이메일" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} />
-            <SelectField label="희망 국가" value={profile.target_country} options={countries} onChange={(value) => setProfile({ ...profile, target_country: value })} />
-            <SelectField label="희망 도시" value={profile.target_city ?? ""} options={cities} onChange={(value) => setProfile({ ...profile, target_city: value })} />
+            <SelectField label="희망 국가" helper="외부 공고 국가 반영" value={profile.target_country} options={countries} onChange={handleTargetCountryChange} />
+            <SelectField label="희망 도시" helper="Remote 선택 가능" value={profile.target_city ?? ""} options={availableCities} onChange={(value) => setProfile({ ...profile, target_city: value })} />
             <SelectField label="희망 직무군" value={profile.target_job_family} options={jobFamilies} onChange={(value) => setProfile({ ...profile, target_job_family: value })} />
             <TextInput label="희망 직무명" value={profile.desired_job_title ?? ""} onChange={(event) => setProfile({ ...profile, desired_job_title: event.target.value })} />
             <SelectField label="선호 근무형태" value={profile.preferred_work_type ?? "Hybrid"} options={workTypes} onChange={(value) => setProfile({ ...profile, preferred_work_type: value })} />
@@ -161,9 +202,9 @@ export default function ProfileOnboardingPage() {
           <Section step="02" title="경력과 역량" description="추천 점수에서 가장 크게 쓰이는 직무 관련 데이터를 입력합니다.">
             <NumberField label="총 경력 연차" value={profile.experience_years ?? 0} onChange={(value) => setProfile({ ...profile, experience_years: value })} />
             <NumberField label="직무 관련 경력 연차" value={profile.related_experience_years ?? 0} onChange={(value) => setProfile({ ...profile, related_experience_years: value })} />
-            <TextTagInput label="대표 프로젝트 경험" value={profile.project_experience_summary ?? ""} suggestions={projectSuggestions} onChange={(value) => setProfile({ ...profile, project_experience_summary: value })} />
-            <TextTagInput label="산업/도메인 경험" value={profile.domain_experience ?? ""} suggestions={domainSuggestions} onChange={(value) => setProfile({ ...profile, domain_experience: value })} />
-            <TagInput label="기술 스택" tags={profile.tech_stack} suggestions={skillSuggestions} onChange={(tags) => setProfile({ ...profile, tech_stack: tags })} />
+            <TextTagInput label="대표 프로젝트 경험" helper={`${profile.target_job_family} 직무 기준`} value={profile.project_experience_summary ?? ""} suggestions={projectSuggestionsFor(profile.target_job_family)} onChange={(value) => setProfile({ ...profile, project_experience_summary: value })} />
+            <TextTagInput label="산업/도메인 경험" helper="공고 도메인 매칭에 사용" value={profile.domain_experience ?? ""} suggestions={domainSuggestionsFor(profile.target_job_family)} onChange={(value) => setProfile({ ...profile, domain_experience: value })} />
+            <TagInput label="기술 스택" helper={`${profile.target_job_family} 추천 태그`} tags={profile.tech_stack} suggestions={skillSuggestionsFor(profile.target_job_family)} onChange={(tags) => setProfile({ ...profile, tech_stack: tags })} />
             <TagInput label="자격증/시험" tags={profile.certifications} suggestions={certSuggestions} onChange={(tags) => setProfile({ ...profile, certifications: tags })} />
           </Section>
 
@@ -177,8 +218,8 @@ export default function ProfileOnboardingPage() {
           </Section>
 
           <Section step="04" title="지원 조건과 증빙" description="비자, 포트폴리오, 희망 조건은 공고 카드와 부족 요소에 함께 표시됩니다.">
-            <TextInput label="희망 연봉" value={profile.expected_salary_range ?? ""} onChange={(event) => setProfile({ ...profile, expected_salary_range: event.target.value })} placeholder="예: USD 100k-130k" />
-            <Toggle label="비자 스폰서십 필요" checked={Boolean(profile.visa_sponsorship_needed)} onChange={(value) => setProfile({ ...profile, visa_sponsorship_needed: value })} />
+            <TextInput label="희망 연봉" helper="공고 미기재가 많으면 비워도 됩니다" value={profile.expected_salary_range ?? ""} onChange={(event) => setProfile({ ...profile, expected_salary_range: event.target.value })} placeholder="예: USD 100k-130k / Not specified" />
+            <Toggle label="비자 스폰서십 필요 또는 확인 필요" checked={Boolean(profile.visa_sponsorship_needed)} onChange={(value) => setProfile({ ...profile, visa_sponsorship_needed: value })} />
             <Toggle label="GitHub 보유" checked={profile.github_present} onChange={(value) => setProfile({ ...profile, github_present: value })} />
             <Toggle label="포트폴리오 보유" checked={profile.portfolio_present} onChange={(value) => setProfile({ ...profile, portfolio_present: value })} />
             <TextInput label="GitHub URL" value={profile.github_url ?? ""} onChange={(event) => setProfile({ ...profile, github_url: event.target.value })} />
@@ -210,9 +251,21 @@ function Section({ step, title, description, children }: { step: string; title: 
   );
 }
 
-function SelectField({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+function SelectField({
+  label,
+  helper,
+  value,
+  options,
+  onChange
+}: {
+  label: string;
+  helper?: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
   return (
-    <SelectInput label={label} value={value} onChange={(event) => onChange(event.target.value)}>
+    <SelectInput label={label} helper={helper} value={value} onChange={(event) => onChange(event.target.value)}>
       {options.map((option) => <option key={option}>{option}</option>)}
     </SelectInput>
   );
@@ -254,7 +307,19 @@ function PriorityToggle({ label, checked, onChange }: { label: string; checked: 
   );
 }
 
-function TagInput({ label, tags, suggestions, onChange }: { label: string; tags: string[]; suggestions: string[]; onChange: (tags: string[]) => void }) {
+function TagInput({
+  label,
+  helper,
+  tags,
+  suggestions,
+  onChange
+}: {
+  label: string;
+  helper?: string;
+  tags: string[];
+  suggestions: string[];
+  onChange: (tags: string[]) => void;
+}) {
   const [draft, setDraft] = useState("");
 
   function addTag(value: string) {
@@ -269,7 +334,10 @@ function TagInput({ label, tags, suggestions, onChange }: { label: string; tags:
 
   return (
     <div className="md:col-span-2">
-      <p className="text-sm font-medium text-slate-700">{label}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium text-slate-700">{label}</p>
+        {helper && <p className="text-xs text-slate-400">{helper}</p>}
+      </div>
       <div className="mt-1 border border-line bg-white p-2">
         <div className="flex flex-wrap gap-2">
           {tags.map((tag) => (
@@ -303,8 +371,24 @@ function TagInput({ label, tags, suggestions, onChange }: { label: string; tags:
   );
 }
 
-function TextTagInput({ label, value, suggestions, onChange }: { label: string; value: string; suggestions: string[]; onChange: (value: string) => void }) {
-  return <TagInput label={label} tags={tagsFromText(value)} suggestions={suggestions} onChange={(tags) => onChange(tags.join(", "))} />;
+function TextTagInput({
+  label,
+  helper,
+  value,
+  suggestions,
+  onChange
+}: {
+  label: string;
+  helper?: string;
+  value: string;
+  suggestions: string[];
+  onChange: (value: string) => void;
+}) {
+  return <TagInput label={label} helper={helper} tags={tagsFromText(value)} suggestions={suggestions} onChange={(tags) => onChange(tags.join(", "))} />;
+}
+
+function cityOptionsFor(country: string) {
+  return citiesByCountry[country] ?? ["Remote", "Not specified"];
 }
 
 function tagsFromText(value: string) {
