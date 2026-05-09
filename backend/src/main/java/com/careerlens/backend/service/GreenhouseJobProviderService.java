@@ -38,7 +38,14 @@ public class GreenhouseJobProviderService {
     private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]+>");
     private static final Pattern SPACE_PATTERN = Pattern.compile("\\s+");
     private static final Pattern EXPERIENCE_PATTERN = Pattern.compile("(\\d+)\\+?\\s*(?:years|yrs|year)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern SALARY_PATTERN = Pattern.compile("\\$\\s?[0-9][0-9,]*(?:k|K)?\\s*(?:-|to|~)\\s*\\$?\\s?[0-9][0-9,]*(?:k|K)?", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SALARY_RANGE_PATTERN = Pattern.compile(
+            "\\$\\s?[0-9][0-9,]*(?:\\.\\d+)?\\s*(?:k|K)?\\s*(?:-|–|—|to|~|and)\\s*(?:\\$\\s?)?[0-9][0-9,]*(?:\\.\\d+)?\\s*(?:k|K)?\\s*(?:USD|CAD|AUD|GBP|EUR)?",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern SALARY_BETWEEN_PATTERN = Pattern.compile(
+            "between\\s+\\$\\s?[0-9][0-9,]*(?:\\.\\d+)?\\s*(?:k|K)?\\s+and\\s+\\$?\\s?[0-9][0-9,]*(?:\\.\\d+)?\\s*(?:k|K)?\\s*(?:USD|CAD|AUD|GBP|EUR)?",
+            Pattern.CASE_INSENSITIVE
+    );
 
     private final ObjectMapper objectMapper;
     private final JobPostingRepository jobPostingRepository;
@@ -621,8 +628,52 @@ public class GreenhouseJobProviderService {
     }
 
     private String inferSalaryRange(String content) {
-        Matcher matcher = SALARY_PATTERN.matcher(content);
-        return matcher.find() ? matcher.group().replaceAll("\\s+", "") : "Not disclosed";
+        String normalized = SPACE_PATTERN.matcher(content == null ? "" : content).replaceAll(" ").trim();
+        String compensationSection = sectionAfter(normalized, "Compensation", 1600);
+        String matched = firstSalaryMatch(compensationSection);
+        if (!matched.isBlank()) {
+            return normalizeSalaryRange(matched);
+        }
+        matched = firstSalaryMatch(normalized);
+        return matched.isBlank() ? "Not disclosed" : normalizeSalaryRange(matched);
+    }
+
+    private String firstSalaryMatch(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        Matcher betweenMatcher = SALARY_BETWEEN_PATTERN.matcher(text);
+        if (betweenMatcher.find()) {
+            return betweenMatcher.group();
+        }
+        Matcher rangeMatcher = SALARY_RANGE_PATTERN.matcher(text);
+        if (rangeMatcher.find()) {
+            return rangeMatcher.group();
+        }
+        return "";
+    }
+
+    private String normalizeSalaryRange(String value) {
+        String normalized = SPACE_PATTERN.matcher(value == null ? "" : value).replaceAll(" ").trim();
+        normalized = normalized.replace("between ", "")
+                .replace("Between ", "")
+                .replaceAll("\\s+and\\s+", " - ")
+                .replaceAll("\\s*(?:–|—|~|to)\\s*", " - ")
+                .replaceAll("\\s*-\\s*", " - ")
+                .replaceAll("\\s+", " ");
+        return normalized.isBlank() ? "Not disclosed" : normalized;
+    }
+
+    private String sectionAfter(String content, String marker, int maxLength) {
+        if (content == null || content.isBlank()) {
+            return "";
+        }
+        int index = content.toLowerCase(Locale.ROOT).indexOf(marker.toLowerCase(Locale.ROOT));
+        if (index < 0) {
+            return "";
+        }
+        int end = Math.min(content.length(), index + Math.max(marker.length(), maxLength));
+        return content.substring(index, end);
     }
 
     private String inferWorkType(String text) {
@@ -638,9 +689,36 @@ public class GreenhouseJobProviderService {
     private Integer scoreSalary(ExternalJobPreviewDto preview) {
         String salaryRange = preview.salaryRange();
         if (salaryRange != null && !salaryRange.equals("Not disclosed")) {
-            return 75;
+            return scoreSalaryFromRange(salaryRange);
         }
         return null;
+    }
+
+    private int scoreSalaryFromRange(String salaryRange) {
+        Matcher matcher = Pattern.compile("[0-9][0-9,]*(?:\\.\\d+)?").matcher(salaryRange == null ? "" : salaryRange);
+        List<Double> values = new ArrayList<>();
+        while (matcher.find()) {
+            String raw = matcher.group().replace(",", "");
+            try {
+                double parsed = Double.parseDouble(raw);
+                if (salaryRange.toLowerCase(Locale.ROOT).contains("k") && parsed < 1000) {
+                    parsed *= 1000;
+                }
+                values.add(parsed);
+            } catch (NumberFormatException ignored) {
+                // Ignore malformed numeric salary fragments.
+            }
+        }
+        if (values.isEmpty()) {
+            return 70;
+        }
+        double max = values.stream().mapToDouble(Double::doubleValue).max().orElse(0);
+        if (max >= 220000) return 92;
+        if (max >= 180000) return 86;
+        if (max >= 140000) return 78;
+        if (max >= 100000) return 70;
+        if (max >= 70000) return 62;
+        return 55;
     }
 
     private Integer scoreWorkLife(ExternalJobPreviewDto preview) {
