@@ -53,3 +53,8 @@ app:
       client-secret: ${AMADEUS_CLIENT_SECRET:}
       base-url: ${AMADEUS_BASE_URL:https://test.api.amadeus.com}
       currency-code: ${AMADEUS_CURRENCY_CODE:KRW}
+  external-jobs:
+    greenhouse:
+      enabled: ${GREENHOUSE_ENABLED:true}
+      base-url: ${GREENHOUSE_BASE_URL:https://boards-api.greenhouse.io}
+      timeout-seconds: ${GREENHOUSE_TIMEOUT_SECONDS:12}

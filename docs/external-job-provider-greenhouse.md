@@ -1,0 +1,95 @@
+# 외부 공고 API 연동 구조 - Greenhouse
+
+## 목적
+
+교수님 피드백 중 "공고를 개발자가 계속 수동으로 관리할 수 있는가?"라는 지점을 보완하기 위해, CareerLens는 수동 조사/seed-data 방식과 별개로 외부 공고 provider 구조를 둔다.
+
+현재 구현 범위는 무단 크롤링이 아니라 Greenhouse 공개 Job Board API의 GET 엔드포인트를 사용하는 시연용 provider다.
+
+## 사용 API
+
+- Provider: Greenhouse Job Board API
+- 공식 문서: https://developer.greenhouse.io/job-board.html
+- 공고 목록: `GET https://boards-api.greenhouse.io/v1/boards/{board_token}/jobs?content=true`
+- 인증: 공개 Job Board GET 엔드포인트는 인증 불필요
+- 제외 범위: 지원서 제출 API, ATS 내부 데이터, 로그인 필요 데이터, LinkedIn/Greenhouse 페이지 scraping
+
+## CareerLens 내부 흐름
+
+```text
+Greenhouse Job Board API
+  -> GreenhouseJobProviderService
+  -> ExternalJobPreviewDto
+  -> JobPosting 정규화
+  -> 기본 PatternProfile 생성
+  -> 기존 추천 진단 / 전체 공고 / 로드맵 흐름에서 사용
+```
+
+추천 엔진은 Greenhouse를 직접 알지 않는다. 외부 공고는 먼저 내부 `JobPosting`으로 정규화되고, 추천 진단은 기존처럼 `JobPosting + PatternProfile + UserProfile`만 비교한다.
+
+## 백엔드 API
+
+### 미리보기
+
+```http
+GET /api/jobs/external/greenhouse/preview?boardToken=airbnb&defaultCountry=United%20States&defaultJobFamily=Backend&limit=8
+```
+
+역할:
+- 외부 API에서 공고를 읽어온다.
+- DB에는 저장하지 않는다.
+- CareerLens 내부 공고 양식으로 어떻게 변환되는지 확인한다.
+
+### DB 등록
+
+```http
+POST /api/jobs/external/greenhouse/import
+Content-Type: application/json
+
+{
+  "board_token": "airbnb",
+  "default_country": "United States",
+  "default_job_family": "Backend",
+  "limit": 8,
+  "default_deadline": "2026-06-20",
+  "create_pattern_profile": true
+}
+```
+
+역할:
+- `external_ref = greenhouse:{boardToken}:{jobId}` 기준으로 upsert한다.
+- 공고 본문의 기술 키워드, 위치, 경력 표현을 분석해 `JobPosting` 필드로 정규화한다.
+- `create_pattern_profile=true`이면 추천 진단이 동작할 수 있도록 기본 `PatternProfile`을 함께 생성한다.
+
+## 환경변수
+
+기본값으로도 동작하지만, 팀원별로 명시하려면 아래 값을 설정한다.
+
+```properties
+GREENHOUSE_ENABLED=true
+GREENHOUSE_BASE_URL=https://boards-api.greenhouse.io
+GREENHOUSE_TIMEOUT_SECONDS=12
+```
+
+## 프론트 화면
+
+- URL: `/jobs/import`
+- 메뉴: `채용공고 > 외부 공고 API`
+- 기능:
+  - board token 입력
+  - 기본 국가/직무군 지정
+  - 미리보기
+  - DB 등록
+  - 기본 PatternProfile 생성 여부 선택
+
+## 발표 때 설명 문장
+
+> 초기 프로토타입은 수동 조사 기반 seed-data로 추천 구조를 검증했습니다. 다만 공고를 계속 개발자가 직접 관리하는 것은 확장성이 낮기 때문에, Greenhouse 같은 공개 Job Board API를 provider 방식으로 연결해 외부 공고를 내부 JobPosting으로 정규화하는 구조를 추가했습니다. 무단 크롤링은 정책/법적 리스크가 있어 배제했고, 추천 엔진은 외부 API에 직접 의존하지 않도록 분리했습니다.
+
+## 한계와 TODO
+
+- Greenhouse 공개 API는 회사별 board token이 필요하다.
+- 모든 공고가 마감일, 연봉, 비자 조건을 명확히 제공하지 않는다.
+- 현재 PatternProfile은 공고 키워드 기반 기본 패턴이다.
+- 실제 서비스 수준에서는 직원 표본/합격자 패턴 검수 또는 관리자 승인 플로우가 필요하다.
+- Greenhouse 외 Workday, Lever 등은 별도 provider로 추가하는 구조가 적합하다.

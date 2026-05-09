@@ -73,6 +73,8 @@ VerificationBadge
 - 국가/직무군/검색 필터
 - 공고별 마감기한 표시
 - 공고별 로드맵 생성
+- Greenhouse 공개 Job Board API 공고 미리보기/DB 등록
+- 외부 공고를 내부 JobPosting + 기본 PatternProfile로 정규화
 
 ### 커리어 플래너
 
@@ -171,6 +173,8 @@ PUT /api/users/{userId}/profile
 
 ```txt
 GET /api/jobs
+GET /api/jobs/external/greenhouse/preview
+POST /api/jobs/external/greenhouse/import
 ```
 
 ### Recommendations
@@ -225,9 +229,11 @@ POST /api/departure/plan
 
 ## 7. 데이터 정책
 
-현재 단계에서는 외부 공고 API, ATS fetch/sync, LinkedIn scraping, Greenhouse 연동, 자동 수집 로직을 사용하지 않습니다.
+현재 핵심 추천 데이터는 `seed-data` 또는 수동 입력 기반 더미 데이터를 기준으로 합니다.
 
-모든 공고/직원 표본/패턴 데이터는 `seed-data` 또는 수동 입력 기반 더미 데이터입니다.
+단, 공고 관리 자동화 가능성을 보여주기 위해 Greenhouse 공개 Job Board API provider를 별도 기능으로 추가했습니다. 이 기능은 무단 크롤링이 아니라 공개 GET API를 사용하며, 가져온 공고를 내부 `JobPosting` 형식으로 정규화합니다.
+
+LinkedIn scraping, 로그인 필요 ATS 데이터 수집, 지원서 제출 API, Greenhouse 페이지 scraping은 사용하지 않습니다.
 
 현재 seed-data 구성:
 
@@ -306,6 +312,7 @@ AMADEUS_CURRENCY_CODE=KRW
 
 ```txt
 docs/ai-api-setup.md
+docs/external-job-provider-greenhouse.md
 docs/duffel-flight-api-integration.md
 docs/departure-flight-api-integration.md
 ```

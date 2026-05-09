@@ -1,0 +1,78 @@
+import type { JobPosting } from "@/lib/jobs";
+
+export type ExternalJobPreview = {
+  provider: string;
+  board_token: string;
+  external_ref: string;
+  company_name: string;
+  country: string;
+  job_title: string;
+  job_family: string;
+  location: string;
+  source_url: string;
+  required_skills: string[];
+  preferred_skills: string[];
+  required_languages: string[];
+  min_experience_years: number | null;
+  degree_requirement: string;
+  portfolio_required: boolean;
+  visa_requirement: string;
+  salary_range: string;
+  work_type: string;
+  content_summary: string;
+  already_imported: boolean;
+};
+
+export type ExternalJobImportRequest = {
+  board_token: string;
+  default_country?: string;
+  default_job_family?: string;
+  limit?: number;
+  default_deadline?: string;
+  create_pattern_profile?: boolean;
+};
+
+export type ExternalJobImportResponse = {
+  provider: string;
+  board_token: string;
+  fetched_count: number;
+  imported_count: number;
+  updated_count: number;
+  jobs: JobPosting[];
+};
+
+const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+
+export async function previewGreenhouseJobs(params: ExternalJobImportRequest): Promise<ExternalJobPreview[]> {
+  const query = new URLSearchParams();
+  query.set("boardToken", params.board_token);
+  if (params.default_country) query.set("defaultCountry", params.default_country);
+  if (params.default_job_family) query.set("defaultJobFamily", params.default_job_family);
+  if (params.limit) query.set("limit", String(params.limit));
+
+  const response = await fetch(`${baseUrl}/api/jobs/external/greenhouse/preview?${query.toString()}`, {
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Greenhouse preview request failed.");
+  }
+
+  return response.json();
+}
+
+export async function importGreenhouseJobs(request: ExternalJobImportRequest): Promise<ExternalJobImportResponse> {
+  const response = await fetch(`${baseUrl}/api/jobs/external/greenhouse/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request)
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Greenhouse import request failed.");
+  }
+
+  return response.json();
+}

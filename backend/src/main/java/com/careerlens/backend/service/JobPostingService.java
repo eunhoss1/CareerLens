@@ -27,7 +27,7 @@ public class JobPostingService {
                 .collect(Collectors.toCollection(ArrayList::new));
     }
 
-    private JobPostingDto toDto(JobPosting job) {
+    public JobPostingDto toDto(JobPosting job) {
         LocalDate today = LocalDate.now();
         LocalDate deadline = job.getApplicationDeadline();
         Integer daysUntilDeadline = deadline == null ? null : (int) ChronoUnit.DAYS.between(today, deadline);
