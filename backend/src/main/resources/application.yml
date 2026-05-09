@@ -25,6 +25,8 @@ careerlens:
     processed-path: ../seed-data/processed
 
 app:
+  auth:
+    admin-login-ids: ${ADMIN_LOGIN_IDS:admin,careerlens-admin}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001}
     allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}

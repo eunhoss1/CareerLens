@@ -96,14 +96,74 @@ GREENHOUSE_SYNC_INITIAL_DELAY_MILLIS=60000
 
 - URL: `/jobs/import`
 - 성격: 관리자용 데이터 관리 화면
+- 접근 정책: `ADMIN` 역할 사용자만 접근 가능
 - 기능:
   - board token 입력
   - 국가/직무군 필터 지정
   - 미리보기
+  - 미리보기 조회 개수, 신규 후보 수, 기등록 수 표시
   - DB 등록
   - 기본 PatternProfile 생성 여부 선택
   - 자동 동기화 상태 확인
   - 수동 동기화 실행
+
+## 관리자 계정
+
+로컬 개발 환경에서는 회원가입 시 `login_id`를 아래 값 중 하나로 만들면 관리자 역할을 받는다.
+
+```text
+admin
+careerlens-admin
+```
+
+관리자 login id 목록은 환경변수로 변경할 수 있다.
+
+```properties
+ADMIN_LOGIN_IDS=admin,careerlens-admin
+```
+
+주의:
+- 현재 권한 체계는 캡스톤 시연용 경량 구조다.
+- 프론트에서는 관리자 계정만 `/jobs/import` 내용을 보여준다.
+- 백엔드는 `X-Careerlens-User-Role=ADMIN` 헤더가 없는 외부 공고 API 요청을 403으로 차단한다.
+- 상용 수준에서는 JWT/session 기반 인증과 서버측 RBAC로 교체해야 한다.
+
+## AI 신뢰성 검증 확장안
+
+외부 공고 API로 가져온 공고는 원문 품질과 회사별 작성 방식이 다르기 때문에, 관리자 등록 전에 AI 보조 검수를 붙이는 것이 적합하다.
+
+입력:
+
+```text
+- 원문 공고 제목
+- 원문 위치
+- 원문 본문 요약
+- 정규화된 country
+- 정규화된 job_family
+- 추출된 required_skills / preferred_skills
+- 추론된 min_experience_years
+- 생성 예정 PatternProfile 초안
+```
+
+출력:
+
+```text
+- 국가 추론 신뢰도
+- 직무군 추론 신뢰도
+- 기술스택 추출 신뢰도
+- 경력 추론 신뢰도
+- 비기술 공고 혼입 위험
+- 관리자 검수 필요 여부
+- 수정 제안
+```
+
+역할:
+
+```text
+외부 API 공고 -> 규칙 기반 정규화 -> AI 신뢰성 검토 -> 관리자 검수 -> DB 등록
+```
+
+추천 점수 계산에는 AI를 직접 쓰지 않고, 공고 데이터 품질 검수와 설명 생성에만 사용한다.
 
 ## 자동 동기화 API
 

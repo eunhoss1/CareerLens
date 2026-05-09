@@ -3,6 +3,8 @@ export type AuthUser = {
   login_id: string;
   display_name: string;
   email: string;
+  role?: string;
+  admin?: boolean;
   profile_completed: boolean;
 };
 
@@ -22,6 +24,10 @@ export function storeUser(user: AuthUser) {
 
 export function clearStoredUser() {
   window.localStorage.removeItem(STORAGE_KEY);
+}
+
+export function isAdminUser(user: AuthUser | null) {
+  return Boolean(user?.admin) || user?.role === "ADMIN";
 }
 
 export async function signup(input: {

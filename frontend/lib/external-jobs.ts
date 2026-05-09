@@ -1,4 +1,5 @@
 import type { JobPosting } from "@/lib/jobs";
+import { getStoredUser } from "@/lib/auth";
 
 export type ExternalJobPreview = {
   provider: string;
@@ -64,6 +65,7 @@ export async function previewGreenhouseJobs(params: ExternalJobImportRequest): P
   if (params.limit) query.set("limit", String(params.limit));
 
   const response = await fetch(`${baseUrl}/api/jobs/external/greenhouse/preview?${query.toString()}`, {
+    headers: adminHeaders(),
     cache: "no-store"
   });
 
@@ -78,7 +80,7 @@ export async function previewGreenhouseJobs(params: ExternalJobImportRequest): P
 export async function importGreenhouseJobs(request: ExternalJobImportRequest): Promise<ExternalJobImportResponse> {
   const response = await fetch(`${baseUrl}/api/jobs/external/greenhouse/import`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify(request)
   });
 
@@ -92,6 +94,7 @@ export async function importGreenhouseJobs(request: ExternalJobImportRequest): P
 
 export async function fetchGreenhouseSyncStatus(): Promise<ExternalJobSyncStatus> {
   const response = await fetch(`${baseUrl}/api/jobs/external/greenhouse/sync/status`, {
+    headers: adminHeaders(),
     cache: "no-store"
   });
 
@@ -105,7 +108,8 @@ export async function fetchGreenhouseSyncStatus(): Promise<ExternalJobSyncStatus
 
 export async function runGreenhouseSync(): Promise<ExternalJobSyncStatus> {
   const response = await fetch(`${baseUrl}/api/jobs/external/greenhouse/sync/run`, {
-    method: "POST"
+    method: "POST",
+    headers: adminHeaders()
   });
 
   if (!response.ok) {
@@ -114,4 +118,11 @@ export async function runGreenhouseSync(): Promise<ExternalJobSyncStatus> {
   }
 
   return response.json();
+}
+
+function adminHeaders() {
+  const user = getStoredUser();
+  return {
+    "X-Careerlens-User-Role": user?.role ?? "USER"
+  };
 }

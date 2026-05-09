@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Badge, Button, Card, EmptyState, MetricCard, PageHeader, PageShell, SelectInput, TextInput } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, LinkButton, MetricCard, PageHeader, PageShell, SelectInput, TextInput } from "@/components/ui";
+import { getStoredUser, isAdminUser, type AuthUser } from "@/lib/auth";
 import {
   importGreenhouseJobs,
   fetchGreenhouseSyncStatus,
@@ -53,6 +54,7 @@ const initialForm: FormState = {
 };
 
 export default function JobImportPage() {
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [form, setForm] = useState<FormState>(initialForm);
   const [previews, setPreviews] = useState<ExternalJobPreview[]>([]);
   const [importResult, setImportResult] = useState<ExternalJobImportResponse | null>(null);
@@ -60,8 +62,14 @@ export default function JobImportPage() {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const isAdmin = isAdminUser(user);
 
   useEffect(() => {
+    const storedUser = getStoredUser();
+    setUser(storedUser);
+    if (!isAdminUser(storedUser)) {
+      return;
+    }
     fetchGreenhouseSyncStatus()
       .then(setSyncStatus)
       .catch(() => {
@@ -128,6 +136,15 @@ export default function JobImportPage() {
         }
       />
 
+      {!isAdmin ? (
+        <div className="lens-container py-8">
+          <EmptyState
+            title="관리자 권한이 필요한 화면입니다."
+            description="외부 공고 API 조회와 DB 등록은 공고 데이터 품질에 직접 영향을 주므로 관리자 계정으로만 접근할 수 있습니다. 로컬 개발 환경에서는 login_id가 admin 또는 careerlens-admin인 계정을 생성해 사용합니다."
+            action={<LinkButton href="/login">관리자 로그인</LinkButton>}
+          />
+        </div>
+      ) : (
       <div className="lens-container grid gap-6 py-8 lg:grid-cols-[360px_1fr]">
         <aside className="space-y-4">
           <Card className="p-5">
@@ -235,6 +252,13 @@ export default function JobImportPage() {
               <li>실제 발표에서는 seed-data와 API provider를 병행 구조로 설명합니다.</li>
             </ul>
           </Card>
+
+          <Card className="p-5">
+            <p className="text-xs font-bold tracking-[0.16em] text-brand">AI REVIEW IDEA</p>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              다음 단계에서는 원문 공고, 정규화 결과, PatternProfile 초안을 AI에 넘겨 직무군/국가/기술스택/경력 추론 신뢰도를 점수화하고, 낮은 항목은 관리자 검수 대상으로 표시할 수 있습니다.
+            </p>
+          </Card>
         </aside>
 
         <section className="space-y-5">
@@ -257,6 +281,25 @@ export default function JobImportPage() {
             </Card>
           )}
 
+          {previews.length > 0 && !importResult && (
+            <Card className="p-5">
+              <div className="grid gap-3 sm:grid-cols-4">
+                <MetricCard label="조회 공고" value={`${previews.length}개`} />
+                <MetricCard label="신규 후보" value={`${previews.filter((job) => !job.already_imported).length}개`} />
+                <MetricCard label="기등록" value={`${previews.filter((job) => job.already_imported).length}개`} />
+                <MetricCard label="국가 수" value={`${new Set(previews.map((job) => job.country)).size}개`} />
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {Array.from(new Set(previews.map((job) => job.job_family))).map((family) => (
+                  <Badge key={family} tone="brand">{family}</Badge>
+                ))}
+                {Array.from(new Set(previews.map((job) => job.country))).map((country) => (
+                  <Badge key={country} tone="muted">{country}</Badge>
+                ))}
+              </div>
+            </Card>
+          )}
+
           {loading ? (
             <Card className="p-8 text-center text-sm text-slate-600">Greenhouse 공개 API를 확인하는 중입니다.</Card>
           ) : previews.length === 0 && !importResult ? (
@@ -273,6 +316,7 @@ export default function JobImportPage() {
           )}
         </section>
       </div>
+      )}
     </PageShell>
   );
 }
@@ -286,7 +330,7 @@ function ExternalJobCard({ job }: { job: ExternalJobPreview }) {
             <Badge tone="brand">{job.provider}</Badge>
             <Badge tone="muted">{job.country}</Badge>
             <Badge tone="muted">{job.job_family}</Badge>
-            {job.already_imported && <Badge tone="success">등록됨</Badge>}
+            {job.already_imported ? <Badge tone="success">DB 등록됨</Badge> : <Badge tone="warning">신규 후보</Badge>}
           </div>
           <h2 className="mt-4 text-xl font-semibold leading-7 text-night">{job.company_name}</h2>
           <p className="mt-1 text-base font-medium text-ink">{job.job_title}</p>
