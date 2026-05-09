@@ -2,11 +2,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { mainMenus, statusLabel } from "@/lib/menu";
+import { useEffect, useState } from "react";
 import { LinkButton } from "@/components/ui";
+import { getStoredUser, isAdminUser, type AuthUser } from "@/lib/auth";
+import { mainMenus, statusLabel, type MenuChild } from "@/lib/menu";
 
 export function SiteHeader() {
   const pathname = usePathname();
+  const [user, setUser] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    setUser(getStoredUser());
+  }, []);
+
+  const isAdmin = isAdminUser(user);
+  const visibleMenus = mainMenus.map((menu) => ({
+    ...menu,
+    children: filterVisibleChildren(menu.children, isAdmin)
+  }));
 
   return (
     <header className="sticky top-0 z-30 border-b border-[#24343a] bg-night text-white">
@@ -22,7 +35,7 @@ export function SiteHeader() {
         </Link>
 
         <nav className="hidden flex-1 items-center justify-center gap-1 xl:flex" aria-label="주요 메뉴">
-          {mainMenus.map((menu) => {
+          {visibleMenus.map((menu) => {
             const active = isActive(pathname, menu.href, flattenHrefs(menu.children));
             return (
               <div key={menu.title} className="group relative">
@@ -37,14 +50,14 @@ export function SiteHeader() {
                   <span className="ml-1 text-xs text-slate-300 group-hover:text-white">v</span>
                 </Link>
 
-                <div className="invisible absolute left-0 top-full w-[300px] translate-y-2 border border-night bg-white text-night opacity-0 shadow-dossier transition group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+                <div className="invisible absolute left-0 top-full w-[320px] translate-y-2 border border-night bg-white text-night opacity-0 shadow-dossier transition group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
                   <div className="border-b border-line bg-panel px-4 py-3">
                     <p className="text-xs font-bold tracking-[0.16em] text-brand">{menu.title}</p>
                     <p className="mt-1 text-xs leading-5 text-slate-600">{menu.summary}</p>
                   </div>
                   <div className="py-2">
                     {menu.children.map((child) => {
-                      const childActive = pathname === child.href || (child.href !== "/" && pathname.startsWith(child.href));
+                      const childActive = isActive(pathname, child.href, flattenHrefs(child.children ?? []));
                       return (
                         <Link
                           key={child.title}
@@ -77,14 +90,14 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-2">
           <div className="hidden max-w-[52vw] gap-2 overflow-x-auto md:flex xl:hidden">
-            {mainMenus.map((menu) => (
+            {visibleMenus.map((menu) => (
               <Link key={menu.title} href={menu.href} className="whitespace-nowrap border border-white/15 px-2.5 py-1.5 text-xs font-semibold text-slate-100">
                 {menu.title}
               </Link>
             ))}
           </div>
-          <LinkButton href="/login" variant="secondary" className="border-white/25 bg-white text-night hover:bg-slate-100">
-            로그인
+          <LinkButton href={user ? "/mypage" : "/login"} variant="secondary" className="border-white/25 bg-white text-night hover:bg-slate-100">
+            {user ? user.display_name : "로그인"}
           </LinkButton>
         </div>
       </div>
@@ -103,6 +116,15 @@ function isActive(pathname: string, href: string, childHrefs: string[]) {
   return childHrefs.some((childHref) => pathname === childHref || (childHref !== "/" && pathname.startsWith(childHref)));
 }
 
-function flattenHrefs(children: Array<{ href: string; children?: Array<{ href: string }> }>) {
-  return children.flatMap((child) => [child.href, ...(child.children?.map((grandChild) => grandChild.href) ?? [])]);
+function filterVisibleChildren(children: MenuChild[], isAdmin: boolean): MenuChild[] {
+  return children
+    .filter((child) => !child.adminOnly || isAdmin)
+    .map((child) => ({
+      ...child,
+      children: child.children ? filterVisibleChildren(child.children, isAdmin) : undefined
+    }));
+}
+
+function flattenHrefs(children: MenuChild[]): string[] {
+  return children.flatMap((child) => [child.href, ...(child.children ? flattenHrefs(child.children) : [])]);
 }
