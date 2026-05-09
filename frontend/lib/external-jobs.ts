@@ -31,6 +31,8 @@ export type ExternalJobImportRequest = {
   limit?: number;
   default_deadline?: string;
   create_pattern_profile?: boolean;
+  selected_external_refs?: string[];
+  import_new?: boolean;
 };
 
 export type ExternalJobImportResponse = {

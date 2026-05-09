@@ -17,6 +17,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -82,6 +83,10 @@ public class GreenhouseJobProviderService {
     @Transactional
     public ExternalJobImportResponseDto importJobs(ExternalJobImportRequestDto request) {
         boolean createPatterns = request.createPatternProfile() == null || request.createPatternProfile();
+        boolean importNew = request.importNew() == null || request.importNew();
+        Set<String> selectedRefs = request.selectedExternalRefs() == null
+                ? new HashSet<>()
+                : new HashSet<>(request.selectedExternalRefs());
         List<ExternalJobPreviewDto> previews = fetchPreviews(
                 request.boardToken(),
                 request.defaultCountry(),
@@ -93,7 +98,13 @@ public class GreenhouseJobProviderService {
         int updated = 0;
         List<JobPostingDto> savedJobs = new ArrayList<>();
         for (ExternalJobPreviewDto preview : previews) {
+            if (!selectedRefs.isEmpty() && !selectedRefs.contains(preview.externalRef())) {
+                continue;
+            }
             boolean exists = jobPostingRepository.findByExternalRef(preview.externalRef()).isPresent();
+            if (!exists && !importNew) {
+                continue;
+            }
             JobPosting job = jobPostingRepository.findByExternalRef(preview.externalRef()).orElseGet(JobPosting::new);
             applyPreview(job, preview, request);
             JobPosting saved = jobPostingRepository.save(job);

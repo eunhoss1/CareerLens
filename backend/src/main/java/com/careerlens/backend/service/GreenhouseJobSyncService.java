@@ -87,22 +87,31 @@ public class GreenhouseJobSyncService {
                 return status();
             }
 
+            List<String> failedTokens = new ArrayList<>();
             for (String boardToken : boardTokens) {
-                ExternalJobImportResponseDto response = greenhouseJobProviderService.importJobs(new ExternalJobImportRequestDto(
-                        boardToken,
-                        defaultCountry,
-                        defaultJobFamily,
-                        limitPerBoard,
-                        defaultDeadline(),
-                        createPatternProfile
-                ));
-                lastFetchedCount += safe(response.fetchedCount());
-                lastImportedCount += safe(response.importedCount());
-                lastUpdatedCount += safe(response.updatedCount());
+                try {
+                    ExternalJobImportResponseDto response = greenhouseJobProviderService.importJobs(new ExternalJobImportRequestDto(
+                            boardToken,
+                            defaultCountry,
+                            defaultJobFamily,
+                            limitPerBoard,
+                            defaultDeadline(),
+                            createPatternProfile,
+                            null,
+                            false
+                    ));
+                    lastFetchedCount += safe(response.fetchedCount());
+                    lastImportedCount += safe(response.importedCount());
+                    lastUpdatedCount += safe(response.updatedCount());
+                } catch (RuntimeException exception) {
+                    failedTokens.add(boardToken);
+                }
             }
 
-            lastStatus = "SUCCESS";
-            lastMessage = "Greenhouse board " + boardTokens.size() + "개를 동기화했습니다.";
+            lastStatus = failedTokens.isEmpty() ? "SUCCESS" : "PARTIAL_SUCCESS";
+            lastMessage = failedTokens.isEmpty()
+                    ? "Greenhouse board " + boardTokens.size() + "개를 동기화했습니다."
+                    : "일부 Greenhouse board token 동기화를 건너뛰었습니다: " + String.join(", ", failedTokens);
             return status();
         } catch (RuntimeException exception) {
             lastStatus = "FAILED";
@@ -130,7 +139,10 @@ public class GreenhouseJobSyncService {
     }
 
     private LocalDate defaultDeadline() {
-        int offset = defaultDeadlineOffsetDays == null ? 45 : Math.max(1, defaultDeadlineOffsetDays);
+        if (defaultDeadlineOffsetDays == null || defaultDeadlineOffsetDays <= 0) {
+            return null;
+        }
+        int offset = Math.max(1, defaultDeadlineOffsetDays);
         return LocalDate.now().plusDays(offset);
     }
 
