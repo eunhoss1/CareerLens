@@ -47,6 +47,25 @@ public class GreenhouseJobProviderService {
             Pattern.CASE_INSENSITIVE
     );
 
+    private static final String BROAD_CURRENCY_MARKER = "(?:\\$|\\x{00A3}|\\x{20B9}|\\x{00A5}|\\x{20AC}|USD|CAD|AUD|GBP|EUR|INR|JPY|KRW|SGD)";
+    private static final String BROAD_SALARY_AMOUNT = "[0-9][0-9,]*(?:\\.\\d+)?\\s*(?:k|K|m|M|lakh|crore)?";
+    private static final String BROAD_SALARY_SEPARATOR = "(?:-|\\x{2013}|\\x{2014}|to|~|and)";
+    private static final Pattern BROAD_SALARY_RANGE_PATTERN = Pattern.compile(
+            BROAD_CURRENCY_MARKER + "\\s*" + BROAD_SALARY_AMOUNT + "\\s*" + BROAD_SALARY_SEPARATOR
+                    + "\\s*(?:" + BROAD_CURRENCY_MARKER + "\\s*)?" + BROAD_SALARY_AMOUNT + "\\s*(?:" + BROAD_CURRENCY_MARKER + ")?",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern BROAD_SALARY_TRAILING_CURRENCY_PATTERN = Pattern.compile(
+            BROAD_SALARY_AMOUNT + "\\s*" + BROAD_SALARY_SEPARATOR + "\\s*" + BROAD_SALARY_AMOUNT + "\\s*" + BROAD_CURRENCY_MARKER,
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern BROAD_SALARY_BETWEEN_PATTERN = Pattern.compile(
+            "between\\s+" + BROAD_CURRENCY_MARKER + "\\s*" + BROAD_SALARY_AMOUNT
+                    + "\\s+and\\s+(?:" + BROAD_CURRENCY_MARKER + "\\s*)?" + BROAD_SALARY_AMOUNT
+                    + "\\s*(?:" + BROAD_CURRENCY_MARKER + ")?",
+            Pattern.CASE_INSENSITIVE
+    );
+
     private final ObjectMapper objectMapper;
     private final JobPostingRepository jobPostingRepository;
     private final PatternProfileRepository patternProfileRepository;
@@ -642,18 +661,29 @@ public class GreenhouseJobProviderService {
         if (text == null || text.isBlank()) {
             return "";
         }
-        Matcher betweenMatcher = SALARY_BETWEEN_PATTERN.matcher(text);
+        Matcher betweenMatcher = BROAD_SALARY_BETWEEN_PATTERN.matcher(text);
         if (betweenMatcher.find()) {
             return betweenMatcher.group();
         }
-        Matcher rangeMatcher = SALARY_RANGE_PATTERN.matcher(text);
+        Matcher rangeMatcher = BROAD_SALARY_RANGE_PATTERN.matcher(text);
         if (rangeMatcher.find()) {
             return rangeMatcher.group();
+        }
+        Matcher trailingCurrencyMatcher = BROAD_SALARY_TRAILING_CURRENCY_PATTERN.matcher(text);
+        if (trailingCurrencyMatcher.find()) {
+            return trailingCurrencyMatcher.group();
         }
         return "";
     }
 
     private String normalizeSalaryRange(String value) {
+        if (value == null || value.isBlank()) {
+            return "Not disclosed";
+        }
+        String safeNormalized = normalizeSalaryRangeSafely(value);
+        if (!safeNormalized.isBlank()) {
+            return safeNormalized;
+        }
         String normalized = SPACE_PATTERN.matcher(value == null ? "" : value).replaceAll(" ").trim();
         normalized = normalized.replace("between ", "")
                 .replace("Between ", "")
@@ -662,6 +692,18 @@ public class GreenhouseJobProviderService {
                 .replaceAll("\\s*-\\s*", " - ")
                 .replaceAll("\\s+", " ");
         return normalized.isBlank() ? "Not disclosed" : normalized;
+    }
+
+    private String normalizeSalaryRangeSafely(String value) {
+        String normalized = SPACE_PATTERN.matcher(value == null ? "" : value).replaceAll(" ").trim();
+        normalized = normalized.replace("between ", "")
+                .replace("Between ", "")
+                .replaceAll("\\s+and\\s+", " - ")
+                .replaceAll("\\s*(?:" + BROAD_SALARY_SEPARATOR + ")\\s*", " - ")
+                .replaceAll("\\s*-\\s*", " - ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        return normalized;
     }
 
     private String sectionAfter(String content, String marker, int maxLength) {
@@ -697,6 +739,7 @@ public class GreenhouseJobProviderService {
     private int scoreSalaryFromRange(String salaryRange) {
         Matcher matcher = Pattern.compile("[0-9][0-9,]*(?:\\.\\d+)?").matcher(salaryRange == null ? "" : salaryRange);
         List<Double> values = new ArrayList<>();
+        double currencyFactor = salaryCurrencyFactor(salaryRange);
         while (matcher.find()) {
             String raw = matcher.group().replace(",", "");
             try {
@@ -704,6 +747,7 @@ public class GreenhouseJobProviderService {
                 if (salaryRange.toLowerCase(Locale.ROOT).contains("k") && parsed < 1000) {
                     parsed *= 1000;
                 }
+                parsed *= currencyFactor;
                 values.add(parsed);
             } catch (NumberFormatException ignored) {
                 // Ignore malformed numeric salary fragments.
@@ -719,6 +763,23 @@ public class GreenhouseJobProviderService {
         if (max >= 100000) return 70;
         if (max >= 70000) return 62;
         return 55;
+    }
+
+    private double salaryCurrencyFactor(String salaryRange) {
+        String normalized = salaryRange == null ? "" : salaryRange.toUpperCase(Locale.ROOT);
+        if (normalized.contains("GBP") || containsCodePoint(salaryRange, 0x00A3)) return 1.25;
+        if (normalized.contains("EUR") || containsCodePoint(salaryRange, 0x20AC)) return 1.08;
+        if (normalized.contains("CAD")) return 0.73;
+        if (normalized.contains("AUD")) return 0.66;
+        if (normalized.contains("SGD")) return 0.74;
+        if (normalized.contains("INR") || containsCodePoint(salaryRange, 0x20B9)) return 0.012;
+        if (normalized.contains("JPY") || containsCodePoint(salaryRange, 0x00A5)) return 0.0067;
+        if (normalized.contains("KRW")) return 0.00075;
+        return 1.0;
+    }
+
+    private boolean containsCodePoint(String value, int codePoint) {
+        return value != null && value.codePoints().anyMatch(current -> current == codePoint);
     }
 
     private Integer scoreWorkLife(ExternalJobPreviewDto preview) {
