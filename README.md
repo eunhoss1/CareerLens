@@ -421,6 +421,7 @@ ADMIN_LOGIN_IDS=admin,careerlens-admin
 
 ```txt
 docs/auth-jwt-security-update.md
+docs/auth-authorization-guide.md
 ```
 
 ## Greenhouse 자동 동기화 설정
