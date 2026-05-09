@@ -175,6 +175,8 @@ PUT /api/users/{userId}/profile
 GET /api/jobs
 GET /api/jobs/external/greenhouse/preview
 POST /api/jobs/external/greenhouse/import
+GET /api/jobs/external/greenhouse/sync/status
+POST /api/jobs/external/greenhouse/sync/run
 ```
 
 ### Recommendations

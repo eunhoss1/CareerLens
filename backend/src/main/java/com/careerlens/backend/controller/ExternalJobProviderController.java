@@ -3,7 +3,9 @@ package com.careerlens.backend.controller;
 import com.careerlens.backend.dto.ExternalJobImportRequestDto;
 import com.careerlens.backend.dto.ExternalJobImportResponseDto;
 import com.careerlens.backend.dto.ExternalJobPreviewDto;
+import com.careerlens.backend.dto.ExternalJobSyncStatusDto;
 import com.careerlens.backend.service.GreenhouseJobProviderService;
+import com.careerlens.backend.service.GreenhouseJobSyncService;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,9 +20,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class ExternalJobProviderController {
 
     private final GreenhouseJobProviderService greenhouseJobProviderService;
+    private final GreenhouseJobSyncService greenhouseJobSyncService;
 
-    public ExternalJobProviderController(GreenhouseJobProviderService greenhouseJobProviderService) {
+    public ExternalJobProviderController(
+            GreenhouseJobProviderService greenhouseJobProviderService,
+            GreenhouseJobSyncService greenhouseJobSyncService
+    ) {
         this.greenhouseJobProviderService = greenhouseJobProviderService;
+        this.greenhouseJobSyncService = greenhouseJobSyncService;
     }
 
     @GetMapping("/greenhouse/preview")
@@ -36,5 +43,15 @@ public class ExternalJobProviderController {
     @PostMapping("/greenhouse/import")
     public ExternalJobImportResponseDto importGreenhouseJobs(@Valid @RequestBody ExternalJobImportRequestDto request) {
         return greenhouseJobProviderService.importJobs(request);
+    }
+
+    @PostMapping("/greenhouse/sync/run")
+    public ExternalJobSyncStatusDto runGreenhouseSync() {
+        return greenhouseJobSyncService.runSync();
+    }
+
+    @GetMapping("/greenhouse/sync/status")
+    public ExternalJobSyncStatusDto getGreenhouseSyncStatus() {
+        return greenhouseJobSyncService.status();
     }
 }

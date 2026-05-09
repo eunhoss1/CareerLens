@@ -71,6 +71,27 @@ GREENHOUSE_BASE_URL=https://boards-api.greenhouse.io
 GREENHOUSE_TIMEOUT_SECONDS=12
 ```
 
+자동 동기화까지 켜려면 아래 값을 추가한다. 서버가 실행 중인 동안에만 주기적으로 동작한다.
+
+```properties
+GREENHOUSE_SYNC_ENABLED=true
+GREENHOUSE_SYNC_BOARD_TOKENS=airbnb,doordash,reddit
+GREENHOUSE_SYNC_DEFAULT_COUNTRY=United States
+GREENHOUSE_SYNC_DEFAULT_JOB_FAMILY=Backend
+GREENHOUSE_SYNC_LIMIT_PER_BOARD=20
+GREENHOUSE_SYNC_CREATE_PATTERN_PROFILE=true
+GREENHOUSE_SYNC_DEFAULT_DEADLINE_OFFSET_DAYS=45
+GREENHOUSE_SYNC_FIXED_DELAY_MINUTES=360
+GREENHOUSE_SYNC_FIXED_DELAY_MILLIS=21600000
+GREENHOUSE_SYNC_INITIAL_DELAY_MILLIS=60000
+```
+
+주의:
+- `GREENHOUSE_SYNC_FIXED_DELAY_MILLIS`가 실제 스케줄 주기다.
+- `GREENHOUSE_SYNC_FIXED_DELAY_MINUTES`는 화면/문서 표시용 값이다.
+- 예를 들어 6시간마다 동기화하려면 `GREENHOUSE_SYNC_FIXED_DELAY_MILLIS=21600000`으로 둔다.
+- `external_ref = greenhouse:{boardToken}:{jobId}` 기준으로 upsert하므로 같은 공고가 중복 저장되지 않는다.
+
 ## 프론트 화면
 
 - URL: `/jobs/import`
@@ -81,6 +102,24 @@ GREENHOUSE_TIMEOUT_SECONDS=12
   - 미리보기
   - DB 등록
   - 기본 PatternProfile 생성 여부 선택
+  - 자동 동기화 상태 확인
+  - 수동 동기화 실행
+
+## 자동 동기화 API
+
+### 상태 확인
+
+```http
+GET /api/jobs/external/greenhouse/sync/status
+```
+
+### 즉시 실행
+
+```http
+POST /api/jobs/external/greenhouse/sync/run
+```
+
+자동 동기화는 Spring Boot `@Scheduled` 기반이다. 별도 서버리스/배치 인프라 없이 백엔드 서버가 살아 있는 동안 설정된 주기마다 실행된다.
 
 ## 발표 때 설명 문장
 
@@ -90,6 +129,7 @@ GREENHOUSE_TIMEOUT_SECONDS=12
 
 - Greenhouse 공개 API는 회사별 board token이 필요하다.
 - 모든 공고가 마감일, 연봉, 비자 조건을 명확히 제공하지 않는다.
+- Software Engineer처럼 넓은 제목으로 올라오는 경우가 많아서 본문 키워드 기반 직무군 추론이 필요하다.
 - 현재 PatternProfile은 공고 키워드 기반 기본 패턴이다.
 - 실제 서비스 수준에서는 직원 표본/합격자 패턴 검수 또는 관리자 승인 플로우가 필요하다.
 - Greenhouse 외 Workday, Lever 등은 별도 provider로 추가하는 구조가 적합하다.

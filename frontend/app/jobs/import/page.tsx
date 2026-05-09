@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Badge, Button, Card, EmptyState, MetricCard, PageHeader, PageShell, SelectInput, TextInput } from "@/components/ui";
 import {
   importGreenhouseJobs,
+  fetchGreenhouseSyncStatus,
   previewGreenhouseJobs,
+  runGreenhouseSync,
   type ExternalJobImportResponse,
-  type ExternalJobPreview
+  type ExternalJobPreview,
+  type ExternalJobSyncStatus
 } from "@/lib/external-jobs";
 
 type FormState = {
@@ -32,8 +35,18 @@ export default function JobImportPage() {
   const [form, setForm] = useState<FormState>(initialForm);
   const [previews, setPreviews] = useState<ExternalJobPreview[]>([]);
   const [importResult, setImportResult] = useState<ExternalJobImportResponse | null>(null);
+  const [syncStatus, setSyncStatus] = useState<ExternalJobSyncStatus | null>(null);
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    fetchGreenhouseSyncStatus()
+      .then(setSyncStatus)
+      .catch(() => {
+        setSyncStatus(null);
+      });
+  }, []);
 
   async function handlePreview() {
     setLoading(true);
@@ -60,6 +73,19 @@ export default function JobImportPage() {
       setErrorMessage(error instanceof Error ? error.message : "Greenhouse 공고 등록 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleRunSync() {
+    setSyncing(true);
+    setErrorMessage("");
+    try {
+      const result = await runGreenhouseSync();
+      setSyncStatus(result);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Greenhouse 자동 동기화 실행 중 오류가 발생했습니다.");
+    } finally {
+      setSyncing(false);
     }
   }
 
@@ -147,6 +173,28 @@ export default function JobImportPage() {
                 DB 등록
               </Button>
             </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold tracking-[0.16em] text-brand">AUTO SYNC</p>
+                <h2 className="mt-2 text-lg font-semibold text-night">자동 동기화 상태</h2>
+              </div>
+              <Badge tone={syncStatus?.enabled ? "success" : "muted"}>{syncStatus?.enabled ? "ON" : "OFF"}</Badge>
+            </div>
+            <div className="mt-4 space-y-3 text-sm text-slate-600">
+              <StatusLine label="대상 board" value={syncStatus?.board_tokens?.length ? syncStatus.board_tokens.join(", ") : "미설정"} />
+              <StatusLine label="동기화 주기" value={syncStatus?.fixed_delay_minutes ? `${syncStatus.fixed_delay_minutes}분` : "기본 360분"} />
+              <StatusLine label="마지막 상태" value={syncStatus?.last_status ?? "IDLE"} />
+              <StatusLine label="마지막 결과" value={syncStatus ? `가져옴 ${syncStatus.last_fetched_count} / 신규 ${syncStatus.last_imported_count} / 갱신 ${syncStatus.last_updated_count}` : "아직 없음"} />
+              <p className="border border-line bg-panel p-3 text-xs leading-5 text-slate-500">
+                {syncStatus?.last_message ?? "환경변수 GREENHOUSE_SYNC_ENABLED=true와 GREENHOUSE_SYNC_BOARD_TOKENS를 설정하면 서버 실행 중 자동으로 DB에 반영됩니다."}
+              </p>
+            </div>
+            <Button type="button" variant="secondary" className="mt-4 w-full" onClick={handleRunSync} disabled={syncing}>
+              {syncing ? "동기화 실행 중" : "수동 동기화 실행"}
+            </Button>
           </Card>
 
           <Card className="p-5">
@@ -249,6 +297,15 @@ function Info({ label, value }: { label: string; value: string }) {
     <div className="border border-line bg-panel p-3">
       <p className="text-xs font-semibold text-slate-500">{label}</p>
       <p className="mt-1 font-medium text-night">{value || "미기재"}</p>
+    </div>
+  );
+}
+
+function StatusLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-line pb-2 last:border-b-0">
+      <span className="text-slate-500">{label}</span>
+      <span className="text-right font-medium text-night">{value}</span>
     </div>
   );
 }

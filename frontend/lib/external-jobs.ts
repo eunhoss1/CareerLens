@@ -41,6 +41,19 @@ export type ExternalJobImportResponse = {
   jobs: JobPosting[];
 };
 
+export type ExternalJobSyncStatus = {
+  enabled: boolean;
+  board_tokens: string[];
+  fixed_delay_minutes: number;
+  last_started_at: string | null;
+  last_finished_at: string | null;
+  last_status: string;
+  last_fetched_count: number;
+  last_imported_count: number;
+  last_updated_count: number;
+  last_message: string;
+};
+
 const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
 export async function previewGreenhouseJobs(params: ExternalJobImportRequest): Promise<ExternalJobPreview[]> {
@@ -72,6 +85,32 @@ export async function importGreenhouseJobs(request: ExternalJobImportRequest): P
   if (!response.ok) {
     const message = await response.text();
     throw new Error(message || "Greenhouse import request failed.");
+  }
+
+  return response.json();
+}
+
+export async function fetchGreenhouseSyncStatus(): Promise<ExternalJobSyncStatus> {
+  const response = await fetch(`${baseUrl}/api/jobs/external/greenhouse/sync/status`, {
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Greenhouse sync status request failed.");
+  }
+
+  return response.json();
+}
+
+export async function runGreenhouseSync(): Promise<ExternalJobSyncStatus> {
+  const response = await fetch(`${baseUrl}/api/jobs/external/greenhouse/sync/run`, {
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Greenhouse sync request failed.");
   }
 
   return response.json();

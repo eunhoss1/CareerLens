@@ -58,3 +58,14 @@ app:
       enabled: ${GREENHOUSE_ENABLED:true}
       base-url: ${GREENHOUSE_BASE_URL:https://boards-api.greenhouse.io}
       timeout-seconds: ${GREENHOUSE_TIMEOUT_SECONDS:12}
+      sync:
+        enabled: ${GREENHOUSE_SYNC_ENABLED:false}
+        board-tokens: ${GREENHOUSE_SYNC_BOARD_TOKENS:}
+        default-country: ${GREENHOUSE_SYNC_DEFAULT_COUNTRY:United States}
+        default-job-family: ${GREENHOUSE_SYNC_DEFAULT_JOB_FAMILY:Backend}
+        limit-per-board: ${GREENHOUSE_SYNC_LIMIT_PER_BOARD:20}
+        create-pattern-profile: ${GREENHOUSE_SYNC_CREATE_PATTERN_PROFILE:true}
+        default-deadline-offset-days: ${GREENHOUSE_SYNC_DEFAULT_DEADLINE_OFFSET_DAYS:45}
+        fixed-delay-minutes: ${GREENHOUSE_SYNC_FIXED_DELAY_MINUTES:360}
+        fixed-delay-millis: ${GREENHOUSE_SYNC_FIXED_DELAY_MILLIS:21600000}
+        initial-delay-millis: ${GREENHOUSE_SYNC_INITIAL_DELAY_MILLIS:60000}
