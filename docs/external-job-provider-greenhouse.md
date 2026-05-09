@@ -130,6 +130,8 @@ POST /api/jobs/external/greenhouse/sync/run
 - Greenhouse 공개 API는 회사별 board token이 필요하다.
 - 모든 공고가 마감일, 연봉, 비자 조건을 명확히 제공하지 않는다.
 - Software Engineer처럼 넓은 제목으로 올라오는 경우가 많아서 본문 키워드 기반 직무군 추론이 필요하다. 현재 기본 추론 범위는 `Backend`, `Frontend`, `AI/ML`, `Data`다.
+- Policy, Finance, Business Operations, Marketing, Sales, Recruiting 등 비기술 공고는 미리보기/import 단계에서 제외한다.
+- 위치가 명확한 공고는 `Seoul -> South Korea`, `Milan -> Italy`, `Singapore -> Singapore`처럼 실제 국가로 정규화한다. 미국/일본 추천 진단에는 사용자의 희망 국가 필터가 적용된다.
 - 현재 PatternProfile은 공고 키워드 기반 기본 패턴이다.
 - 실제 서비스 수준에서는 직원 표본/합격자 패턴 검수 또는 관리자 승인 플로우가 필요하다.
 - Greenhouse 외 Workday, Lever 등은 별도 provider로 추가하는 구조가 적합하다.

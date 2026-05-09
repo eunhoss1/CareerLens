@@ -27,6 +27,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.util.HtmlUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -185,11 +186,19 @@ public class GreenhouseJobProviderService {
         String title = text(job.path("title"));
         String content = stripHtml(text(job.path("content")));
         String location = locationFor(job);
+        String department = departmentFor(job);
         String sourceUrl = text(job.path("absolute_url"));
         String textForAnalysis = (title + " " + content + " " + location).toLowerCase(Locale.ROOT);
+        String classificationText = (title + " " + department).toLowerCase(Locale.ROOT);
         String country = fallback(inferCountry(location), defaultCountry, "United States");
-        String inferredJobFamily = inferJobFamily(textForAnalysis);
-        if (inferredJobFamily.isBlank() && !isRelevantEngineeringPosting(textForAnalysis)) {
+        if (isExcludedNonEngineeringPosting(classificationText)) {
+            return null;
+        }
+        String inferredJobFamily = inferJobFamily(classificationText);
+        if (inferredJobFamily.isBlank() && isRelevantEngineeringPosting(classificationText)) {
+            inferredJobFamily = "Backend";
+        }
+        if (inferredJobFamily.isBlank()) {
             return null;
         }
         String jobFamily = fallback(inferredJobFamily, defaultJobFamily, "Backend");
@@ -322,6 +331,21 @@ public class GreenhouseJobProviderService {
         return "Remote / Not specified";
     }
 
+    private String departmentFor(JsonNode job) {
+        JsonNode departments = job.path("departments");
+        if (!departments.isArray()) {
+            return "";
+        }
+        List<String> names = new ArrayList<>();
+        for (JsonNode department : departments) {
+            String name = text(department.path("name"));
+            if (!name.isBlank()) {
+                names.add(name);
+            }
+        }
+        return String.join(" ", names);
+    }
+
     private List<String> extractSkills(String text, String jobFamily, boolean core) {
         List<String> candidates = new ArrayList<>();
         addSkillCandidates(candidates);
@@ -424,6 +448,24 @@ public class GreenhouseJobProviderService {
 
     private String inferCountry(String location) {
         String normalized = location.toLowerCase(Locale.ROOT);
+        if (normalized.contains("south korea") || normalized.contains("korea") || normalized.contains("seoul")) {
+            return "South Korea";
+        }
+        if (normalized.contains("singapore")) {
+            return "Singapore";
+        }
+        if (normalized.contains("italy") || normalized.contains("milan")) {
+            return "Italy";
+        }
+        if (normalized.contains("united kingdom") || normalized.contains("uk") || normalized.contains("london")) {
+            return "United Kingdom";
+        }
+        if (normalized.contains("canada") || normalized.contains("toronto") || normalized.contains("vancouver")) {
+            return "Canada";
+        }
+        if (normalized.contains("australia") || normalized.contains("sydney") || normalized.contains("melbourne")) {
+            return "Australia";
+        }
         if (normalized.contains("japan") || normalized.contains("tokyo") || normalized.contains("osaka")) {
             return "Japan";
         }
@@ -431,7 +473,7 @@ public class GreenhouseJobProviderService {
                 || normalized.contains("san francisco") || normalized.contains("seattle") || normalized.contains("california")) {
             return "United States";
         }
-        return "United States";
+        return "";
     }
 
     private String inferJobFamily(String text) {
@@ -456,17 +498,40 @@ public class GreenhouseJobProviderService {
 
     private boolean isRelevantEngineeringPosting(String text) {
         return text.contains("software engineer")
-                || text.contains("engineer")
+                || text.contains("software engineering")
+                || text.contains("backend engineer")
+                || text.contains("frontend engineer")
+                || text.contains("full stack engineer")
+                || text.contains("platform engineer")
+                || text.contains("infrastructure engineer")
+                || text.contains("data engineer")
+                || text.contains("machine learning engineer")
+                || text.contains("ml engineer")
                 || text.contains("developer")
                 || text.contains("swe")
-                || text.contains("engineering")
                 || text.contains("backend")
                 || text.contains("frontend")
                 || text.contains("full stack")
                 || text.contains("platform")
-                || text.contains("infrastructure")
-                || text.contains("machine learning")
-                || text.contains("data engineer");
+                || text.contains("infrastructure");
+    }
+
+    private boolean isExcludedNonEngineeringPosting(String text) {
+        return text.contains("policy")
+                || text.contains("business operations")
+                || text.contains("operations lead")
+                || text.contains("strategic finance")
+                || text.contains("finance")
+                || text.contains("legal")
+                || text.contains("recruit")
+                || text.contains("talent")
+                || text.contains("marketing")
+                || text.contains("sales")
+                || text.contains("product manager")
+                || text.contains("program manager")
+                || text.contains("community support")
+                || text.contains("customer support")
+                || text.contains("trust & safety");
     }
 
     private String inferDegree(String text) {
@@ -538,8 +603,9 @@ public class GreenhouseJobProviderService {
     }
 
     private String stripHtml(String value) {
-        String withoutTags = HTML_TAG_PATTERN.matcher(value == null ? "" : value).replaceAll(" ");
-        return SPACE_PATTERN.matcher(withoutTags.replace("&amp;", "&").replace("&nbsp;", " ")).replaceAll(" ").trim();
+        String unescaped = HtmlUtils.htmlUnescape(value == null ? "" : value);
+        String withoutTags = HTML_TAG_PATTERN.matcher(unescaped).replaceAll(" ");
+        return SPACE_PATTERN.matcher(withoutTags.replace("&nbsp;", " ")).replaceAll(" ").trim();
     }
 
     private String text(JsonNode node) {
