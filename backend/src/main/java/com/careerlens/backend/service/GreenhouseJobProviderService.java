@@ -136,7 +136,10 @@ public class GreenhouseJobProviderService {
             if (previews.size() >= max) {
                 break;
             }
-            previews.add(toPreview(boardToken, companyName, job, defaultCountry, defaultJobFamily));
+            ExternalJobPreviewDto preview = toPreview(boardToken, companyName, job, defaultCountry, defaultJobFamily);
+            if (preview != null) {
+                previews.add(preview);
+            }
         }
         return previews;
     }
@@ -185,7 +188,11 @@ public class GreenhouseJobProviderService {
         String sourceUrl = text(job.path("absolute_url"));
         String textForAnalysis = (title + " " + content + " " + location).toLowerCase(Locale.ROOT);
         String country = fallback(inferCountry(location), defaultCountry, "United States");
-        String jobFamily = fallback(inferJobFamily(textForAnalysis), defaultJobFamily, "Backend");
+        String inferredJobFamily = inferJobFamily(textForAnalysis);
+        if (inferredJobFamily.isBlank() && !isRelevantEngineeringPosting(textForAnalysis)) {
+            return null;
+        }
+        String jobFamily = fallback(inferredJobFamily, defaultJobFamily, "Backend");
         List<String> requiredSkills = extractSkills(textForAnalysis, jobFamily, true);
         List<String> preferredSkills = extractSkills(textForAnalysis, jobFamily, false);
         List<String> languages = extractLanguages(textForAnalysis, country);
@@ -329,6 +336,14 @@ public class GreenhouseJobProviderService {
                 found.add("TypeScript");
                 found.add("React");
                 found.add("Next.js");
+            } else if ("AI/ML".equalsIgnoreCase(jobFamily)) {
+                found.add("Python");
+                found.add("Machine Learning");
+                found.add("PyTorch");
+            } else if ("Data".equalsIgnoreCase(jobFamily)) {
+                found.add("Python");
+                found.add("SQL");
+                found.add("Data Pipeline");
             } else {
                 found.add("Java");
                 found.add("Spring Boot");
@@ -369,6 +384,13 @@ public class GreenhouseJobProviderService {
         candidates.add("API");
         candidates.add("Distributed Systems");
         candidates.add("Machine Learning");
+        candidates.add("PyTorch");
+        candidates.add("TensorFlow");
+        candidates.add("LLM");
+        candidates.add("MLOps");
+        candidates.add("SQL");
+        candidates.add("Spark");
+        candidates.add("Data Pipeline");
         candidates.add("CI/CD");
     }
 
@@ -430,6 +452,21 @@ public class GreenhouseJobProviderService {
             return "Backend";
         }
         return "";
+    }
+
+    private boolean isRelevantEngineeringPosting(String text) {
+        return text.contains("software engineer")
+                || text.contains("engineer")
+                || text.contains("developer")
+                || text.contains("swe")
+                || text.contains("engineering")
+                || text.contains("backend")
+                || text.contains("frontend")
+                || text.contains("full stack")
+                || text.contains("platform")
+                || text.contains("infrastructure")
+                || text.contains("machine learning")
+                || text.contains("data engineer");
     }
 
     private String inferDegree(String text) {
