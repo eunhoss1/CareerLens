@@ -207,7 +207,8 @@ public class RecommendationServiceV2 {
     private DiagnosisResult diagnoseJob(User user, UserProfile profile, JobPosting job) {
         List<PatternProfile> patterns = patternProfileRepository.findByJobPostingId(job.getId());
         if (patterns.isEmpty()) {
-            return null;
+            patterns = new ArrayList<>();
+            patterns.add(createFallbackPattern(job));
         }
 
         PatternScore bestScore = patterns.stream()
@@ -255,6 +256,28 @@ public class RecommendationServiceV2 {
         result.setNextActionSummary(aiExplanationService.buildNextActionSummary(readinessStatus, bestScore.missingItems()));
         result.setCreatedAt(LocalDateTime.now());
         return result;
+    }
+
+    private PatternProfile createFallbackPattern(JobPosting job) {
+        PatternProfile pattern = new PatternProfile();
+        pattern.setPatternRef("fallback-pattern:job:" + job.getId());
+        pattern.setJobPosting(job);
+        pattern.setPatternTitle(valueOrDefault(job.getCompanyName(), "회사 미기재") + " "
+                + valueOrDefault(job.getJobFamily(), "직무") + " 공고 기반 기본 패턴");
+        pattern.setJobFamily(job.getJobFamily());
+        pattern.setTargetExperienceYears(job.getMinExperienceYears() == null ? 0 : job.getMinExperienceYears());
+        pattern.setLanguageBenchmark(job.getRequiredLanguages() == null || job.getRequiredLanguages().isEmpty()
+                ? "English Business"
+                : String.join(", ", job.getRequiredLanguages()));
+        pattern.setEducationBenchmark(valueOrDefault(job.getDegreeRequirement(), "Degree not explicitly required"));
+        pattern.setGithubExpected(true);
+        pattern.setPortfolioExpected(Boolean.TRUE.equals(job.getPortfolioRequired()));
+        pattern.setProjectExperienceBenchmark(valueOrDefault(job.getJobFamily(), "직무") + " 직무의 핵심 기술을 활용한 프로젝트 경험");
+        pattern.setEvidenceSummary("이 공고는 연결된 직원 표본/가상 합격자 패턴이 아직 없어 공고의 요구 기술과 경력 조건을 기반으로 임시 진단 패턴을 생성했습니다.");
+        pattern.setCoreSkills(normalizeList(job.getRequiredSkills()));
+        pattern.setPreferredSkills(normalizeList(job.getPreferredSkills()));
+        pattern.setCertifications(new ArrayList<>());
+        return patternProfileRepository.save(pattern);
     }
 
     private PatternScore scorePattern(UserProfile profile, JobPosting job, PatternProfile pattern) {

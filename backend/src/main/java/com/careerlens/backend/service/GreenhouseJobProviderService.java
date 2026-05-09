@@ -16,7 +16,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -249,10 +248,10 @@ public class GreenhouseJobProviderService {
         job.setVisaRequirement(preview.visaRequirement());
         job.setSalaryRange(preview.salaryRange());
         job.setWorkType(preview.workType());
-        job.setApplicationDeadline(resolveDeadline(preview, request.defaultDeadline()));
+        job.setApplicationDeadline(request.defaultDeadline());
         job.setSalaryScore(scoreSalary(preview));
         job.setWorkLifeBalanceScore(scoreWorkLife(preview));
-        job.setCompanyValueScore(scoreCompanyValue(preview));
+        job.setCompanyValueScore(null);
         job.setProbabilityWeight(30);
         job.setSalaryWeight(15);
         job.setWorkLifeBalanceWeight(15);
@@ -625,57 +624,23 @@ public class GreenhouseJobProviderService {
         return "On-site / Not specified";
     }
 
-    private LocalDate resolveDeadline(ExternalJobPreviewDto preview, LocalDate requestedDeadline) {
-        if (requestedDeadline != null) {
-            return requestedDeadline;
-        }
-        int spreadDays = 21 + stableBucket(preview.externalRef(), 50);
-        return LocalDate.now().plusDays(spreadDays);
-    }
-
-    private int scoreSalary(ExternalJobPreviewDto preview) {
+    private Integer scoreSalary(ExternalJobPreviewDto preview) {
         String salaryRange = preview.salaryRange();
         if (salaryRange != null && !salaryRange.equals("Not disclosed")) {
-            return 72 + stableBucket(preview.externalRef() + ":salary", 18);
+            return 75;
         }
-        int baseline = switch (preview.country()) {
-            case "United States" -> 64;
-            case "United Kingdom", "Canada", "Australia", "Singapore" -> 61;
-            case "Japan", "South Korea", "Germany", "France", "Netherlands", "Ireland" -> 58;
-            default -> 55;
-        };
-        return clampScore(baseline + stableBucket(preview.externalRef() + ":salary-missing", 9) - 4);
+        return null;
     }
 
-    private int scoreWorkLife(ExternalJobPreviewDto preview) {
+    private Integer scoreWorkLife(ExternalJobPreviewDto preview) {
         String workType = preview.workType();
-        int baseline = 62;
         if (workType != null && workType.contains("Remote")) {
-            baseline = 77;
-        } else if (workType != null && workType.contains("Hybrid")) {
-            baseline = 72;
-        } else if (workType != null && workType.contains("On-site")) {
-            baseline = 61;
+            return 78;
         }
-        if (preview.minExperienceYears() != null && preview.minExperienceYears() >= 7) {
-            baseline -= 4;
+        if (workType != null && workType.contains("Hybrid")) {
+            return 72;
         }
-        return clampScore(baseline + stableBucket(preview.externalRef() + ":work-life", 7) - 3);
-    }
-
-    private int scoreCompanyValue(ExternalJobPreviewDto preview) {
-        String companyName = valueOrDefault(preview.companyName(), "Unknown company");
-        int baseline = switch (companyName) {
-            case "Airbnb" -> 84;
-            case "DoorDash" -> 80;
-            case "Reddit" -> 78;
-            case "Stripe" -> 85;
-            default -> 72 + stableBucket(preview.boardToken() + ":company", 10);
-        };
-        if ("AI/ML".equals(preview.jobFamily()) || "Data".equals(preview.jobFamily())) {
-            baseline += 2;
-        }
-        return clampScore(baseline + stableBucket(preview.externalRef() + ":company", 7) - 3);
+        return null;
     }
 
     private String buildCandidateFacingSummary(ExternalJobPreviewDto preview) {
@@ -715,14 +680,6 @@ public class GreenhouseJobProviderService {
             firstSkills.add(skill);
         }
         return String.join(", ", firstSkills);
-    }
-
-    private int stableBucket(String value, int modulo) {
-        return Math.floorMod((value == null ? "" : value).hashCode(), Math.max(1, modulo));
-    }
-
-    private int clampScore(int value) {
-        return Math.max(45, Math.min(95, value));
     }
 
     private String languageBenchmark(List<String> languages) {
