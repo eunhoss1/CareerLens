@@ -2,6 +2,7 @@ package com.careerlens.backend.controller;
 
 import com.careerlens.backend.dto.ApplicationRecordDto;
 import com.careerlens.backend.dto.ApplicationStatusUpdateRequestDto;
+import com.careerlens.backend.dto.ApplicationWorkspaceUpdateRequestDto;
 import com.careerlens.backend.service.ApplicationService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -28,9 +29,19 @@ public class ApplicationController {
         return applicationService.getUserApplications(userId);
     }
 
+    @GetMapping("/{applicationId}")
+    public ApplicationRecordDto getApplication(@PathVariable Long applicationId) {
+        return applicationService.getApplication(applicationId);
+    }
+
     @PostMapping("/from-roadmap/{roadmapId}")
     public ApplicationRecordDto createFromRoadmap(@PathVariable Long roadmapId) {
         return applicationService.createFromRoadmap(roadmapId);
+    }
+
+    @PostMapping("/users/{userId}/jobs/{jobId}")
+    public ApplicationRecordDto createFromJob(@PathVariable Long userId, @PathVariable Long jobId) {
+        return applicationService.createFromJob(userId, jobId);
     }
 
     @PatchMapping("/{applicationId}/status")
@@ -39,5 +50,13 @@ public class ApplicationController {
             @Valid @RequestBody ApplicationStatusUpdateRequestDto request
     ) {
         return applicationService.updateStatus(applicationId, request.status());
+    }
+
+    @PatchMapping("/{applicationId}/workspace")
+    public ApplicationRecordDto updateWorkspace(
+            @PathVariable Long applicationId,
+            @Valid @RequestBody ApplicationWorkspaceUpdateRequestDto request
+    ) {
+        return applicationService.updateWorkspace(applicationId, request);
     }
 }

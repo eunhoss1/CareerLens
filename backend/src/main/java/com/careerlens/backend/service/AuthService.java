@@ -6,7 +6,15 @@ import com.careerlens.backend.dto.SignupRequestDto;
 import com.careerlens.backend.entity.User;
 import com.careerlens.backend.repository.UserProfileRepository;
 import com.careerlens.backend.repository.UserRepository;
+import com.careerlens.backend.security.JwtClaims;
+import com.careerlens.backend.security.JwtTokenService;
+import com.careerlens.backend.security.JwtTokenService.TokenIssue;
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,38 +22,69 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AuthService {
 
+    private static final String ACTIVE_STATUS = "ACTIVE";
+    private static final String SUSPENDED_STATUS = "SUSPENDED";
+    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final int LOCK_MINUTES = 15;
+
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
+    private final JwtTokenService jwtTokenService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final Set<String> adminLoginIds;
 
-    public AuthService(UserRepository userRepository, UserProfileRepository userProfileRepository) {
+    public AuthService(
+            UserRepository userRepository,
+            UserProfileRepository userProfileRepository,
+            JwtTokenService jwtTokenService,
+            @Value("${app.auth.admin-login-ids:admin,careerlens-admin}") String adminLoginIds
+    ) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
+        this.jwtTokenService = jwtTokenService;
+        this.adminLoginIds = Arrays.stream(adminLoginIds.split(","))
+                .map(value -> value.trim().toLowerCase(Locale.ROOT))
+                .filter(value -> !value.isBlank())
+                .collect(Collectors.toSet());
     }
 
     @Transactional
     public AuthResponseDto signup(SignupRequestDto request) {
-        String loginId = request.loginId().trim().toLowerCase();
-        String email = request.email().trim().toLowerCase();
+        String loginId = request.loginId().trim().toLowerCase(Locale.ROOT);
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
         String displayName = request.displayName().trim();
 
         if (!request.password().equals(request.passwordConfirm())) {
             throw new IllegalArgumentException("비밀번호 확인이 일치하지 않습니다.");
         }
+        validatePasswordPolicy(request.password());
 
         userRepository.findByLoginId(loginId).ifPresent(user -> {
-            throw new IllegalArgumentException("이미 사용 중인 아이디입니다: " + loginId);
+            throw new IllegalArgumentException("이미 사용 중인 아이디입니다.");
         });
         userRepository.findByEmail(email).ifPresent(user -> {
-            throw new IllegalArgumentException("이미 사용 중인 이메일입니다: " + email);
+            throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
         });
 
+        LocalDateTime now = LocalDateTime.now();
         User user = new User();
         user.setLoginId(loginId);
         user.setDisplayName(displayName);
         user.setEmail(email);
+        user.setCountryDialCode(blankToNull(request.countryDialCode()));
+        user.setPhoneNumber(blankToNull(request.phoneNumber()));
         user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.setCreatedAt(LocalDateTime.now());
+        user.setRole(roleFor(loginId));
+        user.setAccountStatus(ACTIVE_STATUS);
+        user.setEmailVerified(false);
+        user.setFailedLoginAttempts(0);
+        user.setMarketingOptIn(Boolean.TRUE.equals(request.marketingOptIn()));
+        user.setTermsAcceptedAt(now);
+        user.setPrivacyAcceptedAt(now);
+        user.setSecurityNoticeAcceptedAt(now);
+        user.setPasswordChangedAt(now);
+        user.setCreatedAt(now);
+        user.setUpdatedAt(now);
         User savedUser = userRepository.save(user);
 
         return toResponse(savedUser);
@@ -53,23 +92,107 @@ public class AuthService {
 
     @Transactional
     public AuthResponseDto login(LoginRequestDto request) {
-        String loginIdentifier = request.loginId().trim().toLowerCase();
+        String loginIdentifier = request.loginId().trim().toLowerCase(Locale.ROOT);
         User user = userRepository.findByLoginId(loginIdentifier)
                 .or(() -> userRepository.findByEmail(loginIdentifier))
                 .orElseThrow(() -> new IllegalArgumentException("아이디 또는 비밀번호가 올바르지 않습니다."));
+
+        ensureLoginAllowed(user);
         if (user.getPasswordHash() == null || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            registerFailedLogin(user);
             throw new IllegalArgumentException("아이디 또는 비밀번호가 올바르지 않습니다.");
         }
+
+        String role = roleFor(user.getLoginId());
+        if (user.getRole() == null || user.getRole().isBlank() || "ADMIN".equals(role)) {
+            user.setRole(role);
+        }
+        user.setFailedLoginAttempts(0);
+        user.setLockedUntil(null);
+        user.setLastLoginAt(LocalDateTime.now());
+        user.setUpdatedAt(LocalDateTime.now());
         return toResponse(user);
     }
 
+    @Transactional(readOnly = true)
+    public AuthResponseDto currentUser(JwtClaims claims) {
+        User user = userRepository.findById(claims.userId())
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        return toResponse(user);
+    }
+
+    private void ensureLoginAllowed(User user) {
+        String status = user.getAccountStatus() == null || user.getAccountStatus().isBlank()
+                ? ACTIVE_STATUS
+                : user.getAccountStatus();
+        if (SUSPENDED_STATUS.equalsIgnoreCase(status)) {
+            throw new IllegalArgumentException("정지된 계정입니다. 관리자에게 문의해주세요.");
+        }
+
+        LocalDateTime lockedUntil = user.getLockedUntil();
+        if (lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now())) {
+            throw new IllegalArgumentException("로그인 실패가 반복되어 계정이 잠시 잠겼습니다. 잠시 후 다시 시도해주세요.");
+        }
+        if (lockedUntil != null && lockedUntil.isBefore(LocalDateTime.now())) {
+            user.setLockedUntil(null);
+            user.setFailedLoginAttempts(0);
+        }
+    }
+
+    private void registerFailedLogin(User user) {
+        int attempts = user.getFailedLoginAttempts() == null ? 0 : user.getFailedLoginAttempts();
+        attempts += 1;
+        user.setFailedLoginAttempts(attempts);
+        user.setUpdatedAt(LocalDateTime.now());
+        if (attempts >= MAX_FAILED_ATTEMPTS) {
+            user.setLockedUntil(LocalDateTime.now().plusMinutes(LOCK_MINUTES));
+        }
+    }
+
     private AuthResponseDto toResponse(User user) {
+        String role = normalizedRole(user);
+        TokenIssue token = jwtTokenService.issue(user, role);
         return new AuthResponseDto(
                 user.getId(),
                 user.getLoginId(),
                 user.getDisplayName(),
                 user.getEmail(),
-                userProfileRepository.findByUserId(user.getId()).isPresent()
+                role,
+                "ADMIN".equals(role),
+                userProfileRepository.findByUserId(user.getId()).isPresent(),
+                user.getAccountStatus() == null ? ACTIVE_STATUS : user.getAccountStatus(),
+                Boolean.TRUE.equals(user.getEmailVerified()),
+                user.getLastLoginAt(),
+                token.accessToken(),
+                "Bearer",
+                token.expiresAt()
         );
+    }
+
+    private String roleFor(String loginId) {
+        String normalizedLoginId = loginId == null ? "" : loginId.trim().toLowerCase(Locale.ROOT);
+        return adminLoginIds.contains(normalizedLoginId) ? "ADMIN" : "USER";
+    }
+
+    private String normalizedRole(User user) {
+        if (user.getRole() == null || user.getRole().isBlank()) {
+            return roleFor(user.getLoginId());
+        }
+        return user.getRole().trim().toUpperCase(Locale.ROOT);
+    }
+
+    private void validatePasswordPolicy(String password) {
+        if (password == null || password.length() < 8) {
+            throw new IllegalArgumentException("비밀번호는 8자 이상이어야 합니다.");
+        }
+        if (!password.matches(".*[A-Za-z].*")
+                || !password.matches(".*\\d.*")
+                || !password.matches(".*[^A-Za-z0-9].*")) {
+            throw new IllegalArgumentException("비밀번호는 영문, 숫자, 특수문자를 모두 포함해야 합니다.");
+        }
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

@@ -13,9 +13,13 @@ import org.springframework.web.filter.CorsFilter;
 public class CorsConfig {
 
     @Bean
-    public CorsFilter corsFilter(@Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
+    public CorsFilter corsFilter(
+            @Value("${app.cors.allowed-origins}") List<String> allowedOrigins,
+            @Value("${app.cors.allowed-origin-patterns}") List<String> allowedOriginPatterns
+    ) {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(allowedOrigins);
+        configuration.setAllowedOriginPatterns(allowedOriginPatterns);
         List<String> allowedMethods = new ArrayList<>();
         allowedMethods.add("GET");
         allowedMethods.add("POST");

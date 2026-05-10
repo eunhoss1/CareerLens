@@ -1,12 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { mainMenus, statusLabel } from "@/lib/menu";
-import { LinkButton } from "@/components/ui";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { clearStoredUser, getStoredUser, isAdminUser, type AuthUser } from "@/lib/auth";
+import { mainMenus, statusLabel, type MenuChild } from "@/lib/menu";
 
 export function SiteHeader() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    setUser(getStoredUser());
+  }, []);
+
+  const isAdmin = isAdminUser(user);
+  const visibleMenus = mainMenus.map((menu) => ({
+    ...menu,
+    children: filterVisibleChildren(menu.children, isAdmin)
+  }));
+
+  function logout() {
+    clearStoredUser();
+    setUser(null);
+    router.push("/login");
+  }
 
   return (
     <header className="sticky top-0 z-30 border-b border-[#24343a] bg-night text-white">
@@ -22,7 +41,7 @@ export function SiteHeader() {
         </Link>
 
         <nav className="hidden flex-1 items-center justify-center gap-1 xl:flex" aria-label="주요 메뉴">
-          {mainMenus.map((menu) => {
+          {visibleMenus.map((menu) => {
             const active = isActive(pathname, menu.href, flattenHrefs(menu.children));
             return (
               <div key={menu.title} className="group relative">
@@ -37,14 +56,14 @@ export function SiteHeader() {
                   <span className="ml-1 text-xs text-slate-300 group-hover:text-white">v</span>
                 </Link>
 
-                <div className="invisible absolute left-0 top-full w-[300px] translate-y-2 border border-night bg-white text-night opacity-0 shadow-dossier transition group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+                <div className="invisible absolute left-0 top-full w-[320px] translate-y-2 border border-night bg-white text-night opacity-0 shadow-dossier transition group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
                   <div className="border-b border-line bg-panel px-4 py-3">
                     <p className="text-xs font-bold tracking-[0.16em] text-brand">{menu.title}</p>
                     <p className="mt-1 text-xs leading-5 text-slate-600">{menu.summary}</p>
                   </div>
                   <div className="py-2">
                     {menu.children.map((child) => {
-                      const childActive = pathname === child.href || (child.href !== "/" && pathname.startsWith(child.href));
+                      const childActive = isActive(pathname, child.href, flattenHrefs(child.children ?? []));
                       return (
                         <Link
                           key={child.title}
@@ -55,11 +74,16 @@ export function SiteHeader() {
                             <span className="text-sm font-semibold text-night">{child.title}</span>
                             <span className="text-[11px] font-bold text-slate-400">{statusLabel(child.status)}</span>
                           </span>
-                          {child.description && <span className="mt-1 block text-xs leading-5 text-slate-500">{child.description}</span>}
+                          {child.description && (
+                            <span className="mt-1 block text-xs leading-5 text-slate-500">{child.description}</span>
+                          )}
                           {child.children && (
                             <span className="mt-2 flex flex-wrap gap-1.5">
                               {child.children.map((grandChild) => (
-                                <span key={grandChild.title} className="border border-line bg-white px-2 py-1 text-[11px] font-semibold text-slate-500">
+                                <span
+                                  key={grandChild.title}
+                                  className="border border-line bg-white px-2 py-1 text-[11px] font-semibold text-slate-500"
+                                >
                                   {grandChild.title}
                                 </span>
                               ))}
@@ -77,15 +101,43 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-2">
           <div className="hidden max-w-[52vw] gap-2 overflow-x-auto md:flex xl:hidden">
-            {mainMenus.map((menu) => (
-              <Link key={menu.title} href={menu.href} className="whitespace-nowrap border border-white/15 px-2.5 py-1.5 text-xs font-semibold text-slate-100">
+            {visibleMenus.map((menu) => (
+              <Link
+                key={menu.title}
+                href={menu.href}
+                className="whitespace-nowrap border border-white/15 px-2.5 py-1.5 text-xs font-semibold text-slate-100"
+              >
                 {menu.title}
               </Link>
             ))}
           </div>
-          <LinkButton href="/login" variant="secondary" className="border-white/25 bg-white text-night hover:bg-slate-100">
-            로그인
-          </LinkButton>
+
+          {user ? (
+            <div className="flex items-center gap-2">
+              <Link
+                href="/mypage"
+                className="hidden border border-white/20 px-2.5 py-1.5 text-xs font-semibold text-slate-100 hover:bg-white/10 sm:inline-flex"
+                title={`${user.display_name} 계정으로 로그인 중`}
+              >
+                {user.display_name}
+                <span className="ml-2 text-cyan-200">{isAdmin ? "ADMIN" : "USER"}</span>
+              </Link>
+              <button
+                type="button"
+                onClick={logout}
+                className="inline-flex min-h-10 items-center justify-center border border-white/25 bg-white px-4 py-2 text-sm font-semibold text-night transition hover:bg-slate-100"
+              >
+                로그아웃
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="inline-flex min-h-10 items-center justify-center border border-white/25 bg-white px-4 py-2 text-sm font-semibold text-night transition hover:bg-slate-100"
+            >
+              로그인
+            </Link>
+          )}
         </div>
       </div>
     </header>
@@ -103,6 +155,15 @@ function isActive(pathname: string, href: string, childHrefs: string[]) {
   return childHrefs.some((childHref) => pathname === childHref || (childHref !== "/" && pathname.startsWith(childHref)));
 }
 
-function flattenHrefs(children: Array<{ href: string; children?: Array<{ href: string }> }>) {
-  return children.flatMap((child) => [child.href, ...(child.children?.map((grandChild) => grandChild.href) ?? [])]);
+function filterVisibleChildren(children: MenuChild[], isAdmin: boolean): MenuChild[] {
+  return children
+    .filter((child) => !child.adminOnly || isAdmin)
+    .map((child) => ({
+      ...child,
+      children: child.children ? filterVisibleChildren(child.children, isAdmin) : undefined
+    }));
+}
+
+function flattenHrefs(children: MenuChild[]): string[] {
+  return children.flatMap((child) => [child.href, ...(child.children ? flattenHrefs(child.children) : [])]);
 }
