@@ -1,13 +1,12 @@
 package com.careerlens.backend.service;
 
-import com.careerlens.backend.dto.DepartureMilestoneDto;
-import com.careerlens.backend.dto.DeparturePlanDto;
-import com.careerlens.backend.dto.DeparturePlanRequestDto;
-import com.careerlens.backend.dto.FlightApiProviderDto;
-import com.careerlens.backend.dto.FlightOfferDto;
+import com.careerlens.backend.dto.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -22,11 +21,22 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
+import java.util.function.Supplier;
 
 @Service
 public class DeparturePlanService {
+
+    private static final int DEFAULT_ARRIVAL_BUFFER_DAYS = 14;
+    private static final int MIN_ARRIVAL_BUFFER_DAYS = 3;
+    private static final int MAX_ARRIVAL_BUFFER_DAYS = 45;
+    private static final int MIN_DUFFEL_SUPPLIER_TIMEOUT_MILLIS = 2_000;
+    private static final int MAX_DUFFEL_SUPPLIER_TIMEOUT_MILLIS = 60_000;
+    private static final int DEFAULT_DUFFEL_SUPPLIER_TIMEOUT_MILLIS = 10_000;
+    private static final int AMADEUS_TOKEN_REFRESH_SKEW_SECONDS = 30;
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration AI_REQUEST_TIMEOUT = Duration.ofSeconds(35);
+    private static final Duration DUFFEL_REQUEST_TIMEOUT = Duration.ofSeconds(35);
+    private static final Duration AMADEUS_REQUEST_TIMEOUT = Duration.ofSeconds(20);
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
@@ -72,7 +82,7 @@ public class DeparturePlanService {
             @Value("${app.travel.amadeus.currency-code:KRW}") String amadeusCurrencyCode
     ) {
         this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+        this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
         this.aiEnabled = aiEnabled;
         this.provider = provider == null ? "openai" : provider.trim().toLowerCase(Locale.ROOT);
         if ("groq".equals(this.provider)) {
@@ -89,7 +99,12 @@ public class DeparturePlanService {
         this.duffelAccessToken = duffelAccessToken;
         this.duffelBaseUrl = trimTrailingSlash(duffelBaseUrl, "https://api.duffel.com");
         this.duffelVersion = duffelVersion == null || duffelVersion.isBlank() ? "v2" : duffelVersion.trim();
-        this.duffelSupplierTimeoutMillis = duffelSupplierTimeoutMillis == null ? 10000 : Math.max(2000, Math.min(60000, duffelSupplierTimeoutMillis));
+        this.duffelSupplierTimeoutMillis = bounded(
+                duffelSupplierTimeoutMillis,
+                DEFAULT_DUFFEL_SUPPLIER_TIMEOUT_MILLIS,
+                MIN_DUFFEL_SUPPLIER_TIMEOUT_MILLIS,
+                MAX_DUFFEL_SUPPLIER_TIMEOUT_MILLIS
+        );
         this.amadeusEnabled = amadeusEnabled;
         this.amadeusClientId = amadeusClientId;
         this.amadeusClientSecret = amadeusClientSecret;
@@ -105,13 +120,14 @@ public class DeparturePlanService {
 
         try {
             DeparturePlanDto aiPlan = requestAiPlan(request, fallback);
-            if (aiPlan.summary() == null || aiPlan.summary().isBlank() || aiPlan.milestones().size() < 4) {
-                return fallback;
-            }
-            return aiPlan;
+            return hasUsableAiPlan(aiPlan) ? aiPlan : fallback;
         } catch (RuntimeException exception) {
             return fallback;
         }
+    }
+
+    private boolean hasUsableAiPlan(DeparturePlanDto aiPlan) {
+        return aiPlan.summary() != null && !aiPlan.summary().isBlank() && aiPlan.milestones().size() >= 4;
     }
 
     private DeparturePlanDto requestAiPlan(DeparturePlanRequestDto request, DeparturePlanDto fallback) {
@@ -123,27 +139,21 @@ public class DeparturePlanService {
 
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(responsesUrl))
-                .timeout(Duration.ofSeconds(35))
+                .timeout(AI_REQUEST_TIMEOUT)
                 .header("Content-Type", "application/json")
                 .header("Authorization", "Bearer " + apiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(payload.toString()))
                 .build();
 
         try {
-            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new IllegalStateException("AI departure plan request failed: " + response.statusCode());
-            }
-            String outputText = extractOutputText(objectMapper.readTree(response.body()));
+            String responseBody = send(httpRequest, "AI departure plan request");
+            String outputText = extractOutputText(objectMapper.readTree(responseBody));
             if (outputText.isBlank()) {
                 return fallback;
             }
             return parsePlan(objectMapper.readTree(cleanJson(outputText)), fallback);
         } catch (IOException exception) {
             throw new IllegalStateException("AI departure plan response parse failed", exception);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("AI departure plan request interrupted", exception);
         }
     }
 
@@ -199,27 +209,8 @@ public class DeparturePlanService {
     private DeparturePlanDto parsePlan(JsonNode root, DeparturePlanDto fallback) {
         String summary = text(root, "summary");
         String flightSearchNote = text(root, "flight_search_note");
-        List<DepartureMilestoneDto> milestones = new ArrayList<>();
-        JsonNode nodes = root.path("milestones");
-        if (nodes.isArray()) {
-            for (JsonNode node : nodes) {
-                LocalDate dueDate = parseDate(text(node, "due_date"), fallback.recommendedArrivalDate());
-                String title = text(node, "title");
-                if (title.isBlank()) {
-                    continue;
-                }
-                milestones.add(new DepartureMilestoneDto(
-                        defaultText(text(node, "phase"), "준비"),
-                        title,
-                        defaultText(text(node, "description"), "출국 전 확인이 필요한 항목입니다."),
-                        dueDate,
-                        normalizeStatus(text(node, "status"))
-                ));
-            }
-        }
-        if (milestones.isEmpty()) {
-            milestones = fallback.milestones();
-        }
+        List<DepartureMilestoneDto> milestones = parseMilestones(root.path("milestones"), fallback);
+
         return new DeparturePlanDto(
                 fallback.targetCountry(),
                 fallback.destinationCity(),
@@ -242,33 +233,30 @@ public class DeparturePlanService {
         );
     }
 
-    private DeparturePlanDto buildRuleBasedPlan(DeparturePlanRequestDto request, String generationMode) {
-        int bufferDays = request.arrivalBufferDays() == null ? 14 : Math.max(3, Math.min(45, request.arrivalBufferDays()));
-        LocalDate recommendedArrivalDate = request.startDate().minusDays(bufferDays);
-        LocalDate windowStart = recommendedArrivalDate.minusDays(5);
-        LocalDate windowEnd = recommendedArrivalDate;
-        long daysUntilWindow = ChronoUnit.DAYS.between(LocalDate.now(), windowStart);
-        String urgency = urgencyStatus(daysUntilWindow);
-        String summary = "%s %s 입사 예정일 기준으로 %s까지 입국하고, %s부터 %s 사이 항공편을 우선 탐색하는 계획입니다. 비자 상태는 %s, 숙소 상태는 %s로 입력되어 있어 출국 전 확인 항목을 함께 관리해야 합니다."
-                .formatted(
-                        safe(request.targetCountry()),
-                        safe(request.destinationCity()),
-                        recommendedArrivalDate,
-                        windowStart,
-                        windowEnd,
-                        safe(request.visaStatus()),
-                        safe(request.housingStatus())
-                );
+    private List<DepartureMilestoneDto> parseMilestones(JsonNode nodes, DeparturePlanDto fallback) {
         List<DepartureMilestoneDto> milestones = new ArrayList<>();
-        milestones.add(milestone("T-8W", "비자/오퍼 서류 확인", "오퍼레터, 비자 스폰서십, 입사 예정일, 제출 서류를 한 번에 정리합니다.", request.startDate().minusWeeks(8), urgencyForDueDate(request.startDate().minusWeeks(8))));
-        milestones.add(milestone("T-6W", "항공편 후보 구간 탐색", request.originAirport() + " -> " + request.destinationAirport() + " 구간의 직항/경유, 수하물, 환승 시간을 비교합니다.", windowStart.minusWeeks(2), urgencyForDueDate(windowStart.minusWeeks(2))));
-        milestones.add(milestone("T-4W", "임시 숙소와 도착 동선 정리", "도착 공항에서 임시 숙소까지 이동 방법, 체크인 시간, 첫 출근 전 이동 동선을 정리합니다.", recommendedArrivalDate.minusWeeks(4), urgencyForDueDate(recommendedArrivalDate.minusWeeks(4))));
-        milestones.add(milestone("T-2W", "출국 서류 패키지 확정", "여권, 비자/재류자격, 보험, 회사 제출 서류, 학력/경력 증빙을 오프라인/클라우드에 이중 보관합니다.", recommendedArrivalDate.minusWeeks(2), urgencyForDueDate(recommendedArrivalDate.minusWeeks(2))));
-        milestones.add(milestone("T-0", "입국 후 72시간 체크", "주소 등록, 통신, 은행, 회사 첫 출근 준비, 긴급 연락처를 확인합니다.", recommendedArrivalDate.plusDays(3), "TODO"));
-        List<FlightOfferDto> flightOffers = flightOffersFor(request, recommendedArrivalDate);
-        String flightSearchNote = flightOffers.isEmpty()
-                ? "현재 연결 가능한 실시간 항공편 후보가 없습니다. Duffel/Amadeus API 키가 없거나, 테스트 환경 데이터셋에 해당 노선/날짜 결과가 없을 수 있습니다. 실제 항공편은 공식 항공사, OTA 또는 승인된 Flight API에서 최종 확인해야 합니다."
-                : flightOffers.get(0).provider() + " 공식 API에서 권장 입국일 기준 항공편 후보를 조회했습니다. 테스트 환경은 실제 스케줄/가격과 다를 수 있으므로 최종 예약 전 공식 채널에서 재확인해야 합니다.";
+        if (nodes.isArray()) {
+            for (JsonNode node : nodes) {
+                LocalDate dueDate = parseDate(text(node, "due_date"), fallback.recommendedArrivalDate());
+                String title = text(node, "title");
+                if (title.isBlank()) {
+                    continue;
+                }
+                milestones.add(new DepartureMilestoneDto(
+                        defaultText(text(node, "phase"), "준비"),
+                        title,
+                        defaultText(text(node, "description"), "출국 전 확인이 필요한 항목입니다."),
+                        dueDate,
+                        normalizeStatus(text(node, "status"))
+                ));
+            }
+        }
+        return milestones.isEmpty() ? fallback.milestones() : milestones;
+    }
+
+    private DeparturePlanDto buildRuleBasedPlan(DeparturePlanRequestDto request, String generationMode) {
+        DepartureTimeline timeline = timelineFor(request);
+        List<FlightOfferDto> flightOffers = flightOffersFor(request, timeline.recommendedArrivalDate());
 
         return new DeparturePlanDto(
                 request.targetCountry(),
@@ -276,20 +264,72 @@ public class DeparturePlanService {
                 request.originAirport(),
                 request.destinationAirport(),
                 request.startDate(),
-                recommendedArrivalDate,
-                windowStart,
-                windowEnd,
-                daysUntilWindow,
-                urgency,
-                summary,
-                flightSearchNote,
+                timeline.recommendedArrivalDate(),
+                timeline.windowStart(),
+                timeline.windowEnd(),
+                timeline.daysUntilWindow(),
+                timeline.urgencyStatus(),
+                buildRuleBasedSummary(request, timeline),
+                buildFlightSearchNote(flightOffers),
                 flightDataStatus(flightOffers),
                 flightOffers,
-                milestones,
+                defaultMilestones(request, timeline),
                 flightApiProviders(),
                 generationMode,
                 disclaimer()
         );
+    }
+
+    private DepartureTimeline timelineFor(DeparturePlanRequestDto request) {
+        int bufferDays = bounded(
+                request.arrivalBufferDays(),
+                DEFAULT_ARRIVAL_BUFFER_DAYS,
+                MIN_ARRIVAL_BUFFER_DAYS,
+                MAX_ARRIVAL_BUFFER_DAYS
+        );
+        LocalDate recommendedArrivalDate = request.startDate().minusDays(bufferDays);
+        LocalDate windowStart = recommendedArrivalDate.minusDays(5);
+        LocalDate windowEnd = recommendedArrivalDate;
+        long daysUntilWindow = ChronoUnit.DAYS.between(LocalDate.now(), windowStart);
+        return new DepartureTimeline(
+                recommendedArrivalDate,
+                windowStart,
+                windowEnd,
+                daysUntilWindow,
+                urgencyStatus(daysUntilWindow)
+        );
+    }
+
+    private String buildRuleBasedSummary(DeparturePlanRequestDto request, DepartureTimeline timeline) {
+        return "%s %s 입사 예정일 기준으로 %s까지 입국하고, %s부터 %s 사이 항공편을 우선 탐색하는 계획입니다. 비자 상태는 %s, 숙소 상태는 %s로 입력되어 있어 출국 전 확인 항목을 함께 관리해야 합니다."
+                .formatted(
+                        safe(request.targetCountry()),
+                        safe(request.destinationCity()),
+                        timeline.recommendedArrivalDate(),
+                        timeline.windowStart(),
+                        timeline.windowEnd(),
+                        safe(request.visaStatus()),
+                        safe(request.housingStatus())
+                );
+    }
+
+    private List<DepartureMilestoneDto> defaultMilestones(DeparturePlanRequestDto request, DepartureTimeline timeline) {
+        LocalDate recommendedArrivalDate = timeline.recommendedArrivalDate();
+        LocalDate windowStart = timeline.windowStart();
+        List<DepartureMilestoneDto> milestones = new ArrayList<>();
+        milestones.add(milestone("T-8W", "비자/오퍼 서류 확인", "오퍼레터, 비자 스폰서십, 입사 예정일, 제출 서류를 한 번에 정리합니다.", request.startDate().minusWeeks(8), urgencyForDueDate(request.startDate().minusWeeks(8))));
+        milestones.add(milestone("T-6W", "항공편 후보 구간 탐색", request.originAirport() + " -> " + request.destinationAirport() + " 구간의 직항/경유, 수하물, 환승 시간을 비교합니다.", windowStart.minusWeeks(2), urgencyForDueDate(windowStart.minusWeeks(2))));
+        milestones.add(milestone("T-4W", "임시 숙소와 도착 동선 정리", "도착 공항에서 임시 숙소까지 이동 방법, 체크인 시간, 첫 출근 전 이동 동선을 정리합니다.", recommendedArrivalDate.minusWeeks(4), urgencyForDueDate(recommendedArrivalDate.minusWeeks(4))));
+        milestones.add(milestone("T-2W", "출국 서류 패키지 확정", "여권, 비자/재류자격, 보험, 회사 제출 서류, 학력/경력 증빙을 오프라인/클라우드에 이중 보관합니다.", recommendedArrivalDate.minusWeeks(2), urgencyForDueDate(recommendedArrivalDate.minusWeeks(2))));
+        milestones.add(milestone("T-0", "입국 후 72시간 체크", "주소 등록, 통신, 은행, 회사 첫 출근 준비, 긴급 연락처를 확인합니다.", recommendedArrivalDate.plusDays(3), "TODO"));
+        return milestones;
+    }
+
+    private String buildFlightSearchNote(List<FlightOfferDto> flightOffers) {
+        if (flightOffers.isEmpty()) {
+            return "현재 연결 가능한 실시간 항공편 후보가 없습니다. Duffel/Amadeus API 키가 없거나, 테스트 환경 데이터셋에 해당 노선/날짜 결과가 없을 수 있습니다. 실제 항공편은 공식 항공사, OTA 또는 승인된 Flight API에서 최종 확인해야 합니다.";
+        }
+        return flightOffers.get(0).provider() + " 공식 API에서 권장 입국일 기준 항공편 후보를 조회했습니다. 테스트 환경은 실제 스케줄/가격과 다를 수 있으므로 최종 예약 전 공식 채널에서 재확인해야 합니다.";
     }
 
     private DepartureMilestoneDto milestone(String phase, String title, String description, LocalDate dueDate, String status) {
@@ -297,55 +337,54 @@ public class DeparturePlanService {
     }
 
     private List<FlightApiProviderDto> flightApiProviders() {
-        List<FlightApiProviderDto> providers = new ArrayList<>();
-        providers.add(new FlightApiProviderDto(
-                "Duffel Flights API",
-                "Offer Request 생성으로 항공편 후보, 구간, 항공사, 가격 정보를 조회",
-                duffelConfigured() ? "Primary provider configured" : "Recommended provider",
-                "테스트 토큰은 duffel_test_로 시작하며, CareerLens에서는 예약/결제 없이 항공편 후보 표시까지만 사용합니다."
-        ));
-        providers.add(new FlightApiProviderDto(
-                "Amadeus Flight Offers Search",
-                "출발/도착 공항, 날짜, 승객 수 기준 항공권 후보와 가격 조회",
-                amadeusConfigured() ? "Legacy/self-service key configured" : "Legacy optional",
-                "Self-Service 신규 등록이 제한되고 2026-07-17 decommission 예정이므로, 기존 키 보유 시에만 선택적으로 사용합니다."
-        ));
-        providers.add(new FlightApiProviderDto(
-                "Skyscanner Flights API",
-                "실시간/캐시 기반 항공권 검색, OTA/항공사 공급망 연동",
-                "Partner approval required",
-                "제휴 신청 및 승인 후 사용할 수 있는 파트너 API 성격이 강합니다."
-        ));
-        providers.add(new FlightApiProviderDto(
-                "Manual itinerary input",
-                "사용자가 직접 확인한 항공편 시간, 가격, 예약 링크를 저장",
-                "Recommended prototype path",
-                "캡스톤 시연 단계에서는 법적 리스크, API 승인, 키 발급 의존도를 줄이는 가장 안정적인 방식입니다."
-        ));
-        return providers;
+        return List.of(
+                new FlightApiProviderDto(
+                        "Duffel Flights API",
+                        "Offer Request 생성으로 항공편 후보, 구간, 항공사, 가격 정보를 조회",
+                        duffelConfigured() ? "Primary provider configured" : "Recommended provider",
+                        "테스트 토큰은 duffel_test_로 시작하며, CareerLens에서는 예약/결제 없이 항공편 후보 표시까지만 사용합니다."
+                ),
+                new FlightApiProviderDto(
+                        "Amadeus Flight Offers Search",
+                        "출발/도착 공항, 날짜, 승객 수 기준 항공권 후보와 가격 조회",
+                        amadeusConfigured() ? "Legacy/self-service key configured" : "Legacy optional",
+                        "Self-Service 신규 등록이 제한되고 2026-07-17 decommission 예정이므로, 기존 키 보유 시에만 선택적으로 사용합니다."
+                ),
+                new FlightApiProviderDto(
+                        "Skyscanner Flights API",
+                        "실시간/캐시 기반 항공권 검색, OTA/항공사 공급망 연동",
+                        "Partner approval required",
+                        "제휴 신청 및 승인 후 사용할 수 있는 파트너 API 성격이 강합니다."
+                ),
+                new FlightApiProviderDto(
+                        "Manual itinerary input",
+                        "사용자가 직접 확인한 항공편 시간, 가격, 예약 링크를 저장",
+                        "Recommended prototype path",
+                        "캡스톤 시연 단계에서는 법적 리스크, API 승인, 키 발급 의존도를 줄이는 가장 안정적인 방식입니다."
+                )
+        );
     }
 
     private List<FlightOfferDto> flightOffersFor(DeparturePlanRequestDto request, LocalDate departureDate) {
-        List<FlightOfferDto> duffelOffers = new ArrayList<>();
         if (!"amadeus".equals(travelProvider) && duffelConfigured()) {
-            try {
-                duffelOffers = requestDuffelFlightOffers(request, departureDate);
-            } catch (RuntimeException exception) {
-                duffelOffers = new ArrayList<>();
-            }
+            List<FlightOfferDto> duffelOffers = safeFlightOffers(() -> requestDuffelFlightOffers(request, departureDate));
             if (!duffelOffers.isEmpty()) {
                 return duffelOffers;
             }
         }
 
         if (amadeusConfigured()) {
-            try {
-                return requestAmadeusFlightOffers(request, departureDate);
-            } catch (RuntimeException exception) {
-                return new ArrayList<>();
-            }
+            return safeFlightOffers(() -> requestAmadeusFlightOffers(request, departureDate));
         }
-        return new ArrayList<>();
+        return List.of();
+    }
+
+    private List<FlightOfferDto> safeFlightOffers(Supplier<List<FlightOfferDto>> supplier) {
+        try {
+            return supplier.get();
+        } catch (RuntimeException exception) {
+            return List.of();
+        }
     }
 
     private List<FlightOfferDto> requestDuffelFlightOffers(DeparturePlanRequestDto request, LocalDate departureDate) {
@@ -361,7 +400,7 @@ public class DeparturePlanService {
 
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(duffelBaseUrl + "/air/offer_requests?return_offers=true&supplier_timeout=" + duffelSupplierTimeoutMillis))
-                .timeout(Duration.ofSeconds(35))
+                .timeout(DUFFEL_REQUEST_TIMEOUT)
                 .header("Accept", "application/json")
                 .header("Content-Type", "application/json")
                 .header("Duffel-Version", duffelVersion)
@@ -370,16 +409,9 @@ public class DeparturePlanService {
                 .build();
 
         try {
-            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new IllegalStateException("Duffel offer request failed: " + response.statusCode());
-            }
-            return parseDuffelOffers(objectMapper.readTree(response.body()));
+            return parseDuffelOffers(objectMapper.readTree(send(httpRequest, "Duffel offer request")));
         } catch (IOException exception) {
             throw new IllegalStateException("Duffel offer response parse failed", exception);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Duffel offer request interrupted", exception);
         }
     }
 
@@ -393,27 +425,22 @@ public class DeparturePlanService {
                 + "&max=5";
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(amadeusBaseUrl + "/v2/shopping/flight-offers?" + query))
-                .timeout(Duration.ofSeconds(20))
+                .timeout(AMADEUS_REQUEST_TIMEOUT)
                 .header("Authorization", "Bearer " + token)
                 .GET()
                 .build();
 
         try {
-            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new IllegalStateException("Amadeus flight offers request failed: " + response.statusCode());
-            }
-            return parseAmadeusOffers(objectMapper.readTree(response.body()));
+            return parseAmadeusOffers(objectMapper.readTree(send(httpRequest, "Amadeus flight offers request")));
         } catch (IOException exception) {
             throw new IllegalStateException("Amadeus flight offers parse failed", exception);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Amadeus flight offers request interrupted", exception);
         }
     }
 
     private String amadeusToken() {
-        if (amadeusAccessToken != null && amadeusTokenExpiresAt != null && Instant.now().isBefore(amadeusTokenExpiresAt.minusSeconds(30))) {
+        if (amadeusAccessToken != null
+                && amadeusTokenExpiresAt != null
+                && Instant.now().isBefore(amadeusTokenExpiresAt.minusSeconds(AMADEUS_TOKEN_REFRESH_SKEW_SECONDS))) {
             return amadeusAccessToken;
         }
 
@@ -422,17 +449,13 @@ public class DeparturePlanService {
                 + "&client_secret=" + encode(amadeusClientSecret);
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(amadeusBaseUrl + "/v1/security/oauth2/token"))
-                .timeout(Duration.ofSeconds(20))
+                .timeout(AMADEUS_REQUEST_TIMEOUT)
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
 
         try {
-            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new IllegalStateException("Amadeus token request failed: " + response.statusCode());
-            }
-            JsonNode root = objectMapper.readTree(response.body());
+            JsonNode root = objectMapper.readTree(send(httpRequest, "Amadeus token request"));
             String token = root.path("access_token").asText("");
             int expiresIn = root.path("expires_in").asInt(0);
             if (token.isBlank()) {
@@ -443,10 +466,26 @@ public class DeparturePlanService {
             return token;
         } catch (IOException exception) {
             throw new IllegalStateException("Amadeus token parse failed", exception);
+        }
+    }
+
+    private String send(HttpRequest request, String failureContext) {
+        try {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (!isSuccessful(response.statusCode())) {
+                throw new IllegalStateException(failureContext + " failed: " + response.statusCode());
+            }
+            return response.body();
+        } catch (IOException exception) {
+            throw new IllegalStateException(failureContext + " failed", exception);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Amadeus token request interrupted", exception);
+            throw new IllegalStateException(failureContext + " interrupted", exception);
         }
+    }
+
+    private boolean isSuccessful(int statusCode) {
+        return statusCode >= 200 && statusCode < 300;
     }
 
     private List<FlightOfferDto> parseDuffelOffers(JsonNode root) {
@@ -504,12 +543,10 @@ public class DeparturePlanService {
         }
 
         for (JsonNode offer : data) {
-            JsonNode itinerary = offer.path("itineraries").isArray() && !offer.path("itineraries").isEmpty()
-                    ? offer.path("itineraries").get(0)
-                    : objectMapper.createObjectNode();
+            JsonNode itinerary = firstNode(offer.path("itineraries"));
             JsonNode segments = itinerary.path("segments");
-            JsonNode firstSegment = segments.isArray() && !segments.isEmpty() ? segments.get(0) : objectMapper.createObjectNode();
-            JsonNode lastSegment = segments.isArray() && !segments.isEmpty() ? segments.get(segments.size() - 1) : firstSegment;
+            JsonNode firstSegment = firstNode(segments);
+            JsonNode lastSegment = lastNode(segments);
             JsonNode price = offer.path("price");
             offers.add(new FlightOfferDto(
                     "Amadeus",
@@ -647,6 +684,10 @@ public class DeparturePlanService {
         return first != null && !first.isBlank() ? first : (second == null ? "" : second);
     }
 
+    private int bounded(Integer value, int defaultValue, int min, int max) {
+        return value == null ? defaultValue : Math.max(min, Math.min(max, value));
+    }
+
     private String encode(String value) {
         return URLEncoder.encode(value == null ? "" : value.trim(), StandardCharsets.UTF_8);
     }
@@ -657,5 +698,14 @@ public class DeparturePlanService {
         }
         String trimmed = value.trim();
         return trimmed.endsWith("/") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
+    }
+
+    private record DepartureTimeline(
+            LocalDate recommendedArrivalDate,
+            LocalDate windowStart,
+            LocalDate windowEnd,
+            long daysUntilWindow,
+            String urgencyStatus
+    ) {
     }
 }
