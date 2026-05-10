@@ -5,10 +5,10 @@ spring:
   application:
     name: careerlens-backend
   datasource:
-    url: ${DB_URL:jdbc:mariadb://localhost:3306/careerlens?serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/careerlens?serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:lucky369@yahoo}
-    driver-class-name: ${DB_DRIVER:org.mariadb.jdbc.Driver}
+    password: ${DB_PASSWORD:1234}
+    driver-class-name: ${DB_DRIVER:com.mysql.cj.jdbc.Driver}
   jpa:
     hibernate:
       ddl-auto: ${DB_DDL_AUTO:update}
@@ -25,8 +25,15 @@ careerlens:
     processed-path: ../seed-data/processed
 
 app:
+  auth:
+    admin-login-ids: ${ADMIN_LOGIN_IDS:admin,careerlens-admin}
+    jwt:
+      secret: ${JWT_SECRET:careerlens-local-demo-secret-change-before-deploy-2026}
+      issuer: ${JWT_ISSUER:careerlens}
+      expiration-minutes: ${JWT_EXPIRATION_MINUTES:480}
   cors:
-    allowed-origins: http://localhost:3000
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001}
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}
   ai:
     provider: ${AI_PROVIDER:openai}
     openai:
@@ -52,3 +59,19 @@ app:
       client-secret: ${AMADEUS_CLIENT_SECRET:}
       base-url: ${AMADEUS_BASE_URL:https://test.api.amadeus.com}
       currency-code: ${AMADEUS_CURRENCY_CODE:KRW}
+  external-jobs:
+    greenhouse:
+      enabled: ${GREENHOUSE_ENABLED:true}
+      base-url: ${GREENHOUSE_BASE_URL:https://boards-api.greenhouse.io}
+      timeout-seconds: ${GREENHOUSE_TIMEOUT_SECONDS:12}
+      sync:
+        enabled: ${GREENHOUSE_SYNC_ENABLED:false}
+        board-tokens: ${GREENHOUSE_SYNC_BOARD_TOKENS:airbnb,stripe,reddit,databricks,figma,greenhouse,anthropic,doordashusa,asana,discord,duolingo,gitlab,mixpanel,webflow}
+        default-country: ${GREENHOUSE_SYNC_DEFAULT_COUNTRY:ALL}
+        default-job-family: ${GREENHOUSE_SYNC_DEFAULT_JOB_FAMILY:ALL}
+        limit-per-board: ${GREENHOUSE_SYNC_LIMIT_PER_BOARD:50}
+        create-pattern-profile: ${GREENHOUSE_SYNC_CREATE_PATTERN_PROFILE:true}
+        default-deadline-offset-days: ${GREENHOUSE_SYNC_DEFAULT_DEADLINE_OFFSET_DAYS:0}
+        fixed-delay-minutes: ${GREENHOUSE_SYNC_FIXED_DELAY_MINUTES:360}
+        fixed-delay-millis: ${GREENHOUSE_SYNC_FIXED_DELAY_MILLIS:21600000}
+        initial-delay-millis: ${GREENHOUSE_SYNC_INITIAL_DELAY_MILLIS:60000}
