@@ -1,13 +1,12 @@
 package com.careerlens.backend.service;
 
-import com.careerlens.backend.dto.DepartureMilestoneDto;
-import com.careerlens.backend.dto.DeparturePlanDto;
-import com.careerlens.backend.dto.DeparturePlanRequestDto;
-import com.careerlens.backend.dto.FlightApiProviderDto;
-import com.careerlens.backend.dto.FlightOfferDto;
+import com.careerlens.backend.dto.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -23,8 +22,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Supplier;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
 
 @Service
 public class DeparturePlanService {
