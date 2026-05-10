@@ -5,9 +5,9 @@ import { countryGuides, noticeItems, qnaItems, resourceDisclaimer, visaGuides } 
 const resourceSections = [
   {
     title: "공지사항",
-    description: "팀 작업, 데이터 정책, 시연 범위, 주요 변경사항을 한 곳에서 확인합니다.",
+    description: "서비스 이용 안내, 공고 데이터 업데이트, 추천 진단 변경사항을 확인합니다.",
     href: "/resources/notices",
-    badge: "TEAM"
+    badge: "NOTICE"
   },
   {
     title: "Q&A",
@@ -70,7 +70,7 @@ export default function ResourcesPage() {
             <SectionHeader
               kicker="NOTICE BRIEF"
               title="최근 공지"
-              description="조원들이 dev pull 전 확인해야 할 작업 변경사항과 시연 정책을 정리했습니다."
+              description="서비스 이용 흐름과 데이터 반영 기준에서 꼭 확인해야 할 안내입니다."
               actions={<LinkButton href="/resources/notices" variant="subtle">전체 공지</LinkButton>}
             />
             <div className="mt-5 grid gap-3">
@@ -92,7 +92,7 @@ export default function ResourcesPage() {
             <SectionHeader
               kicker="SERVICE Q&A"
               title="자주 묻는 질문"
-              description="추천 엔진과 AI 활용 방식처럼 발표 때 질문받기 쉬운 항목을 먼저 정리했습니다."
+              description="추천 진단, AI 활용, 비자 정보처럼 사용자가 궁금해할 항목을 정리했습니다."
               actions={<LinkButton href="/resources/qna" variant="subtle">Q&A 전체</LinkButton>}
             />
             <div className="mt-5 space-y-3">

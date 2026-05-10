@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { clearStoredUser, getStoredUser, isAdminUser, type AuthUser } from "@/lib/auth";
-import { mainMenus, statusLabel, type MenuChild } from "@/lib/menu";
+import { mainMenus, type MenuChild } from "@/lib/menu";
 
 export function SiteHeader() {
   const pathname = usePathname();
@@ -50,7 +50,7 @@ export function SiteHeader() {
                   className={`inline-flex min-h-10 items-center px-3 py-2 text-sm font-semibold transition ${
                     active ? "bg-white text-night" : "text-slate-100 hover:bg-white/10"
                   }`}
-                  aria-label={`${menu.title} ${statusLabel(menu.status)}`}
+                  aria-label={menu.title}
                 >
                   {menu.title}
                   <span className="ml-1 text-xs text-slate-300 group-hover:text-white">v</span>
@@ -72,7 +72,7 @@ export function SiteHeader() {
                         >
                           <span className="flex items-center justify-between gap-3">
                             <span className="text-sm font-semibold text-night">{child.title}</span>
-                            <span className="text-[11px] font-bold text-slate-400">{statusLabel(child.status)}</span>
+                            {child.adminOnly && <span className="text-[11px] font-bold text-brand">ADMIN</span>}
                           </span>
                           {child.description && (
                             <span className="mt-1 block text-xs leading-5 text-slate-500">{child.description}</span>
