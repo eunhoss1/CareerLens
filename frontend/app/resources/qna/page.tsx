@@ -4,10 +4,10 @@ import { Badge, Card, LinkButton, MetricCard, PageHeader, PageShell, SectionHead
 import { qnaItems } from "@/lib/resource-guides";
 
 const topicGroups = [
-  { title: "추천 진단", description: "공고, 사용자 프로필, PatternProfile을 비교하는 핵심 엔진 설명" },
-  { title: "AI 활용", description: "설명 생성, 로드맵 과제 생성, 문서 분석에 AI를 사용하는 방식" },
-  { title: "인증/권한", description: "JWT, USER/ADMIN 권한, 관리자 API 보호 정책 설명" },
-  { title: "비자/정책", description: "공식 링크와 준비 체크리스트를 제공한다는 원칙" }
+  { title: "추천 진단", description: "프로필과 공고 패턴을 비교해 추천 결과가 나오는 방식" },
+  { title: "프로필 입력", description: "희망 국가, 직무, 기술스택, 경력 정보를 입력하는 기준" },
+  { title: "AI 활용", description: "추천 이유 요약, 로드맵 과제, 문서 분석에 AI가 쓰이는 방식" },
+  { title: "비자 정보", description: "공식 링크와 준비 체크리스트를 함께 확인하는 원칙" }
 ];
 
 const qnaBoardPosts: ResourceBoardPost[] = qnaItems.map((item, index) => ({
@@ -18,10 +18,10 @@ const qnaBoardPosts: ResourceBoardPost[] = qnaItems.map((item, index) => ({
   summary: item.answer,
   body: [
     item.answer,
-    "발표 중 같은 질문이 나오면 이 답변을 기준으로 설명하고, 필요하면 연결 화면으로 이동해 실제 흐름을 보여주면 됩니다.",
-    "후속 단계에서는 사용자 질문 등록, 답변 상태 관리, 관리자 답변 작성 기능을 DB 기반으로 연결할 수 있습니다."
+    "관련 화면으로 이동하면 프로필 입력, 추천 진단, 로드맵 생성, 비자 정보 확인 흐름을 이어서 볼 수 있습니다.",
+    "개인별 상황에 따라 결과가 달라질 수 있으므로 공고 원문과 공식 기관 안내를 함께 확인하는 것이 좋습니다."
   ],
-  author: "CareerLens 팀",
+  author: "CareerLens",
   views: 98 - index * 9,
   status: "답변완료",
   pinned: index < 2,
@@ -36,7 +36,7 @@ export default function QnaPage() {
       <PageHeader
         kicker="Q&A BOARD"
         title="Q&A"
-        description="CareerLens의 추천 구조, 데이터 정책, AI 활용, 인증/권한, 비자정보 제공 원칙을 게시판 구조로 정리했습니다. 검색과 카테고리 필터로 발표 답변을 빠르게 찾을 수 있습니다."
+        description="CareerLens 이용 중 자주 생기는 질문을 정리했습니다. 추천 진단, 프로필 입력, AI 활용, 비자 정보 확인 기준을 검색과 카테고리로 빠르게 찾을 수 있습니다."
         actions={
           <>
             <LinkButton href="/resources" variant="secondary">자료실</LinkButton>
@@ -47,10 +47,10 @@ export default function QnaPage() {
 
       <section className="lens-container py-6">
         <div className="grid gap-3 md:grid-cols-4">
-          <MetricCard label="등록 질문" value={`${qnaItems.length}건`} helper="시연용 Q&A" />
+          <MetricCard label="등록 질문" value={`${qnaItems.length}건`} helper="자주 묻는 질문" />
           <MetricCard label="답변 상태" value="100%" helper="답변완료" />
-          <MetricCard label="주요 주제" value={`${topicGroups.length}개`} helper="추천/AI/권한/비자" />
-          <MetricCard label="운영 방식" value="목록+상세" helper="게시판형 UI" />
+          <MetricCard label="주요 주제" value={`${topicGroups.length}개`} helper="추천/프로필/AI/비자" />
+          <MetricCard label="연결 화면" value="제공" helper="바로 이동" />
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -68,14 +68,14 @@ export default function QnaPage() {
 
         <Card className="mt-6 p-5">
           <SectionHeader
-            kicker="PRESENTATION TIP"
-            title="발표 답변 기준"
-            description="CareerLens는 해외취업 준비 흐름을 데이터 기반으로 정리하고, AI를 설명/요약/로드맵 생성 보조에 붙인 시연용 프로토타입입니다."
+            kicker="HELP GUIDE"
+            title="질문을 해결하는 순서"
+            description="공고를 먼저 고르는 것이 아니라, 내 프로필을 정리한 뒤 추천 진단과 로드맵으로 이어가면 준비 항목을 더 명확히 확인할 수 있습니다."
           />
           <div className="mt-5 grid gap-3 md:grid-cols-3">
-            <Tip title="데이터" description="공고와 직원 표본은 수동 조사 또는 공개 API를 관리자 검수 후 사용합니다." />
-            <Tip title="추천" description="사용자 프로필과 공고별 PatternProfile을 비교해 추천과 부족 요소를 산출합니다." />
-            <Tip title="AI" description="AI는 추천 점수 계산이 아니라 설명, 요약, 로드맵 과제 생성에 사용합니다." />
+            <Tip title="1. 프로필 확인" description="희망 국가, 직무, 경력, 기술스택, 언어 정보를 마이페이지에서 먼저 정리합니다." />
+            <Tip title="2. 추천 진단" description="저장된 프로필과 공고별 PatternProfile을 비교해 추천 공고와 부족 요소를 확인합니다." />
+            <Tip title="3. 로드맵 연결" description="추천 결과에서 커리어 플래너를 생성하고 문서 분석, 지원 관리, 행정 준비로 이어갑니다." />
           </div>
         </Card>
       </section>

@@ -9,7 +9,7 @@ export default function CountriesPage() {
       <PageHeader
         kicker="COUNTRY GUIDE"
         title="국가정보"
-        description="국가별 채용시장 신호, 언어, 비자 확인 포인트, 정착 준비 항목을 추천 진단 이후 흐름과 연결합니다. 현재는 발표용 정리 데이터이며, 최종 판단은 공식 출처 확인이 필요합니다."
+        description="국가별 채용시장 신호, 언어, 비자 확인 포인트, 정착 준비 항목을 추천 진단 이후 흐름과 연결합니다. 실제 지원 전에는 공식 출처와 고용주 안내를 함께 확인해야 합니다."
         actions={
           <>
             <LinkButton href="/recommendations/compare" variant="secondary">비교대시보드</LinkButton>
@@ -20,7 +20,7 @@ export default function CountriesPage() {
 
       <section className="lens-container py-6">
         <div className="grid gap-3 md:grid-cols-4">
-          <MetricCard label="정리 국가" value={`${countryGuides.length}개`} helper="시연용 국가 가이드" />
+          <MetricCard label="정리 국가" value={`${countryGuides.length}개`} helper="국가별 가이드" />
           <MetricCard label="핵심 기준" value="채용·비자·정착" helper="추천 이후 연결" />
           <MetricCard label="공식 링크" value="국가별 제공" helper="최종 확인 경로" />
           <MetricCard label="AI 활용" value="요약 보조" helper="판정 대신 설명" />

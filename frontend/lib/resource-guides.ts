@@ -51,42 +51,42 @@ export type VisaGuide = {
 
 export const noticeItems: NoticeItem[] = [
   {
-    id: "notice-auth-jwt",
+    id: "notice-recommendation-guide",
     category: "서비스",
-    title: "로그인/회원가입 및 JWT 인증 구조가 dev에 반영되었습니다",
+    title: "맞춤추천 진단 이용 전 프로필 입력을 먼저 완료해주세요",
     date: "2026.05.10",
-    summary: "USER/ADMIN 권한 구분, 관리자 공고 API 보호, 로그인 실패 잠금 정책이 추가되었습니다.",
-    audience: "전체 팀원",
+    summary: "추천 진단은 마이페이지에 저장된 희망 국가, 직무군, 기술스택, 언어, 경력 정보를 기준으로 결과를 생성합니다.",
+    audience: "전체 사용자",
     priority: "높음",
-    relatedHref: "/resources/qna"
-  },
-  {
-    id: "notice-greenhouse",
-    category: "데이터",
-    title: "외부 공고 API는 관리자 검수 후 DB 저장 방식으로 운영합니다",
-    date: "2026.05.09",
-    summary: "Greenhouse 공개 Job Board 데이터는 미리보기 후 체크한 공고만 저장하고, 저장된 공고만 추천/로드맵 흐름에 연결합니다.",
-    audience: "공고/추천 담당",
-    priority: "높음",
-    relatedHref: "/jobs/import"
-  },
-  {
-    id: "notice-profile",
-    category: "시연",
-    title: "추천 진단은 마이페이지 프로필 입력을 기준으로 실행합니다",
-    date: "2026.05.08",
-    summary: "사용자는 회원가입 후 마이페이지에서 희망 국가, 직무군, 기술, 언어, 우선순위를 입력해야 합니다.",
-    audience: "프론트/발표 담당",
-    priority: "보통",
     relatedHref: "/mypage"
+  },
+  {
+    id: "notice-job-data",
+    category: "데이터",
+    title: "채용공고 데이터는 출처 확인 후 서비스에 반영됩니다",
+    date: "2026.05.09",
+    summary: "CareerLens는 수동 조사 공고와 공개 Job Board 데이터를 정규화해 국가, 직무, 기술스택, 비자 조건으로 비교합니다.",
+    audience: "구직자",
+    priority: "높음",
+    relatedHref: "/jobs"
+  },
+  {
+    id: "notice-roadmap",
+    category: "서비스",
+    title: "추천 결과에서 커리어 플래너를 바로 생성할 수 있습니다",
+    date: "2026.05.08",
+    summary: "추천 공고의 부족 요소를 바탕으로 주차별 준비 과제를 생성하고, 완료 상태를 관리할 수 있습니다.",
+    audience: "구직자",
+    priority: "보통",
+    relatedHref: "/planner"
   },
   {
     id: "notice-visa",
     category: "정책",
-    title: "비자 정보는 공식 링크 우선 확인 원칙으로 표시합니다",
+    title: "비자 정보는 공식 기관 확인을 우선합니다",
     date: "2026.05.10",
-    summary: "CareerLens는 비자 가능 여부를 판정하지 않고, 공고의 sponsorship 문구와 공식 기관 확인 링크를 연결합니다.",
-    audience: "자료실/정착 담당",
+    summary: "CareerLens의 비자 정보는 참고 안내이며, 실제 체류자격과 제출 서류는 공식 기관과 고용주 안내를 기준으로 확인해야 합니다.",
+    audience: "전체 사용자",
     priority: "보통",
     relatedHref: "/resources/visas"
   }
@@ -94,11 +94,11 @@ export const noticeItems: NoticeItem[] = [
 
 export const qnaItems: QnaItem[] = [
   {
-    question: "CareerLens는 실제 채용공고를 자동으로 크롤링하나요?",
+    question: "CareerLens의 채용공고 데이터는 어디서 가져오나요?",
     answer:
-      "현재 프로토타입은 무단 크롤링을 하지 않습니다. 수동 조사 데이터와 공개 Job Board API를 관리자 검수 후 DB에 저장하는 방식입니다. 자동 수집보다 데이터 출처와 정규화 기준을 설명 가능하게 유지하는 것이 우선입니다.",
-    tags: ["데이터 정책", "외부 API"],
-    relatedHref: "/jobs/import"
+      "수동 조사한 공고 데이터와 공개 Job Board 데이터를 함께 사용합니다. 서비스에 반영되는 공고는 국가, 직무군, 기술스택, 경력, 비자 조건처럼 추천 진단에 필요한 항목으로 정리됩니다.",
+    tags: ["공고 데이터", "추천 기준"],
+    relatedHref: "/jobs"
   },
   {
     question: "추천 점수는 AI가 직접 계산하나요?",
@@ -122,11 +122,11 @@ export const qnaItems: QnaItem[] = [
     relatedHref: "/resources/visas"
   },
   {
-    question: "admin으로 계속 보이는 이유는 무엇인가요?",
+    question: "추천 진단 전에 어떤 정보를 입력해야 하나요?",
     answer:
-      "브라우저 localStorage에 마지막 로그인한 admin 계정 정보가 남아 있기 때문입니다. 헤더의 로그아웃 버튼을 누르거나 localStorage의 careerlens_user 값을 삭제한 뒤 일반 계정으로 다시 로그인하면 USER 권한으로 표시됩니다.",
-    tags: ["로그인", "권한"],
-    relatedHref: "/login"
+      "희망 국가와 직무군, 경력 연차, 기술스택, 언어 수준, 학력, 자격증, 프로젝트 경험, 포트폴리오 여부, 지원 우선순위를 입력하면 더 구체적인 추천 결과를 확인할 수 있습니다.",
+    tags: ["프로필", "추천 진단"],
+    relatedHref: "/mypage"
   },
   {
     question: "로드맵 과제는 어떻게 생성되나요?",
@@ -384,4 +384,4 @@ export const visaGuides: VisaGuide[] = [
 ];
 
 export const resourceDisclaimer =
-  "CareerLens 자료실은 수동 조사와 공식 링크를 바탕으로 한 캡스톤 시연용 정보 허브입니다. 비자, 체류자격, 입국 요건, 행정 절차는 수시로 바뀔 수 있으므로 최종 판단은 반드시 공식 기관, 고용주, 전문가를 통해 확인해야 합니다.";
+  "CareerLens 자료실은 수동 조사와 공식 링크를 바탕으로 해외취업 준비 정보를 정리합니다. 비자, 체류자격, 입국 요건, 행정 절차는 수시로 바뀔 수 있으므로 최종 판단은 반드시 공식 기관, 고용주, 전문가를 통해 확인해야 합니다.";

@@ -164,31 +164,31 @@ export const mainMenus: MenuItem[] = [
   {
     title: "자료실",
     href: "/resources",
-    status: "planned",
+    status: "active",
     summary: "국가, 비자, Q&A, 공지 자료를 모아 해외취업 준비의 참고 자료로 제공합니다.",
     children: [
       {
         title: "공지사항",
         href: "/resources/notices",
-        status: "planned",
+        status: "active",
         description: "서비스 공지와 업데이트를 안내합니다."
       },
       {
         title: "Q&A",
         href: "/resources/qna",
-        status: "planned",
+        status: "active",
         description: "해외취업 준비 관련 질문과 답변을 정리합니다."
       },
       {
         title: "국가정보",
         href: "/resources/countries",
-        status: "planned",
+        status: "active",
         description: "국가별 취업 정보와 생활 정보를 제공합니다."
       },
       {
         title: "비자정보",
         href: "/resources/visas",
-        status: "planned",
+        status: "active",
         description: "공식 자료 링크 중심으로 비자 정보를 정리합니다."
       }
     ]

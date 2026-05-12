@@ -16,11 +16,10 @@ const noticeBoardPosts: ResourceBoardPost[] = noticeItems.map((notice, index) =>
   summary: notice.summary,
   body: [
     notice.summary,
-    `대상: ${notice.audience}`,
-    "이 공지는 캡스톤 시연과 팀 작업 충돌을 줄이기 위해 자료실 게시판에 정리한 내용입니다. 관련 기능을 작업하는 조원은 연결 화면과 변경 파일을 먼저 확인한 뒤 작업해주세요.",
-    "실제 운영 단계에서는 게시글 작성, 수정, 삭제, 첨부파일, 댓글 기능을 백엔드 DB와 연결할 수 있습니다."
+    "자세한 내용은 연결된 화면에서 확인할 수 있습니다. 추천 진단, 공고 조회, 로드맵 생성 흐름과 함께 확인하면 준비 상태를 더 구체적으로 점검할 수 있습니다.",
+    "비자, 체류자격, 고용 조건처럼 변경 가능성이 큰 정보는 반드시 공식 기관과 고용주 안내를 함께 확인해야 합니다."
   ],
-  author: "CareerLens 운영",
+  author: "CareerLens",
   views: 152 - index * 17,
   priority: notice.priority,
   pinned: notice.priority === "높음",
@@ -37,11 +36,11 @@ export default function NoticesPage() {
       <PageHeader
         kicker="NOTICE BOARD"
         title="공지사항"
-        description="팀 작업 공유, 데이터 정책, 시연 범위, 인증/권한 변경사항을 실제 게시판 구조로 확인합니다. 검색과 카테고리 필터를 사용해 영향 범위를 빠르게 찾을 수 있습니다."
+        description="CareerLens 이용 안내와 공고 데이터, 추천 진단, 비자 정보 업데이트를 확인합니다. 필요한 공지는 연결 화면에서 바로 이어서 확인할 수 있습니다."
         actions={
           <>
             <LinkButton href="/resources" variant="secondary">자료실</LinkButton>
-            <LinkButton href="/login">로그인 확인</LinkButton>
+            <LinkButton href="/mypage">프로필 확인</LinkButton>
           </>
         }
       />
@@ -49,9 +48,9 @@ export default function NoticesPage() {
       <section className="lens-container py-6">
         <div className="grid gap-3 md:grid-cols-4">
           <MetricCard label="전체 공지" value={`${noticeItems.length}건`} helper="게시판 등록" />
-          <MetricCard label="상단 고정" value={`${highPriorityCount}건`} helper="dev pull 전 확인" />
+          <MetricCard label="중요 안내" value={`${highPriorityCount}건`} helper="우선 확인" />
           <MetricCard label="분류" value={`${Object.keys(categoryCounts).length}개`} helper="서비스/데이터/정책" />
-          <MetricCard label="운영 방식" value="목록+상세" helper="게시판형 UI" />
+          <MetricCard label="연결 화면" value="제공" helper="상세 확인" />
         </div>
 
         <div className="mt-6">
@@ -60,14 +59,14 @@ export default function NoticesPage() {
 
         <Card className="mt-6 p-5">
           <SectionHeader
-            kicker="BOARD POLICY"
-            title="공지 게시판 운영 기준"
-            description="현재는 프론트 정적 데이터 기반이지만, 화면 구조는 실제 게시판처럼 확장할 수 있도록 목록, 검색, 상세 패널 기준으로 설계했습니다."
+            kicker="SERVICE GUIDE"
+            title="이용 전 확인할 기준"
+            description="CareerLens는 추천 결과를 더 쉽게 이해하도록 돕는 서비스입니다. 공고와 비자 정보는 공식 출처 확인을 함께 진행해야 합니다."
           />
           <div className="mt-5 grid gap-3 md:grid-cols-3">
-            <RuleCard title="dev 반영 전 공유" description="공통 파일, 엔티티, DTO, API 변경은 노션과 카톡에 함께 공유합니다." />
-            <RuleCard title="충돌 시 덮어쓰기 금지" description="User.java 같은 공통 파일은 dev 변경과 본인 변경을 합쳐서 해결합니다." />
-            <RuleCard title="운영 확장 가능" description="후속 단계에서 게시글 DB, 작성 권한, 첨부파일, 댓글 기능을 붙일 수 있습니다." />
+            <RuleCard title="프로필 최신화" description="추천 진단 전 마이페이지의 희망 국가, 직무, 기술스택, 경력 정보를 먼저 확인하세요." />
+            <RuleCard title="공고 원문 확인" description="지원 전에는 공고 원문에서 근무지, 경력, 비자, 마감 여부를 다시 확인하세요." />
+            <RuleCard title="공식 출처 우선" description="비자와 행정 절차는 공식 기관과 고용주 안내를 기준으로 최종 판단하세요." />
           </div>
         </Card>
       </section>
