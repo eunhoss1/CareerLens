@@ -1,6 +1,7 @@
 package com.careerlens.backend.service;
 
 import com.careerlens.backend.dto.AuthResponseDto;
+import com.careerlens.backend.dto.AvailabilityResponseDto;
 import com.careerlens.backend.dto.LoginRequestDto;
 import com.careerlens.backend.dto.SignupRequestDto;
 import com.careerlens.backend.entity.User;
@@ -48,10 +49,34 @@ public class AuthService {
                 .collect(Collectors.toSet());
     }
 
+    @Transactional(readOnly = true)
+    public AvailabilityResponseDto checkLoginIdAvailability(String value) {
+        String loginId = normalizeIdentifier(value);
+        boolean available = !loginId.isBlank() && !userRepository.existsByLoginId(loginId);
+        return new AvailabilityResponseDto(
+                "login_id",
+                loginId,
+                available,
+                available ? "사용 가능한 아이디입니다." : "이미 사용 중인 아이디입니다."
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public AvailabilityResponseDto checkEmailAvailability(String value) {
+        String email = normalizeIdentifier(value);
+        boolean available = !email.isBlank() && !userRepository.existsByEmail(email);
+        return new AvailabilityResponseDto(
+                "email",
+                email,
+                available,
+                available ? "사용 가능한 이메일입니다." : "이미 사용 중인 이메일입니다."
+        );
+    }
+
     @Transactional
     public AuthResponseDto signup(SignupRequestDto request) {
-        String loginId = request.loginId().trim().toLowerCase(Locale.ROOT);
-        String email = request.email().trim().toLowerCase(Locale.ROOT);
+        String loginId = normalizeIdentifier(request.loginId());
+        String email = normalizeIdentifier(request.email());
         String displayName = request.displayName().trim();
 
         if (!request.password().equals(request.passwordConfirm())) {
@@ -59,12 +84,12 @@ public class AuthService {
         }
         validatePasswordPolicy(request.password());
 
-        userRepository.findByLoginId(loginId).ifPresent(user -> {
+        if (userRepository.existsByLoginId(loginId)) {
             throw new IllegalArgumentException("이미 사용 중인 아이디입니다.");
-        });
-        userRepository.findByEmail(email).ifPresent(user -> {
+        }
+        if (userRepository.existsByEmail(email)) {
             throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
-        });
+        }
 
         LocalDateTime now = LocalDateTime.now();
         User user = new User();
@@ -92,7 +117,7 @@ public class AuthService {
 
     @Transactional
     public AuthResponseDto login(LoginRequestDto request) {
-        String loginIdentifier = request.loginId().trim().toLowerCase(Locale.ROOT);
+        String loginIdentifier = normalizeIdentifier(request.loginId());
         User user = userRepository.findByLoginId(loginIdentifier)
                 .or(() -> userRepository.findByEmail(loginIdentifier))
                 .orElseThrow(() -> new IllegalArgumentException("아이디 또는 비밀번호가 올바르지 않습니다."));
@@ -131,7 +156,7 @@ public class AuthService {
 
         LocalDateTime lockedUntil = user.getLockedUntil();
         if (lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now())) {
-            throw new IllegalArgumentException("로그인 실패가 반복되어 계정이 잠시 잠겼습니다. 잠시 후 다시 시도해주세요.");
+            throw new IllegalArgumentException("로그인 실패가 반복되어 계정이 일시 잠겼습니다. 잠시 후 다시 시도해주세요.");
         }
         if (lockedUntil != null && lockedUntil.isBefore(LocalDateTime.now())) {
             user.setLockedUntil(null);
@@ -194,5 +219,9 @@ public class AuthService {
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String normalizeIdentifier(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 }

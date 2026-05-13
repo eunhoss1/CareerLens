@@ -13,6 +13,7 @@ import {
   type ExternalJobPreview,
   type ExternalJobSyncStatus
 } from "@/lib/external-jobs";
+import { countryLabel, workTypeLabel } from "@/lib/display-labels";
 import { defaultGreenhouseBoardTokens, greenhouseBoardPresets } from "@/lib/greenhouse-board-registry";
 import { jobFamilies } from "@/lib/job-families";
 
@@ -240,7 +241,7 @@ export default function JobImportPage() {
               >
                 {countryFilters.map((country) => (
                   <option key={country} value={country}>
-                    {country === "ALL" ? "전체 국가" : country}
+                    {country === "ALL" ? "전체 국가" : countryLabel(country)}
                   </option>
                 ))}
               </SelectInput>
@@ -396,7 +397,7 @@ export default function JobImportPage() {
                   <Badge key={family} tone="brand">{family}</Badge>
                 ))}
                 {Array.from(new Set(previews.map((job) => job.country))).map((country) => (
-                  <Badge key={country} tone="muted">{country}</Badge>
+                  <Badge key={country} tone="muted">{countryLabel(country)}</Badge>
                 ))}
               </div>
             </Card>
@@ -453,7 +454,7 @@ function ExternalJobCard({
           </label>
           <div className="flex flex-wrap gap-2">
             <Badge tone="brand">{job.provider}</Badge>
-            <Badge tone="muted">{job.country}</Badge>
+            <Badge tone="muted">{countryLabel(job.country)}</Badge>
             <Badge tone="muted">{job.job_family}</Badge>
             {job.already_imported ? <Badge tone="success">DB 등록됨</Badge> : <Badge tone="warning">신규 후보</Badge>}
           </div>
@@ -481,7 +482,7 @@ function ExternalJobCard({
         </div>
         <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
           <Info label="경력" value={`${job.min_experience_years ?? 0}년 이상`} />
-          <Info label="근무형태" value={job.work_type} />
+          <Info label="근무형태" value={workTypeLabel(job.work_type)} />
           <Info label="연봉" value={job.salary_range} />
           <Info label="비자" value={job.visa_requirement} />
         </div>
