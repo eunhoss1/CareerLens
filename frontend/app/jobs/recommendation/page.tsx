@@ -79,7 +79,7 @@ export default function RecommendationPage() {
       <SiteHeader />
       <PageHeader
         kicker="CAREERLENS MATCH"
-        title="맞춤채용정보 적합도 진단"
+        title="맞춤채용정보 적합도 진단 서비스"
         description="저장된 해외취업 프로필과 공고별 PatternProfile을 비교해 지원 가능성, 부족 요소, 다음 준비 액션을 정리합니다."
         actions={
           <>
@@ -185,9 +185,7 @@ function SummaryBanner({
           <h2 className="mt-2 text-2xl font-bold text-night">
             {result ? `상위 ${result.returned_recommendation_count}개 공고 분석` : isLoading ? "공고별 적합도 계산 중" : "적합도 진단을 실행하세요"}
           </h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-            {result?.criteria_summary ?? "국가, 직무군, 경력, 언어 조건으로 후보 공고를 좁히고 PatternProfile과 사용자 프로필을 비교합니다."}
-          </p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">프로필과 공고 패턴을 비교해 지원 우선순위가 높은 후보만 정리했습니다.</p>
         </div>
         <div className="grid grid-cols-3 gap-3">
           <MetricCard label="총 후보" value={String(result?.total_candidate_count ?? 0)} />
@@ -240,7 +238,7 @@ function RecommendationCard({
         </div>
       </div>
 
-      <p className="mt-4 text-sm leading-6 text-slate-600">{recommendation.recommendation_summary}</p>
+      <p className="mt-4 line-clamp-2 text-sm leading-6 text-slate-600">{recommendation.recommendation_summary}</p>
 
       <div className="mt-5 rounded-xl bg-slate-50/80 px-4 py-3">
         <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
@@ -284,13 +282,13 @@ function ComparisonPanel({ recommendation }: { recommendation: JobRecommendation
 
       <div className="mt-5 rounded-xl bg-slate-50/80 p-4">
         <p className="text-sm font-bold text-night">공고별 평가 기준</p>
-        <p className="mt-2 text-sm leading-6 text-slate-600">{koreanEvaluationText(recommendation)}</p>
+        <p className="mt-2 text-sm leading-6 text-slate-600">{evaluationText(recommendation)}</p>
       </div>
 
       <div className="mt-4 rounded-xl border border-slate-100 bg-white p-4">
         <p className="text-sm font-bold text-night">비교 기준 PatternProfile</p>
         <p className="mt-2 text-sm font-bold text-brand">{recommendation.pattern_title || recommendation.pattern_ref}</p>
-        <p className="mt-2 text-sm leading-6 text-slate-600">{koreanPatternText(recommendation)}</p>
+        <p className="mt-2 text-sm leading-6 text-slate-600">{patternText(recommendation)}</p>
       </div>
 
       <div className="mt-4 rounded-xl bg-slate-50/80 p-4">
@@ -304,9 +302,9 @@ function ComparisonPanel({ recommendation }: { recommendation: JobRecommendation
 function CompactMetric({ label, score, weight }: { label: string; score: number; weight: number }) {
   return (
     <div>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] font-bold text-slate-400">{label}</p>
-        <p className="text-[10px] font-bold text-slate-400">{weight}%</p>
+      <div className="flex min-h-[28px] items-start justify-between gap-2">
+        <p className="whitespace-nowrap text-[10px] font-bold text-slate-400">{label}</p>
+        <p className="whitespace-nowrap text-[10px] font-bold text-slate-400">{weight}%</p>
       </div>
       <p className="mt-1 text-sm font-extrabold text-night">{score}</p>
       <div className="mt-2 h-1.5 rounded-full bg-slate-200">
@@ -342,11 +340,11 @@ function NoCandidateState() {
 
 function categoryMetrics(recommendation: JobRecommendation) {
   return [
-    { label: "합격 가능성", score: recommendation.acceptance_probability_score ?? 0, weight: recommendation.probability_weight ?? 0 },
+    { label: "합격가능성", score: recommendation.acceptance_probability_score ?? 0, weight: recommendation.probability_weight ?? 0 },
     { label: "연봉", score: recommendation.salary_score ?? 0, weight: recommendation.salary_weight ?? 0 },
     { label: "워라밸", score: recommendation.work_life_balance_score ?? 0, weight: recommendation.work_life_balance_weight ?? 0 },
     { label: "기업 가치", score: recommendation.company_value_score ?? 0, weight: recommendation.company_value_weight ?? 0 },
-    { label: "직무 적합도", score: recommendation.job_fit_score ?? 0, weight: recommendation.job_fit_weight ?? 0 }
+    { label: "직무적합도", score: recommendation.job_fit_score ?? 0, weight: recommendation.job_fit_weight ?? 0 }
   ];
 }
 
@@ -360,22 +358,13 @@ function priorityLabels(profile: UserProfileRequest) {
   return labels;
 }
 
-function koreanEvaluationText(recommendation: JobRecommendation) {
-  if (hasKorean(recommendation.evaluation_rationale)) {
-    return recommendation.evaluation_rationale;
-  }
-  return "공고의 핵심 요구조건, 저장된 PatternProfile, 사용자 우선순위를 기준으로 평가 가중치를 적용했습니다. 합격 가능성과 직무 적합도를 중심으로 보되, 연봉/워라밸/기업가치 선호도도 함께 반영합니다.";
+function evaluationText(recommendation: JobRecommendation) {
+  const core = `${recommendation.company_name} ${recommendation.job_title} 공고의 요구조건과 사용자 프로필을 비교했습니다.`;
+  return `${core} 기술, 경력, 언어, 포트폴리오 적합도를 우선 반영하고 선택한 우선순위 점수를 보조 지표로 사용합니다.`;
 }
 
-function koreanPatternText(recommendation: JobRecommendation) {
-  if (hasKorean(recommendation.pattern_evidence_summary)) {
-    return recommendation.pattern_evidence_summary;
-  }
-  return `${recommendation.company_name} ${recommendation.job_title} 공고의 요구 기술, 경력 기준, 언어/포트폴리오 조건을 비교 기준으로 정리한 패턴입니다. 실제 직원 표본과 가상 합격자 패턴 데이터가 보강되면 더 세분화된 기준으로 확장할 수 있습니다.`;
-}
-
-function hasKorean(value?: string) {
-  return Boolean(value && /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(value));
+function patternText(recommendation: JobRecommendation) {
+  return "공고 요구사항과 직무 패턴을 기준으로 만든 비교 기준입니다. 이 패턴을 사용자 프로필과 대조해 강점과 부족 요소를 분리합니다.";
 }
 
 function countryName(country: string) {
