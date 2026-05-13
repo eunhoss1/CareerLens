@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Button, Card, MetricCard, PageHeader, PageShell, SelectInput, TextInput } from "@/components/ui";
 import { getStoredUser, storeUser, type AuthUser } from "@/lib/auth";
+import { countryLabel } from "@/lib/display-labels";
 import { domainSuggestionsFor, jobFamilies, projectSuggestionsFor, skillSuggestionsFor } from "@/lib/job-families";
 import { demoProfile, fetchUserProfile, saveUserProfile, type UserProfileRequest } from "@/lib/recommendation";
 
@@ -157,7 +158,7 @@ export default function ProfileOnboardingPage() {
               </div>
             </div>
             <div className="mt-5 grid grid-cols-2 gap-2">
-              <MetricCard label="희망 국가" value={profile.target_country} />
+              <MetricCard label="희망 국가" value={countryLabel(profile.target_country)} />
               <MetricCard label="직무군" value={profile.target_job_family} />
               <MetricCard label="경력" value={`${profile.experience_years ?? 0}년`} />
               <MetricCard label="언어" value={profile.language_level} />
@@ -191,7 +192,7 @@ export default function ProfileOnboardingPage() {
           <Section step="01" title="기본 정보" description="회원 정보와 해외 취업 기준을 입력합니다.">
             <TextInput label="이름" value={profile.display_name} onChange={(event) => setProfile({ ...profile, display_name: event.target.value })} />
             <TextInput label="이메일" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} />
-            <SelectField label="희망 국가" helper="외부 공고 국가 반영" value={profile.target_country} options={countries} onChange={handleTargetCountryChange} />
+            <SelectField label="희망 국가" helper="외부 공고 국가 반영" value={profile.target_country} options={countries} optionLabel={countryLabel} onChange={handleTargetCountryChange} />
             <SelectField label="희망 도시" helper="Remote 선택 가능" value={profile.target_city ?? ""} options={availableCities} onChange={(value) => setProfile({ ...profile, target_city: value })} />
             <SelectField label="희망 직무군" value={profile.target_job_family} options={jobFamilies} onChange={(value) => setProfile({ ...profile, target_job_family: value })} />
             <TextInput label="희망 직무명" value={profile.desired_job_title ?? ""} onChange={(event) => setProfile({ ...profile, desired_job_title: event.target.value })} />
@@ -256,17 +257,19 @@ function SelectField({
   helper,
   value,
   options,
+  optionLabel,
   onChange
 }: {
   label: string;
   helper?: string;
   value: string;
   options: string[];
+  optionLabel?: (value: string) => string;
   onChange: (value: string) => void;
 }) {
   return (
     <SelectInput label={label} helper={helper} value={value} onChange={(event) => onChange(event.target.value)}>
-      {options.map((option) => <option key={option}>{option}</option>)}
+      {options.map((option) => <option key={option} value={option}>{optionLabel ? optionLabel(option) : option}</option>)}
     </SelectInput>
   );
 }
