@@ -82,7 +82,6 @@ export default function PlannerRoadmapPage() {
       <PageHeader
         kicker="준비 로드맵"
         title="커리어 플래너 상세"
-        description="다음 과제를 확인하고 진행 상태를 바꿔보세요."
         actions={
           <>
             <LinkButton href="/planner" variant="secondary">목록</LinkButton>

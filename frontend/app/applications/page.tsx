@@ -102,7 +102,6 @@ export default function ApplicationsPage() {
       <PageHeader
         kicker="APPLICATION WORKSPACE"
         title="기업지원 관리"
-        description="목표 공고의 서류 준비도, 마감 위험, 다음 액션을 한곳에서 관리합니다. 실제 제출은 공식 Apply 페이지에서 진행하고, CareerLens는 준비 상태를 추적합니다."
         actions={
           <>
             <LinkButton href="/jobs" variant="secondary">전체 공고 보기</LinkButton>
@@ -143,11 +142,15 @@ export default function ApplicationsPage() {
 
         {!isLoading && user && records.length === 0 && (
           <div className="mt-6">
-            <EmptyState
-              title="아직 지원 후보가 없습니다."
-              description="적합도 진단에서 커리어 플래너를 만들거나 전체 공고에서 목표 공고를 선택하면 지원관리로 넘길 수 있습니다."
-              action={<LinkButton href="/jobs/recommendation">적합도 진단 시작</LinkButton>}
-            />
+            <Card className="rounded-2xl border-slate-200 p-8 text-center shadow-sm">
+              <p className="text-lg font-bold text-night">아직 지원 후보가 없습니다.</p>
+              <p className="mx-auto mt-3 max-w-2xl text-base font-semibold leading-7 text-brand">
+                적합도 진단에서 커리어 플래너를 만들거나 전체 공고에서 목표 공고를 선택하면 지원관리로 넘길 수 있습니다.
+              </p>
+              <div className="mt-6 flex justify-center">
+                <LinkButton href="/jobs/recommendation">적합도 진단 시작</LinkButton>
+              </div>
+            </Card>
           </div>
         )}
 

@@ -14,6 +14,13 @@ export type AuthUser = {
   expires_at?: number;
 };
 
+export type AvailabilityResponse = {
+  field: "login_id" | "email";
+  value: string;
+  available: boolean;
+  message: string;
+};
+
 const STORAGE_KEY = "careerlens_user";
 
 export function getStoredUser(): AuthUser | null {
@@ -66,6 +73,14 @@ export async function login(input: { login_id: string; password: string }): Prom
   return authRequest("/api/auth/login", input);
 }
 
+export async function checkLoginIdAvailability(loginId: string): Promise<AvailabilityResponse> {
+  return availabilityRequest(`/api/auth/check-login-id?login_id=${encodeURIComponent(loginId)}`);
+}
+
+export async function checkEmailAvailability(email: string): Promise<AvailabilityResponse> {
+  return availabilityRequest(`/api/auth/check-email?email=${encodeURIComponent(email)}`);
+}
+
 export async function fetchCurrentUser(): Promise<AuthUser> {
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
   const response = await fetch(`${baseUrl}/api/auth/me`, {
@@ -93,6 +108,20 @@ async function authRequest(path: string, input: object): Promise<AuthUser> {
 
   if (!response.ok) {
     throw new Error(await readApiError(response, "Authentication request failed."));
+  }
+
+  return response.json();
+}
+
+async function availabilityRequest(path: string): Promise<AvailabilityResponse> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: "GET",
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Availability request failed."));
   }
 
   return response.json();

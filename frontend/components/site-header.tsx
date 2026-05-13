@@ -149,10 +149,16 @@ export function PageKicker({ children }: { children: React.ReactNode }) {
 }
 
 function isActive(pathname: string, href: string, childHrefs: string[]) {
-  if (pathname === href || (href !== "/" && pathname.startsWith(href))) {
+  if (pathname.startsWith("/jobs/recommendation")) {
+    return href === "/jobs/recommendation" || childHrefs.includes("/jobs/recommendation");
+  }
+  if (pathname === href) {
     return true;
   }
-  return childHrefs.some((childHref) => pathname === childHref || (childHref !== "/" && pathname.startsWith(childHref)));
+  if (childHrefs.some((childHref) => pathname === childHref || (childHref !== "/" && pathname.startsWith(`${childHref}/`)))) {
+    return true;
+  }
+  return href !== "/" && href !== "/jobs" && pathname.startsWith(`${href}/`);
 }
 
 function filterVisibleChildren(children: MenuChild[], isAdmin: boolean): MenuChild[] {

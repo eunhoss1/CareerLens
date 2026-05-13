@@ -1,44 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
-import { Badge, Button, Card, PageShell, SelectInput, StatusPill, TextInput } from "@/components/ui";
-import { signup, storeUser } from "@/lib/auth";
+import { Button, Card, PageShell, StatusPill, TextInput } from "@/components/ui";
+import { checkEmailAvailability, checkLoginIdAvailability, signup } from "@/lib/auth";
 
-const dialCodes = [
-  { label: "대한민국 +82", value: "+82" },
-  { label: "미국 +1", value: "+1" },
-  { label: "일본 +81", value: "+81" },
-  { label: "영국 +44", value: "+44" },
-  { label: "싱가포르 +65", value: "+65" },
-  { label: "호주 +61", value: "+61" },
-  { label: "독일 +49", value: "+49" },
-  { label: "프랑스 +33", value: "+33" }
+type AvailabilityStatus = "idle" | "checking" | "available" | "unavailable" | "error";
+
+const heroFeatures = [
+  "글로벌 공고 탐색",
+  "커리어 준비도 진단",
+  "안전한 계정 관리"
 ];
 
-const onboardingSteps = [
-  {
-    title: "계정 생성",
-    description: "아이디, 이메일, 비밀번호 정책을 검증하고 사용자 계정을 생성합니다.",
-    status: "현재"
-  },
-  {
-    title: "해외취업 프로필 입력",
-    description: "희망 국가, 직무군, 기술, 언어, 우선순위 정보를 저장합니다.",
-    status: "다음"
-  },
-  {
-    title: "맞춤채용정보 진단",
-    description: "프로필과 공고, PatternProfile을 비교해 추천 결과를 생성합니다.",
-    status: "다음"
-  },
-  {
-    title: "커리어 로드맵 연결",
-    description: "부족 요소를 주차별 준비 과제와 지원 관리 흐름으로 전환합니다.",
-    status: "확장"
-  }
+const heroStats = [
+  { label: "공고 후보", value: "Top 5" },
+  { label: "진단 항목", value: "5개" },
+  { label: "준비 로드맵", value: "8주" },
+  { label: "지원 관리", value: "연결" }
 ];
 
 export default function SignupPage() {
@@ -46,8 +27,6 @@ export default function SignupPage() {
   const [loginId, setLoginId] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
-  const [countryDialCode, setCountryDialCode] = useState("+82");
-  const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -55,8 +34,13 @@ export default function SignupPage() {
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [securityNoticeAccepted, setSecurityNoticeAccepted] = useState(false);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
+  const [loginIdStatus, setLoginIdStatus] = useState<AvailabilityStatus>("idle");
+  const [emailStatus, setEmailStatus] = useState<AvailabilityStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const normalizedLoginId = loginId.trim().toLowerCase();
+  const normalizedEmail = email.trim().toLowerCase();
 
   const passwordChecks = useMemo(
     () => [
@@ -69,28 +53,63 @@ export default function SignupPage() {
     [password, passwordConfirm]
   );
 
-  const loginIdValid = /^[a-zA-Z0-9._-]{4,30}$/.test(loginId);
-  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const loginIdValid = /^[a-zA-Z0-9._-]{4,30}$/.test(normalizedLoginId);
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
   const displayNameValid = displayName.trim().length > 0;
   const passwordValid = passwordChecks.every((check) => check.passed);
   const requiredConsentsAccepted = termsAccepted && privacyAccepted && securityNoticeAccepted;
-  const canSubmit = loginIdValid && displayNameValid && emailValid && passwordValid && requiredConsentsAccepted;
+  const canSubmit =
+    loginIdValid &&
+    loginIdStatus === "available" &&
+    displayNameValid &&
+    emailValid &&
+    emailStatus === "available" &&
+    passwordValid &&
+    requiredConsentsAccepted;
+
+  async function checkLoginId() {
+    if (!loginIdValid) {
+      setLoginIdStatus("error");
+      return;
+    }
+
+    setLoginIdStatus("checking");
+    try {
+      const result = await checkLoginIdAvailability(normalizedLoginId);
+      setLoginIdStatus(result.available ? "available" : "unavailable");
+    } catch {
+      setLoginIdStatus("error");
+    }
+  }
+
+  async function checkEmail() {
+    if (!emailValid) {
+      setEmailStatus("error");
+      return;
+    }
+
+    setEmailStatus("checking");
+    try {
+      const result = await checkEmailAvailability(normalizedEmail);
+      setEmailStatus(result.available ? "available" : "unavailable");
+    } catch {
+      setEmailStatus("error");
+    }
+  }
 
   async function submit() {
     if (!canSubmit) {
-      setErrorMessage("입력값, 비밀번호 정책, 필수 동의 항목을 다시 확인해주세요.");
+      setErrorMessage("아이디와 이메일 중복 확인, 비밀번호 조건, 필수 동의 항목을 확인해주세요.");
       return;
     }
 
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const user = await signup({
-        login_id: loginId.trim().toLowerCase(),
+      await signup({
+        login_id: normalizedLoginId,
         display_name: displayName.trim(),
-        email: email.trim().toLowerCase(),
-        country_dial_code: countryDialCode,
-        phone_number: phoneNumber.trim() || undefined,
+        email: normalizedEmail,
         password,
         password_confirm: passwordConfirm,
         terms_accepted: termsAccepted,
@@ -98,8 +117,7 @@ export default function SignupPage() {
         security_notice_accepted: securityNoticeAccepted,
         marketing_opt_in: marketingOptIn
       });
-      storeUser(user);
-      router.push("/mypage");
+      router.push("/login");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "회원가입 중 오류가 발생했습니다.");
     } finally {
@@ -110,54 +128,53 @@ export default function SignupPage() {
   return (
     <PageShell>
       <SiteHeader />
-      <section className="lens-container grid gap-5 py-8 lg:grid-cols-[1fr_430px]">
-        <Card className="p-6 md:p-8">
-          <Badge tone="brand">CREATE ACCOUNT</Badge>
-          <h1 className="mt-4 text-3xl font-semibold text-night">CareerLens 회원가입</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            계정을 만들면 해외취업 프로필, 추천 진단 결과, 커리어 로드맵, 지원 관리 기록을 사용자별로
-            저장할 수 있습니다. 아이디와 이메일은 중복 검증 대상입니다.
-          </p>
+      <section className="lens-container grid gap-6 py-8 lg:grid-cols-[0.95fr_1.05fr]">
+        <CareerHeroPanel />
+
+        <Card className="rounded-[28px] p-6 shadow-[0_18px_50px_rgba(15,23,42,0.06)] md:p-8">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h1 className="text-3xl font-black text-night">CareerLens 회원가입</h1>
+            </div>
+            <Link href="/login" className="text-sm font-semibold text-brand underline-offset-4 hover:underline">
+              로그인
+            </Link>
+          </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <TextInput
-              label="아이디"
-              helper="4~30자, 영문/숫자/._-"
-              value={loginId}
-              onChange={(event) => setLoginId(event.target.value)}
-              autoComplete="username"
-            />
+            <div className="md:col-span-2">
+              <CheckedInput
+                label="아이디"
+                helper="4~30자, 영문/숫자/._-"
+                value={loginId}
+                onChange={(value) => {
+                  setLoginId(value);
+                  setLoginIdStatus("idle");
+                }}
+                onCheck={checkLoginId}
+                status={loginIdStatus}
+                autoComplete="username"
+              />
+            </div>
             <TextInput
               label="이름"
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
               autoComplete="name"
             />
-            <TextInput
-              label="이메일"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              autoComplete="email"
-              type="email"
-            />
-            <div className="grid grid-cols-[120px_1fr] gap-2">
-              <SelectInput
-                label="국가번호"
-                value={countryDialCode}
-                onChange={(event) => setCountryDialCode(event.target.value)}
-              >
-                {dialCodes.map((code) => (
-                  <option key={code.value} value={code.value}>
-                    {code.label}
-                  </option>
-                ))}
-              </SelectInput>
-              <TextInput
-                label="휴대폰"
-                helper="선택"
-                value={phoneNumber}
-                onChange={(event) => setPhoneNumber(event.target.value)}
-                autoComplete="tel"
+            <div>
+              <CheckedInput
+                label="이메일"
+                helper="로그인 및 계정 확인에 사용"
+                value={email}
+                onChange={(value) => {
+                  setEmail(value);
+                  setEmailStatus("idle");
+                }}
+                onCheck={checkEmail}
+                status={emailStatus}
+                type="email"
+                autoComplete="email"
               />
             </div>
             <TextInput
@@ -184,11 +201,11 @@ export default function SignupPage() {
             비밀번호 표시
           </label>
 
-          <div className="mt-4 border border-line bg-panel p-4">
+          <div className="mt-4 rounded-2xl border border-line bg-panel p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm font-semibold text-night">비밀번호 보안 정책</p>
+              <p className="text-sm font-semibold text-night">비밀번호 조건</p>
               <StatusPill tone={passwordValid ? "success" : "warning"}>
-                {passwordValid ? "정책 충족" : "확인 필요"}
+                {passwordValid ? "조건 충족" : "확인 필요"}
               </StatusPill>
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -199,7 +216,7 @@ export default function SignupPage() {
                     check.passed ? "border-mint/20 bg-emerald-50 text-mint" : "border-line bg-white text-slate-500"
                   }`}
                 >
-                  {check.passed ? "완료" : "필요"} · {check.label}
+                  {check.passed ? "완료" : "필요"} - {check.label}
                 </span>
               ))}
             </div>
@@ -218,44 +235,126 @@ export default function SignupPage() {
           </div>
 
           {errorMessage && (
-            <p role="alert" className="mt-4 border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <p role="alert" className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
               {errorMessage}
             </p>
           )}
 
-          <Button type="button" onClick={submit} disabled={isLoading || !canSubmit} className="mt-6 w-full">
-            {isLoading ? "계정 생성 중" : "회원가입 후 프로필 설정"}
+          <Button type="button" onClick={submit} disabled={isLoading || !canSubmit} className="mt-6 w-full rounded-2xl">
+            {isLoading ? "계정 생성 중" : "회원가입"}
           </Button>
-
-          <p className="mt-4 text-center text-sm text-slate-600">
-            이미 계정이 있나요?{" "}
-            <Link href="/login" className="font-semibold text-brand underline-offset-4 hover:underline">
-              로그인
-            </Link>
-          </p>
         </Card>
-
-        <aside className="border border-night bg-night p-6 text-white shadow-panel md:p-8">
-          <p className="text-sm font-semibold text-cyan-200">가입 후 진행 흐름</p>
-          <ol className="mt-5 space-y-4 text-sm leading-6 text-slate-200">
-            {onboardingSteps.map((step, index) => (
-              <li key={step.title} className="border-l border-white/20 pl-4">
-                <div className="flex items-center justify-between gap-2">
-                  <strong className="text-white">{index + 1}. {step.title}</strong>
-                  <StatusPill tone={index === 0 ? "success" : "muted"}>{step.status}</StatusPill>
-                </div>
-                <p className="mt-1 text-slate-300">{step.description}</p>
-              </li>
-            ))}
-          </ol>
-          <div className="mt-6 border border-white/10 bg-white/10 p-4 text-sm leading-6 text-slate-200">
-            로그인 실패 5회 이상이면 계정이 15분간 잠깁니다. 관리자 공고 수집 기능은 ADMIN 권한과 JWT 토큰이
-            있을 때만 접근할 수 있습니다.
-          </div>
-        </aside>
       </section>
     </PageShell>
   );
+}
+
+function CareerHeroPanel() {
+  return (
+    <aside className="relative overflow-hidden rounded-[32px] border border-blue-100 bg-[linear-gradient(145deg,#eef5ff_0%,#ffffff_42%,#dbeafe_100%)] p-8 shadow-[0_24px_80px_rgba(15,23,42,0.10)]">
+      <div className="relative z-10">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-sm font-black text-white">CL</span>
+          <span className="text-xl font-black text-night">CareerLens</span>
+        </div>
+
+        <h2 className="mt-16 max-w-[560px] text-4xl font-black leading-tight text-night md:text-[44px]">
+          해외취업 준비, 명확하게
+        </h2>
+
+        <div className="mt-10 space-y-5">
+          {heroFeatures.map((feature, index) => (
+            <div key={feature} className="flex items-center gap-4">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-blue-100 bg-white text-sm font-black text-blue-600 shadow-sm">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <p className="text-lg font-bold text-night">{feature}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-12 grid grid-cols-2 gap-3 rounded-[28px] border border-white/70 bg-white/70 p-4 shadow-[0_18px_60px_rgba(37,99,235,0.14)] backdrop-blur md:grid-cols-4">
+          {heroStats.map((stat) => (
+            <div key={stat.label} className="border-line/70 px-3 py-2 md:border-r last:border-r-0">
+              <p className="text-2xl font-black text-night">{stat.value}</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">{stat.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-[linear-gradient(to_top,rgba(30,64,175,0.18),transparent)]" />
+      <div className="pointer-events-none absolute bottom-0 right-8 h-44 w-56 rounded-t-[90px] bg-blue-200/40 blur-3xl" />
+      <div className="pointer-events-none absolute -right-12 top-16 h-40 w-40 rounded-full bg-white/60" />
+    </aside>
+  );
+}
+
+function CheckedInput({
+  label,
+  helper,
+  value,
+  onChange,
+  onCheck,
+  status,
+  type = "text",
+  autoComplete
+}: {
+  label: string;
+  helper: string;
+  value: string;
+  onChange: (value: string) => void;
+  onCheck: () => void;
+  status: AvailabilityStatus;
+  type?: string;
+  autoComplete?: string;
+}) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-brand">{label}</span>
+        <span className="text-xs font-medium text-slate-400">{helper}</span>
+      </div>
+      <div className="grid grid-cols-[1fr_96px] gap-2">
+        <input
+          className="h-10 w-full border border-line bg-white px-3 text-sm text-ink focus:border-brand"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          type={type}
+          autoComplete={autoComplete}
+        />
+        <button
+          type="button"
+          onClick={onCheck}
+          disabled={status === "checking"}
+          className="h-10 rounded-xl border border-line bg-white px-3 text-sm font-semibold text-night transition hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {status === "checking" ? "확인 중" : "중복 확인"}
+        </button>
+      </div>
+      {status !== "idle" && (
+        <p className={`mt-2 text-xs font-semibold ${status === "available" ? "text-mint" : "text-coral"}`}>
+          {availabilityMessage(status)}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function availabilityMessage(status: AvailabilityStatus) {
+  if (status === "checking") {
+    return "중복 여부를 확인하고 있습니다.";
+  }
+  if (status === "available") {
+    return "사용 가능합니다.";
+  }
+  if (status === "unavailable") {
+    return "이미 사용 중입니다.";
+  }
+  if (status === "error") {
+    return "형식을 확인하거나 잠시 후 다시 시도해주세요.";
+  }
+  return "";
 }
 
 function ConsentRow({
@@ -270,7 +369,7 @@ function ConsentRow({
   required?: boolean;
 }) {
   return (
-    <label className="flex items-start gap-3 border border-line bg-white p-3 text-sm text-slate-700">
+    <label className="flex items-start gap-3 rounded-2xl border border-line bg-white p-3 text-sm text-slate-700">
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="mt-1" />
       <span>
         {required && <span className="font-semibold text-coral">[필수] </span>}

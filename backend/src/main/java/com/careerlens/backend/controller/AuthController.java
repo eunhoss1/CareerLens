@@ -1,6 +1,7 @@
 package com.careerlens.backend.controller;
 
 import com.careerlens.backend.dto.AuthResponseDto;
+import com.careerlens.backend.dto.AvailabilityResponseDto;
 import com.careerlens.backend.dto.LoginRequestDto;
 import com.careerlens.backend.dto.SignupRequestDto;
 import com.careerlens.backend.security.JwtClaims;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -26,6 +28,16 @@ public class AuthController {
     @PostMapping("/signup")
     public AuthResponseDto signup(@Valid @RequestBody SignupRequestDto request) {
         return authService.signup(request);
+    }
+
+    @GetMapping("/check-login-id")
+    public AvailabilityResponseDto checkLoginId(@RequestParam("login_id") String loginId) {
+        return authService.checkLoginIdAvailability(loginId);
+    }
+
+    @GetMapping("/check-email")
+    public AvailabilityResponseDto checkEmail(@RequestParam String email) {
+        return authService.checkEmailAvailability(email);
     }
 
     @PostMapping("/login")

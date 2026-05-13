@@ -105,7 +105,6 @@ export default function EmploymentDocumentsPage() {
       <PageHeader
         kicker="AI DOCUMENT ANALYSIS"
         title="AI 문서 분석"
-        description="이력서, 자기소개서, 포트폴리오, GitHub 프로젝트를 목표 공고 기준으로 점검합니다."
         actions={<LinkButton href="/roadmap/employment">취업로드맵으로</LinkButton>}
       />
 
@@ -124,9 +123,6 @@ export default function EmploymentDocumentsPage() {
               <Card className="rounded-2xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
                 <p className="text-xs font-extrabold tracking-[0.14em] text-brand">REVIEW TARGET</p>
                 <h2 className="mt-3 text-xl font-bold text-night">점검 기준 선택</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  어떤 공고와 로드맵 과제를 기준으로 제출물을 볼지 선택하세요.
-                </p>
 
                 <div className="mt-5 space-y-4">
                   <SelectInput

@@ -84,7 +84,6 @@ export default function JobsPage() {
       <PageHeader
         kicker="JOB POSTINGS"
         title="전체 공고 조회"
-        description="검수된 공고와 실시간 수집 공고를 한곳에서 확인하고, 내 프로필 기준 로드맵으로 전환합니다."
         actions={
           <>
             <LinkButton href="/jobs/recommendation" variant="secondary">맞춤추천 진단</LinkButton>

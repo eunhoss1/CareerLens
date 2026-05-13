@@ -45,7 +45,6 @@ export default function PlannerListPage() {
       <PageHeader
         kicker="CAREERLENS PLAN"
         title="커리어 플래너"
-        description="적합도 진단에서 만든 준비 로드맵을 모아보고, 다음 과제와 완료율을 확인합니다."
         actions={<LinkButton href="/jobs/recommendation">적합도 진단으로</LinkButton>}
       />
 
@@ -53,7 +52,7 @@ export default function PlannerListPage() {
         {isLoading && <EmptyState title="로드맵을 불러오는 중입니다." description="저장된 커리어 플래너 목록을 확인하고 있습니다." />}
         {!isLoading && !user && <EmptyState title="로그인이 필요합니다." description="회원가입 또는 로그인 후 추천 진단에서 커리어 플래너를 생성할 수 있습니다." action={<LinkButton href="/login">로그인</LinkButton>} />}
         {!isLoading && user && roadmaps.length === 0 && (
-          <EmptyState title="아직 생성된 플래너가 없습니다." description="맞춤채용정보 추천 진단에서 공고 카드를 선택해 커리어 플래너를 생성하세요." action={<LinkButton href="/jobs/recommendation">추천 진단으로</LinkButton>} />
+          <EmptyState title="아직 생성된 플래너가 없습니다." action={<LinkButton href="/jobs/recommendation">추천 진단으로</LinkButton>} />
         )}
 
         {!isLoading && user && roadmapSummaries.length > 0 && (
