@@ -1,0 +1,19 @@
+services:
+  backend:
+    image: ${BACKEND_IMAGE}
+    container_name: careerlens-backend
+    restart: unless-stopped
+    env_file:
+      - path: .env.production
+        required: false
+    ports:
+      - "8080:8080"
+
+  frontend:
+    image: ${FRONTEND_IMAGE}
+    container_name: careerlens-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
