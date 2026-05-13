@@ -41,7 +41,6 @@ export default function DepartureRoadmapPage() {
       <PageHeader
         kicker="DEPARTURE ROADMAP"
         title="출국로드맵"
-        description="입사 예정일을 기준으로 권장 입국일, 항공편 탐색 기간, 출국 전 준비 마일스톤을 역산합니다."
         actions={<LinkButton href="/roadmap/administration">행정로드맵으로</LinkButton>}
       />
 

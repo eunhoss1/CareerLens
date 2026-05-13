@@ -112,7 +112,6 @@ export default function AdministrationRoadmapPage() {
       <PageHeader
         kicker="ADMINISTRATION ROADMAP"
         title="행정로드맵"
-        description="비자, 회사 제출 서류, 출국 전 행정 패키지, 입국 후 초기 행정 처리를 하나의 준비 흐름으로 정리합니다."
         actions={
           <>
             <LinkButton href="/roadmap/departure" variant="secondary">출국로드맵으로</LinkButton>
