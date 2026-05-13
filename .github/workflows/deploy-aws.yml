@@ -1,0 +1,112 @@
+name: Build and deploy to AWS
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment label"
+        default: "demo"
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  BACKEND_REPOSITORY: ${{ secrets.ECR_BACKEND_REPOSITORY }}
+  FRONTEND_REPOSITORY: ${{ secrets.ECR_FRONTEND_REPOSITORY }}
+
+jobs:
+  build-and-push:
+    name: Build and push ECR images
+    runs-on: ubuntu-latest
+    outputs:
+      backend-image: ${{ steps.images.outputs.backend-image }}
+      frontend-image: ${{ steps.images.outputs.frontend-image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push backend
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -f backend/Dockerfile -t "$REGISTRY/$BACKEND_REPOSITORY:$IMAGE_TAG" -t "$REGISTRY/$BACKEND_REPOSITORY:latest" .
+          docker push "$REGISTRY/$BACKEND_REPOSITORY:$IMAGE_TAG"
+          docker push "$REGISTRY/$BACKEND_REPOSITORY:latest"
+
+      - name: Build and push frontend
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+          NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+        run: |
+          docker build -f frontend/Dockerfile --build-arg NEXT_PUBLIC_API_BASE_URL="$NEXT_PUBLIC_API_BASE_URL" -t "$REGISTRY/$FRONTEND_REPOSITORY:$IMAGE_TAG" -t "$REGISTRY/$FRONTEND_REPOSITORY:latest" .
+          docker push "$REGISTRY/$FRONTEND_REPOSITORY:$IMAGE_TAG"
+          docker push "$REGISTRY/$FRONTEND_REPOSITORY:latest"
+
+      - name: Export image names
+        id: images
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          echo "backend-image=$REGISTRY/$BACKEND_REPOSITORY:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "frontend-image=$REGISTRY/$FRONTEND_REPOSITORY:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+
+  deploy-ec2:
+    name: Deploy on EC2 with Docker Compose
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Write SSH key
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/careerlens.pem
+          chmod 600 ~/.ssh/careerlens.pem
+
+      - name: Copy compose file
+        env:
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          DEPLOY_PATH: ${{ secrets.EC2_DEPLOY_PATH }}
+        run: |
+          ssh -i ~/.ssh/careerlens.pem -o StrictHostKeyChecking=no "$EC2_USER@$EC2_HOST" "mkdir -p '$DEPLOY_PATH'"
+          scp -i ~/.ssh/careerlens.pem -o StrictHostKeyChecking=no docker-compose.aws.example.yml "$EC2_USER@$EC2_HOST:$DEPLOY_PATH/docker-compose.yml"
+
+      - name: Deploy containers
+        env:
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          DEPLOY_PATH: ${{ secrets.EC2_DEPLOY_PATH }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          BACKEND_IMAGE: ${{ needs.build-and-push.outputs.backend-image }}
+          FRONTEND_IMAGE: ${{ needs.build-and-push.outputs.frontend-image }}
+        run: |
+          ssh -i ~/.ssh/careerlens.pem -o StrictHostKeyChecking=no "$EC2_USER@$EC2_HOST" "
+            set -e
+            cd '$DEPLOY_PATH'
+            if [ ! -f .env.production ]; then
+              echo '.env.production is missing on EC2. Create it before deployment.' >&2
+              exit 1
+            fi
+            aws ecr get-login-password --region '$AWS_REGION' | docker login --username AWS --password-stdin '${BACKEND_IMAGE%/*}'
+            BACKEND_IMAGE='$BACKEND_IMAGE' FRONTEND_IMAGE='$FRONTEND_IMAGE' docker compose pull
+            BACKEND_IMAGE='$BACKEND_IMAGE' FRONTEND_IMAGE='$FRONTEND_IMAGE' docker compose up -d
+            docker image prune -f
+          "
