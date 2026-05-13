@@ -1,0 +1,12 @@
+.git
+.github
+**/.next
+**/node_modules
+**/target
+**/.idea
+**/.vscode
+**/*.log
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+seed-data/raw
