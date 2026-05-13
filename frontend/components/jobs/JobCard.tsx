@@ -1,5 +1,6 @@
 import { Badge, Button, Card, ScoreBar } from "@/components/ui";
 import type { JobPosting } from "@/lib/jobs";
+import { workTypeLabel } from "@/lib/display-labels";
 import { countryLabel, daysText, deadlineText, deadlineTone, formatDate } from "./job-format";
 
 export function JobCard({
@@ -25,7 +26,7 @@ export function JobCard({
           <h2 className="mt-4 truncate text-lg font-bold leading-7 text-night">{job.company_name}</h2>
           <p className="mt-1 line-clamp-1 text-base font-semibold text-ink">{job.job_title}</p>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            {job.work_type} · 최소 {job.min_experience_years ?? 0}년 · {job.salary_range || "연봉 미기재"}
+            {workTypeLabel(job.work_type)} · 최소 {job.min_experience_years ?? 0}년 · {job.salary_range || "연봉 미기재"}
           </p>
         </div>
         <div className="min-w-[116px] text-right">

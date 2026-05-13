@@ -67,3 +67,58 @@ export function countryLabel(country: string | null | undefined): string {
 
   return value;
 }
+
+export function workTypeLabel(workType: string | null | undefined): string {
+  const value = workType?.trim();
+  if (!value) return "미기재";
+  const labels: Record<string, string> = {
+    Onsite: "오피스 근무",
+    "On-site": "오피스 근무",
+    "On-site / Not specified": "오피스 근무 또는 미기재",
+    Hybrid: "하이브리드",
+    Remote: "원격",
+    "Remote-first": "원격 우선",
+    "Not specified": "미기재"
+  };
+  return labels[value] ?? value;
+}
+
+export function startDateLabel(value: string | null | undefined): string {
+  const normalized = value?.trim();
+  if (!normalized) return "미기재";
+  const labels: Record<string, string> = {
+    Immediately: "즉시 가능",
+    "Within 1 month": "1개월 이내",
+    "Within 3 months": "3개월 이내",
+    "After 6 months": "6개월 이후",
+    "Not specified": "미기재"
+  };
+  return labels[normalized] ?? normalized;
+}
+
+export function languageLevelLabel(level: string | null | undefined): string {
+  const value = level?.trim();
+  if (!value) return "미기재";
+  const labels: Record<string, string> = {
+    BASIC: "기초",
+    CONVERSATIONAL: "일상 회화",
+    BUSINESS: "비즈니스",
+    FLUENT: "유창",
+    NATIVE: "원어민"
+  };
+  return labels[value] ?? value;
+}
+
+export function preferenceLabel(preference: string | null | undefined): string {
+  const value = preference?.trim();
+  if (!value) return "미기재";
+  const labels: Record<string, string> = {
+    "Visa support": "비자 지원",
+    Hybrid: "하이브리드",
+    Remote: "원격",
+    "Relocation support": "이주 지원",
+    "Global team": "글로벌 팀",
+    "High salary": "높은 연봉"
+  };
+  return labels[value] ?? value;
+}

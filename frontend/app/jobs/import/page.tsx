@@ -13,7 +13,7 @@ import {
   type ExternalJobPreview,
   type ExternalJobSyncStatus
 } from "@/lib/external-jobs";
-import { countryLabel } from "@/lib/display-labels";
+import { countryLabel, workTypeLabel } from "@/lib/display-labels";
 import { defaultGreenhouseBoardTokens, greenhouseBoardPresets } from "@/lib/greenhouse-board-registry";
 import { jobFamilies } from "@/lib/job-families";
 
@@ -482,7 +482,7 @@ function ExternalJobCard({
         </div>
         <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
           <Info label="경력" value={`${job.min_experience_years ?? 0}년 이상`} />
-          <Info label="근무형태" value={job.work_type} />
+          <Info label="근무형태" value={workTypeLabel(job.work_type)} />
           <Info label="연봉" value={job.salary_range} />
           <Info label="비자" value={job.visa_requirement} />
         </div>

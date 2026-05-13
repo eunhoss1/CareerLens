@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Button, Card, MetricCard, PageHeader, PageShell, SelectInput, TextInput } from "@/components/ui";
 import { getStoredUser, storeUser, type AuthUser } from "@/lib/auth";
-import { countryLabel } from "@/lib/display-labels";
+import { countryLabel, languageLevelLabel, preferenceLabel, startDateLabel, workTypeLabel } from "@/lib/display-labels";
 import { domainSuggestionsFor, jobFamilies, projectSuggestionsFor, skillSuggestionsFor } from "@/lib/job-families";
 import { demoProfile, fetchUserProfile, saveUserProfile, type UserProfileRequest } from "@/lib/recommendation";
 
@@ -161,7 +161,7 @@ export default function ProfileOnboardingPage() {
               <MetricCard label="희망 국가" value={countryLabel(profile.target_country)} />
               <MetricCard label="직무군" value={profile.target_job_family} />
               <MetricCard label="경력" value={`${profile.experience_years ?? 0}년`} />
-              <MetricCard label="언어" value={profile.language_level} />
+              <MetricCard label="언어" value={languageLevelLabel(profile.language_level)} />
             </div>
           </Card>
 
@@ -193,11 +193,11 @@ export default function ProfileOnboardingPage() {
             <TextInput label="이름" value={profile.display_name} onChange={(event) => setProfile({ ...profile, display_name: event.target.value })} />
             <TextInput label="이메일" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} />
             <SelectField label="희망 국가" helper="외부 공고 국가 반영" value={profile.target_country} options={countries} optionLabel={countryLabel} onChange={handleTargetCountryChange} />
-            <SelectField label="희망 도시" helper="Remote 선택 가능" value={profile.target_city ?? ""} options={availableCities} onChange={(value) => setProfile({ ...profile, target_city: value })} />
+            <SelectField label="희망 도시" helper="원격 선택 가능" value={profile.target_city ?? ""} options={availableCities} onChange={(value) => setProfile({ ...profile, target_city: value })} />
             <SelectField label="희망 직무군" value={profile.target_job_family} options={jobFamilies} onChange={(value) => setProfile({ ...profile, target_job_family: value })} />
             <TextInput label="희망 직무명" value={profile.desired_job_title ?? ""} onChange={(event) => setProfile({ ...profile, desired_job_title: event.target.value })} />
-            <SelectField label="선호 근무형태" value={profile.preferred_work_type ?? "Hybrid"} options={workTypes} onChange={(value) => setProfile({ ...profile, preferred_work_type: value })} />
-            <SelectField label="입사 가능 시점" value={profile.available_start_date ?? "Within 3 months"} options={startDates} onChange={(value) => setProfile({ ...profile, available_start_date: value })} />
+            <SelectField label="선호 근무형태" value={profile.preferred_work_type ?? "Hybrid"} options={workTypes} optionLabel={workTypeLabel} onChange={(value) => setProfile({ ...profile, preferred_work_type: value })} />
+            <SelectField label="입사 가능 시점" value={profile.available_start_date ?? "Within 3 months"} options={startDates} optionLabel={startDateLabel} onChange={(value) => setProfile({ ...profile, available_start_date: value })} />
           </Section>
 
           <Section step="02" title="경력과 역량" description="추천 점수에서 가장 크게 쓰이는 직무 관련 데이터를 입력합니다.">
@@ -210,9 +210,9 @@ export default function ProfileOnboardingPage() {
           </Section>
 
           <Section step="03" title="언어와 학력" description="해외 취업에서 1차 필터링과 보완 요소 분석에 사용됩니다.">
-            <SelectField label="대표 언어 수준" value={profile.language_level} options={languageLevels} onChange={(value) => setProfile({ ...profile, language_level: value })} />
-            <SelectField label="영어 수준" value={profile.english_level ?? "BUSINESS"} options={languageLevels} onChange={(value) => setProfile({ ...profile, english_level: value })} />
-            <SelectField label="일본어 수준" value={profile.japanese_level ?? "BASIC"} options={languageLevels} onChange={(value) => setProfile({ ...profile, japanese_level: value })} />
+            <SelectField label="대표 언어 수준" value={profile.language_level} options={languageLevels} optionLabel={languageLevelLabel} onChange={(value) => setProfile({ ...profile, language_level: value })} />
+            <SelectField label="영어 수준" value={profile.english_level ?? "BUSINESS"} options={languageLevels} optionLabel={languageLevelLabel} onChange={(value) => setProfile({ ...profile, english_level: value })} />
+            <SelectField label="일본어 수준" value={profile.japanese_level ?? "BASIC"} options={languageLevels} optionLabel={languageLevelLabel} onChange={(value) => setProfile({ ...profile, japanese_level: value })} />
             <TextInput label="어학 점수" value={profile.language_test_scores ?? ""} onChange={(event) => setProfile({ ...profile, language_test_scores: event.target.value })} placeholder="예: TOEIC 860, JLPT N2" />
             <TextInput label="최종 학력" value={profile.education} onChange={(event) => setProfile({ ...profile, education: event.target.value })} />
             <TextInput label="전공" value={profile.major ?? ""} onChange={(event) => setProfile({ ...profile, major: event.target.value })} />
@@ -225,7 +225,7 @@ export default function ProfileOnboardingPage() {
             <Toggle label="포트폴리오 보유" checked={profile.portfolio_present} onChange={(value) => setProfile({ ...profile, portfolio_present: value })} />
             <TextInput label="GitHub URL" value={profile.github_url ?? ""} onChange={(event) => setProfile({ ...profile, github_url: event.target.value })} />
             <TextInput label="포트폴리오 URL" value={profile.portfolio_url ?? ""} onChange={(event) => setProfile({ ...profile, portfolio_url: event.target.value })} />
-            <TagInput label="선호 조건" tags={profile.preferences} suggestions={preferenceSuggestions} onChange={(tags) => setProfile({ ...profile, preferences: tags })} />
+            <TagInput label="선호 조건" tags={profile.preferences} suggestions={preferenceSuggestions} tagLabel={preferenceLabel} onChange={(tags) => setProfile({ ...profile, preferences: tags })} />
           </Section>
 
           <div className="flex justify-end">
@@ -315,12 +315,14 @@ function TagInput({
   helper,
   tags,
   suggestions,
+  tagLabel,
   onChange
 }: {
   label: string;
   helper?: string;
   tags: string[];
   suggestions: string[];
+  tagLabel?: (value: string) => string;
   onChange: (tags: string[]) => void;
 }) {
   const [draft, setDraft] = useState("");
@@ -345,7 +347,7 @@ function TagInput({
         <div className="flex flex-wrap gap-2">
           {tags.map((tag) => (
             <button key={tag} type="button" onClick={() => onChange(tags.filter((item) => item !== tag))} className="bg-[#e8f2f1] px-3 py-1 text-sm font-semibold text-brand">
-              {tag} x
+              {tagLabel ? tagLabel(tag) : tag} x
             </button>
           ))}
           <input
@@ -366,7 +368,7 @@ function TagInput({
       <div className="mt-2 flex flex-wrap gap-2">
         {suggestions.map((suggestion) => (
           <button key={suggestion} type="button" onClick={() => addTag(suggestion)} className="border border-line px-3 py-1 text-xs font-semibold text-slate-600 hover:border-brand hover:text-brand">
-            + {suggestion}
+            + {tagLabel ? tagLabel(suggestion) : suggestion}
           </button>
         ))}
       </div>
@@ -379,15 +381,17 @@ function TextTagInput({
   helper,
   value,
   suggestions,
+  tagLabel,
   onChange
 }: {
   label: string;
   helper?: string;
   value: string;
   suggestions: string[];
+  tagLabel?: (value: string) => string;
   onChange: (value: string) => void;
 }) {
-  return <TagInput label={label} helper={helper} tags={tagsFromText(value)} suggestions={suggestions} onChange={(tags) => onChange(tags.join(", "))} />;
+  return <TagInput label={label} helper={helper} tags={tagsFromText(value)} suggestions={suggestions} tagLabel={tagLabel} onChange={(tags) => onChange(tags.join(", "))} />;
 }
 
 function cityOptionsFor(country: string) {

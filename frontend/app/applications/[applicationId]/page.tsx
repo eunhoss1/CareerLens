@@ -22,7 +22,7 @@ import {
   type ApplicationRecord,
   type ApplicationStatus
 } from "@/lib/applications";
-import { countryLabel } from "@/lib/display-labels";
+import { countryLabel, workTypeLabel } from "@/lib/display-labels";
 
 type AssistantStatus = "READY" | "CHECK" | "AI_DRAFT" | "EXTERNAL" | "SENSITIVE";
 
@@ -169,7 +169,7 @@ export default function ApplicationWorkspacePage() {
                 <p className="mt-4 text-sm font-semibold text-brand">{record.company_name}</p>
                 <h1 className="mt-1 text-2xl font-semibold leading-8 text-night">{record.job_title}</h1>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {countryLabel(record.country)} · {record.work_type} · {record.salary_range || "연봉 미기재"}
+                  {countryLabel(record.country)} · {workTypeLabel(record.work_type)} · {record.salary_range || "연봉 미기재"}
                 </p>
 
                 <div className="mt-5 grid grid-cols-2 gap-3">

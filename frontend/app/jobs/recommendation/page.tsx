@@ -15,7 +15,7 @@ import {
   type UserProfileRequest
 } from "@/lib/recommendation";
 import { createPlannerRoadmap } from "@/lib/planner";
-import { countryLabel } from "@/lib/display-labels";
+import { countryLabel, languageLevelLabel } from "@/lib/display-labels";
 
 export default function RecommendationPage() {
   const router = useRouter();
@@ -145,7 +145,7 @@ function ProfileCard({ profile, user }: { profile: UserProfileRequest; user: Aut
         <MetricCard label="희망 국가" value={countryLabel(profile.target_country)} />
         <MetricCard label="직무군" value={profile.target_job_family} />
         <MetricCard label="총 경력" value={`${profile.experience_years ?? 0}년`} />
-        <MetricCard label="언어" value={profile.language_level} />
+        <MetricCard label="언어" value={languageLevelLabel(profile.language_level)} />
       </dl>
 
       <div className="mt-5 border-t border-slate-100 pt-4">
