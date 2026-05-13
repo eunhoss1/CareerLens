@@ -10,7 +10,8 @@
 CI는 아래 상황에서 자동 실행됩니다.
 
 - Pull request 생성 또는 업데이트
-- `main`, `master`, `dev` 브랜치에 push
+- 모든 브랜치에 push
+- GitHub Actions 화면에서 수동 실행
 
 검증 항목:
 
