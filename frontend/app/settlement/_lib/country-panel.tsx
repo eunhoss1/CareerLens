@@ -35,7 +35,7 @@ export function CountryPanel({
 
       <div className="mt-5 grid gap-4">
         {Object.entries(groupedByCategory).map(([category, categoryItems]) => (
-          <section key={category} className="border border-line bg-panel p-4">
+          <section key={category} className="rounded-xl border border-line bg-panel p-4">
             <h3 className="text-lg font-semibold text-night">{category}</h3>
             <div className="mt-4 space-y-3">
               {categoryItems.map((item) => (

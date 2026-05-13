@@ -139,7 +139,7 @@ export default function DepartureRoadmapPage() {
                 {plan.flight_offers.length > 0 && (
                   <div className="mt-5 grid gap-3">
                     {plan.flight_offers.map((offer, index) => (
-                      <div key={`${offer.provider}-${offer.departure_at}-${index}`} className="border border-line bg-white p-4">
+                      <div key={`${offer.provider}-${offer.departure_at}-${index}`} className="rounded-xl border border-line bg-white p-4">
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div>
                             <p className="text-sm font-semibold text-night">
@@ -152,7 +152,7 @@ export default function DepartureRoadmapPage() {
                               {offer.carrier_name || offer.carrier_code} {offer.flight_number} · {offer.duration || "소요시간 미기재"}
                             </p>
                           </div>
-                          <div className="border border-line bg-panel px-3 py-2 text-right">
+                          <div className="rounded-xl border border-line bg-panel px-3 py-2 text-right">
                             <p className="text-xs font-bold text-slate-500">{offer.provider}</p>
                             <p className="mt-1 text-base font-semibold text-night">
                               {offer.currency} {offer.total_price || "미기재"}
@@ -166,7 +166,7 @@ export default function DepartureRoadmapPage() {
                 )}
                 {/* <div className="mt-5 grid gap-3 md:grid-cols-3">
                   {plan.flight_api_providers.map((provider) => (
-                    <div key={provider.provider} className="border border-line bg-panel p-4">
+                    <div key={provider.provider} className="rounded-xl border border-line bg-panel p-4">
                       <p className="text-sm font-semibold text-night">{provider.provider}</p>
                       <p className="mt-2 text-xs font-bold text-brand">{provider.integrationStatus}</p>
                       <p className="mt-2 text-sm leading-6 text-slate-600">{provider.useCase}</p>

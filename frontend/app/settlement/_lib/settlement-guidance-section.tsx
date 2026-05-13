@@ -72,7 +72,7 @@ function SettlementBriefCard({
           </div>
           <ScoreBar label="전체 정착 준비율" value={guidance.completion_rate} tone={guidance.completion_rate >= 70 ? "success" : "warning"} />
           <p className="text-sm leading-6 text-slate-700">{guidance.summary}</p>
-          <div className="border border-line bg-panel p-4">
+          <div className="rounded-xl border border-line bg-panel p-4">
             <p className="text-xs font-bold text-slate-500">우선 액션</p>
             <ol className="mt-3 space-y-2">
               {guidance.priority_actions.map((action, index) => (
@@ -86,7 +86,7 @@ function SettlementBriefCard({
           <p className="text-xs leading-5 text-slate-500">{guidance.disclaimer}</p>
         </div>
       ) : (
-        <div className="mt-5 border border-dashed border-line bg-panel p-5 text-sm leading-6 text-slate-600">
+        <div className="mt-5 rounded-xl border border-dashed border-line bg-panel p-5 text-sm leading-6 text-slate-600">
           {isGuidanceLoading ? "정착 준비 요약을 생성하고 있습니다." : "요약을 생성하면 현재 체크리스트 기준의 다음 액션이 표시됩니다."}
         </div>
       )}
@@ -109,7 +109,7 @@ function CountryRiskCard({
       <h2 className="mt-3 text-2xl font-semibold text-night">국가별 준비 상태</h2>
       <div className="mt-5 space-y-3">
         {(guidance?.country_summaries ?? countryFallbackSummaries(groupedByCountry)).map((country) => (
-          <div key={country.country} className="border border-line bg-panel p-4">
+          <div key={country.country} className="rounded-xl border border-line bg-panel p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-base font-semibold text-night">{country.country}</p>
