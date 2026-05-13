@@ -27,7 +27,7 @@ public class JobPostingService {
                 .collect(Collectors.toCollection(ArrayList::new));
     }
 
-    private JobPostingDto toDto(JobPosting job) {
+    public JobPostingDto toDto(JobPosting job) {
         LocalDate today = LocalDate.now();
         LocalDate deadline = job.getApplicationDeadline();
         Integer daysUntilDeadline = deadline == null ? null : (int) ChronoUnit.DAYS.between(today, deadline);
@@ -53,7 +53,7 @@ public class JobPostingService {
                 job.getSalaryScore(),
                 job.getWorkLifeBalanceScore(),
                 job.getCompanyValueScore(),
-                job.getEvaluationRationale()
+                displayRationale(job)
         );
     }
 
@@ -75,5 +75,42 @@ public class JobPostingService {
 
     private List<String> mutableList(List<String> values) {
         return values == null ? new ArrayList<>() : new ArrayList<>(values);
+    }
+
+    private String displayRationale(JobPosting job) {
+        String rationale = job.getEvaluationRationale();
+        if (rationale != null
+                && !rationale.isBlank()
+                && !rationale.contains("Greenhouse")
+                && !rationale.contains("Job Board API")) {
+            return rationale;
+        }
+
+        String company = valueOrDefault(job.getCompanyName(), "해당 기업");
+        String title = valueOrDefault(job.getJobTitle(), "해당 포지션");
+        String country = valueOrDefault(job.getCountry(), "국가 미기재");
+        String family = valueOrDefault(job.getJobFamily(), "직무");
+        String skills = firstSkills(job.getRequiredSkills());
+        return company + "의 " + title + " 공고입니다. " + country + " 기준 " + family
+                + " 직무로 분류되며, 핵심 확인 역량은 " + skills
+                + "입니다. 공고 원문에서 세부 자격요건과 근무 조건을 함께 확인하는 것을 권장합니다.";
+    }
+
+    private String firstSkills(List<String> skills) {
+        if (skills == null || skills.isEmpty()) {
+            return "공고 본문에서 확인되는 직무 역량";
+        }
+        List<String> firstSkills = new ArrayList<>();
+        for (String skill : skills) {
+            if (firstSkills.size() >= 4) {
+                break;
+            }
+            firstSkills.add(skill);
+        }
+        return String.join(", ", firstSkills);
+    }
+
+    private String valueOrDefault(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 }

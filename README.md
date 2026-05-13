@@ -1,38 +1,50 @@
 # CareerLens
 
-CareerLens는 해외취업을 준비하는 구직자를 위한 데이터 기반 맞춤채용정보 추천/진단 플랫폼 프로토타입입니다.
+CareerLens는 해외취업을 준비하는 구직자의 프로필과 채용공고, 직원 표본, PatternProfile을 비교해 맞춤 채용 진단 결과와 준비 로드맵을 제공하는 캡스톤 프로토타입입니다.
 
-단순히 채용공고를 보여주는 서비스가 아니라, 사용자의 해외취업 프로필과 공고별 직무 패턴을 비교해 추천 결과를 만들고, 부족 요소를 커리어 플래너 과제로 전환한 뒤, 사용자가 만든 산출물을 검증해 준비 증빙 배지까지 누적하는 흐름을 목표로 합니다.
-
-## 1. 현재 서비스 흐름
-
-현재 구현된 핵심 시연 흐름은 다음과 같습니다.
+단순히 채용공고 목록을 보여주는 서비스가 아니라, 다음 흐름을 목표로 합니다.
 
 ```txt
 회원가입/로그인
 -> 마이페이지 해외취업 프로필 입력
--> 전체 공고 조회 또는 맞춤추천 진단
--> 공고 + PatternProfile + 사용자 프로필 비교
+-> 전체 공고 조회 또는 맞춤채용정보 추천 진단
+-> JobPosting + PatternProfile + UserProfile 비교
 -> DiagnosisResult 저장
--> 커리어 플래너 로드맵 생성
--> PlannerTask 산출물/검증 기준 확인
--> AI 문서 분석 또는 룰 기반 검증
--> VerificationBadge 발급
--> 마이페이지 검증 배지 확인
--> 지원 관리/정착 지원으로 확장
--> 출국로드맵/행정로드맵/자료실로 연결
+-> 커리어 개발 플래너/취업 로드맵 생성
+-> PlannerTask 산출물 검증
+-> 지원 관리, 출국 로드맵, 정착 지원으로 확장
 ```
 
-## 2. 프로젝트 구조
+## 프로젝트 구조
 
 ```txt
-backend/     Spring Boot + Spring Data JPA + MySQL
+backend/     Spring Boot + Spring Data JPA + MySQL/MariaDB
 frontend/    Next.js + React + TypeScript + Tailwind CSS
-seed-data/   seed 데이터, CSV 템플릿, 정규화 CSV
-docs/        프로젝트 문서
+seed-data/   seed 데이터, CSV 템플릿, 전처리 결과
+docs/        설계/운영/발표/팀 공유 문서
 ```
 
-## 3. 주요 도메인
+## 주요 버전
+
+### Backend
+
+- Java: 17
+- Spring Boot: 3.3.5
+- Build Tool: Maven
+- ORM: Spring Data JPA / Hibernate
+- DB Driver: MySQL Connector/J, MariaDB Java Client
+- CSV: Apache Commons CSV 1.11.0
+- PDF/DOCX 분석: PDFBox 3.0.3, Apache POI 5.2.5
+
+### Frontend
+
+- Next.js: 16.2.4
+- React: 18.3.1
+- TypeScript: 5.6.3
+- Tailwind CSS: 3.4.14
+- Node 타입: `@types/node` 22.9.0
+
+## 주요 도메인
 
 ```txt
 User
@@ -49,52 +61,133 @@ VerificationRequest
 VerificationBadge
 ```
 
-## 4. 현재 구현된 주요 기능
+## 현재 구현된 주요 기능
 
-### 사용자/인증
+### 1. 사용자 진입/프로필 관리
 
 - 회원가입
 - 로그인
 - 사용자별 프로필 저장/조회
+- 관리자 계정 구분
 - 마이페이지 해외취업 프로필 입력
 
-### 맞춤채용정보 추천 진단
+프로필 입력 항목은 현재 외부공고 API와 추천 진단 기준을 고려해 다음 수준까지 구성되어 있습니다.
 
-- 공고와 사용자 프로필 직접 비교가 아니라 `JobPosting + PatternProfile + UserProfile` 비교 구조
-- 국가/직무군/언어/경력 기반 1차 필터링
-- 기술, 경력, 언어, 학력/자격, 포트폴리오 적합도 계산
-- 합격 가능성, 연봉, 워라밸, 기업 가치, 직무 적합도 가중치 반영
-- 추천 결과와 부족 요소 저장
-- 전체 공고에서도 특정 공고를 선택해 로드맵 생성 가능
+- 희망 국가/도시
+- 희망 직무군/직무명
+- 선호 근무형태
+- 입사 가능 시점
+- 총 경력/직무 관련 경력
+- 대표 프로젝트 경험
+- 산업/도메인 경험
+- 기술스택
+- 자격증/시험
+- 영어/일본어/대표 언어 수준
+- 최종 학력/전공
+- 희망 연봉
+- 비자 스폰서십 필요 여부
+- GitHub/포트폴리오 보유 여부
+- 선호 조건
+- 추천 우선순위: 연봉, 합격 가능성, 워라밸, 기업 가치, 직무 적합도
 
-### 전체 공고 조회
+현재 입력값은 1차 추천 진단에는 충분합니다. 이후 고도화 시에는 `근로허가 상태`, `relocation 가능 여부`, `선호 통화`, `최저 연봉`, `지원 제외 국가`, `희망 seniority`를 추가하는 것이 좋습니다.
 
-- seed/DB 기반 전체 공고 조회
+### 2. 맞춤채용정보 추천 진단
+
+CareerLens 추천 진단은 단순 사용자-공고 직접 비교가 아닙니다.
+
+```txt
+UserProfile
+-> JobPosting 1차 필터링
+-> 공고별 PatternProfile 조회
+-> 사용자 프로필과 직무 패턴 비교
+-> 부족 요소 분석
+-> 추천 공고/준비도/지원 판단 결과 생성
+-> DiagnosisResult 저장
+-> 커리어 플래너 생성으로 연결
+```
+
+비교 항목:
+
+- 기술스택
+- 경력
+- 언어
+- 학력/자격
+- 포트폴리오/GitHub/프로젝트 경험
+- 사용자가 선택한 우선순위
+- 공고별 평가 가중치
+
+### 3. 전체 공고 조회
+
+- DB에 저장된 전체 공고 조회
 - 국가/직무군/검색 필터
-- 공고별 마감기한 표시
 - 공고별 로드맵 생성
+- 외부 Greenhouse API로 가져온 공고 표시
+- 연봉/워라밸/기업가치 점수가 없으면 근거 부족 상태로 표시
 
-### 커리어 플래너
+### 4. Greenhouse 외부 공고 API 연동
+
+Greenhouse Job Board API는 전체 채용공고 검색 API가 아니라 회사별 공개 Job Board API입니다.
+
+예를 들어 `airbnb` board token은 Airbnb 공고만 가져옵니다. 따라서 CareerLens는 여러 회사의 board token을 관리자 화면에 등록하고, 관리자가 미리보기 후 필요한 공고만 DB에 저장하는 방식으로 운영합니다.
+
+관리자 화면:
+
+```txt
+/jobs/import
+```
+
+현재 기본 프리셋:
+
+```txt
+airbnb
+stripe
+reddit
+databricks
+figma
+greenhouse
+anthropic
+doordashusa
+asana
+discord
+duolingo
+gitlab
+mixpanel
+webflow
+```
+
+정책:
+
+- Notion/Coinbase는 2026-05-09 기준 공개 Greenhouse Job Board API에서 404가 확인되어 기본 프리셋에서 제외했습니다.
+- 외부 공고는 무조건 DB에 저장하지 않습니다.
+- 관리자가 체크한 공고만 DB 저장 대상입니다.
+- 자동 동기화는 신규 공고를 자동 저장하지 않고, 이미 DB에 저장된 공고만 최신 원문 기준으로 업데이트합니다.
+- 공개 API에 명확한 근거가 없는 마감일, 워라밸, 기업가치 점수는 임의 생성하지 않습니다.
+- 연봉은 `metadata.currency_range` 또는 공고 본문의 `Compensation / Pay Range / Annual Pay Range`에서 추출합니다.
+- 비자는 sponsorship/work authorization 문구가 있을 때만 분류하고, 없으면 `Not specified in public posting`으로 둡니다.
+
+관련 문서:
+
+- `docs/greenhouse-board-token-registry.md`
+- `docs/external-job-provider-greenhouse.md`
+
+### 5. 커리어 플래너/취업 로드맵
 
 - 추천 진단 결과 기반 로드맵 생성
-- 준비도에 따라 4주/8주/12주 로드맵 구성
-- 과제별 설명, 기대 산출물, 검증 기준, 예상 시간, 난이도 제공
-- 과제 상태 변경
+- 4주/8주/12주 기간별 과제 생성
+- 과제별 설명, 예상 산출물, 검증 기준, 예상 시간 제공
+- AI API가 활성화되어 있으면 AI가 주차별 과제 초안을 생성
+- AI API가 없거나 실패하면 rule-based fallback 사용
 
-### AI 문서 분석/검증
+### 6. AI 문서 분석/검증
 
 - 텍스트 입력 분석
 - GitHub repository URL 분석
 - PDF/DOCX 업로드 분석
-- AI API가 없거나 실패하면 rule-based fallback 사용
-- 검증 점수, 좋은 점, 보완점 반환
+- PlannerTask와 VerificationRequest 연결
+- 검증 점수 기반 VerificationBadge 발급
 
-### 검증 배지
-
-- 검증 점수 기반 배지 발급
-- 마이페이지에서 사용자별 검증 배지 확인
-
-발급 기준:
+배지 기준:
 
 ```txt
 60점 이상: TASK_VERIFIED_BRONZE
@@ -103,19 +196,16 @@ VerificationBadge
 GitHub repository 분석 75점 이상: GITHUB_PROJECT_VERIFIED
 ```
 
-### 지원 관리/정착 지원
+### 7. 지원 관리/정착 지원/출국 로드맵
 
 - 로드맵에서 지원 관리 기록 생성
 - 지원 상태 관리
 - 국가별 정착 체크리스트 조회/상태 변경
 - 정착 준비 요약 생성
-- 출국로드맵에서 입사 예정일 기준 출국 후보 기간 계산
-- Amadeus 공식 항공 API 연동 가능
-- 행정로드맵에서 비자/서류/초기 행정 준비 흐름 확인
+- 출국 로드맵에서 입사 예정일 기준 출국 준비 기간 계산
+- Duffel/Amadeus 항공 API 연동을 고려한 확장 구조
 
-## 5. 주요 화면
-
-실제 연결된 화면:
+## 주요 화면
 
 ```txt
 /
@@ -124,6 +214,7 @@ GitHub repository 분석 75점 이상: GITHUB_PROJECT_VERIFIED
 /mypage
 /mypage/badges
 /jobs
+/jobs/import
 /jobs/recommendation
 /planner
 /planner/[roadmapId]
@@ -140,18 +231,7 @@ GitHub repository 분석 75점 이상: GITHUB_PROJECT_VERIFIED
 /recommendations/feed
 ```
 
-확장 예정 또는 placeholder 성격의 화면:
-
-```txt
-/jobs/popular
-/companies
-/mypage/saved-jobs
-/mypage/settings
-/resources/notices
-/resources/qna
-```
-
-## 6. 주요 API
+## 주요 API
 
 ### Auth
 
@@ -170,7 +250,11 @@ PUT /api/users/{userId}/profile
 ### Jobs
 
 ```txt
-GET /api/jobs
+GET  /api/jobs
+GET  /api/jobs/external/greenhouse/preview
+POST /api/jobs/external/greenhouse/import
+GET  /api/jobs/external/greenhouse/sync/status
+POST /api/jobs/external/greenhouse/sync/run
 ```
 
 ### Recommendations
@@ -223,312 +307,237 @@ PATCH /api/settlement/checklists/{itemId}/status
 POST /api/departure/plan
 ```
 
-## 7. 데이터 정책
+## 실행 방법
 
-현재 단계에서는 외부 공고 API, ATS fetch/sync, LinkedIn scraping, Greenhouse 연동, 자동 수집 로직을 사용하지 않습니다.
+### 1. DB 준비
 
-모든 공고/직원 표본/패턴 데이터는 `seed-data` 또는 수동 입력 기반 더미 데이터입니다.
-
-현재 seed-data 구성:
-
-```txt
-공고: 24개
-직원 표본: 120개
-가상 합격자 패턴: 480개
-최종 PatternProfile: 72개
-```
-
-사용 파일:
-
-```txt
-seed-data/processed/job-postings.csv
-seed-data/processed/employee-samples.csv
-seed-data/processed/accepted-candidate-patterns.csv
-seed-data/processed/pattern-profiles.csv
-```
-
-공고에는 2026-05-20부터 2026-07-31까지 다양한 마감기한이 포함되어 있습니다.
-
-## 8. AI 활용 범위
-
-추천 점수 계산은 AI가 아니라 rule-based 로직입니다.
-
-AI는 다음 보조 기능에 사용합니다.
-
-```txt
-커리어 플래너 과제 생성
-문서/산출물 검증
-GitHub repository 분석 보조
-PDF/DOCX 내용 분석 보조
-추천 결과 설명/다음 액션 설명
-```
-
-AI API 키가 없거나 호출이 실패하면 rule-based fallback으로 동작합니다.
-
-환경변수:
-
-```txt
-AI_PLANNER_ENABLED=true
-OPENAI_API_KEY=발급받은_API_KEY
-OPENAI_MODEL=gpt-5.4
-```
-
-API 키는 절대 GitHub에 올리지 않습니다.
-
-항공편 후보 조회는 Duffel을 1순위 공식 API 후보로 둡니다.
-
-Duffel을 사용할 경우:
-
-```txt
-TRAVEL_PROVIDER=duffel
-DUFFEL_ENABLED=true
-DUFFEL_ACCESS_TOKEN=duffel_test_...
-DUFFEL_BASE_URL=https://api.duffel.com
-DUFFEL_VERSION=v2
-DUFFEL_SUPPLIER_TIMEOUT_MILLIS=10000
-```
-
-Amadeus는 legacy optional입니다.
-
-2026년 5월 확인 기준으로 Amadeus Self-Service 신규 등록이 제한되고 2026년 7월 17일 decommission 예정 공지가 표시되고 있습니다.
-따라서 아래 설정은 기존 키를 이미 보유한 경우에만 선택적으로 사용합니다.
-키가 없어도 출국로드맵은 규칙 기반으로 정상 동작합니다.
-
-```txt
-AMADEUS_ENABLED=true
-AMADEUS_CLIENT_ID=발급받은_API_KEY
-AMADEUS_CLIENT_SECRET=발급받은_API_SECRET
-AMADEUS_BASE_URL=https://test.api.amadeus.com
-AMADEUS_CURRENCY_CODE=KRW
-```
-
-자세한 설정은 아래 문서를 참고합니다.
-
-```txt
-docs/ai-api-setup.md
-docs/duffel-flight-api-integration.md
-docs/departure-flight-api-integration.md
-```
-
-## 9. 개발 버전
-
-Backend:
-
-```txt
-Java: 17
-Spring Boot: 3.3.5
-Database: MySQL
-Build Tool: Maven
-Backend Port: 8080
-```
-
-Frontend:
-
-```txt
-Next.js: 16.2.4
-React: 18.3.1
-TypeScript: 5.x
-Tailwind CSS: 3.x
-Frontend Port: 3000
-```
-
-자세한 버전은 아래 문서를 참고합니다.
-
-```txt
-docs/team-versions.md
-```
-
-## 10. 로컬 DB 설정
-
-MySQL 또는 MariaDB에서 DB를 먼저 생성합니다.
+MySQL 예시:
 
 ```sql
-CREATE DATABASE careerlens DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE careerlens CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-기본 설정 파일:
+MariaDB도 사용 가능합니다. 팀원별 DB가 다르면 환경변수로 맞춥니다.
 
-```txt
-backend/src/main/resources/application.yml
+### 2. Backend 실행
+
+IntelliJ 실행 권장:
+
+- Module: `backend`
+- Main class: `com.careerlens.backend.CareerLensBackendApplication`
+- Java SDK: 17
+
+환경변수 예시:
+
+```properties
+DB_URL=jdbc:mysql://localhost:3306/careerlens?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+DB_USERNAME=root
+DB_PASSWORD=1234
+DB_DRIVER=com.mysql.cj.jdbc.Driver
+DB_DDL_AUTO=update
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+ADMIN_LOGIN_IDS=admin,careerlens-admin
 ```
 
-기본 DB 설정은 환경변수 기반입니다.
+MariaDB 예시:
 
-```yaml
-spring:
-  datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/careerlens?serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:1234}
-    driver-class-name: ${DB_DRIVER:com.mysql.cj.jdbc.Driver}
-  jpa:
-    hibernate:
-      ddl-auto: ${DB_DDL_AUTO:update}
-```
-
-팀 환경에서는 DB 계정/비밀번호를 파일에 직접 수정하지 말고 환경변수로 설정합니다.
-
-MariaDB 사용 예시:
-
-```env
+```properties
 DB_URL=jdbc:mariadb://localhost:3306/careerlens?useUnicode=true&characterEncoding=utf8
 DB_USERNAME=root
-DB_PASSWORD=본인비밀번호
+DB_PASSWORD=1234
 DB_DRIVER=org.mariadb.jdbc.Driver
 DB_DDL_AUTO=update
 ```
 
-테이블은 직접 만들지 않습니다.
-`careerlens` DB만 만들어두면 백엔드 실행 시 JPA가 엔티티 기준으로 테이블을 자동 생성합니다.
-
-프론트 포트가 조원마다 다르면 CORS 허용 origin을 환경변수로 설정할 수 있습니다.
-
-```env
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
-```
-
-자세한 내용:
-
-```txt
-docs/local-db-setup.md
-```
-
-## 11. 실행 방법
-
-Backend:
-
-```bash
-cd backend
-mvn spring-boot:run
-```
-
-Frontend:
+### 3. Frontend 실행
 
 ```bash
 cd frontend
 npm install
-npm run dev -- --port 3000
+npm run dev
 ```
 
-접속 주소:
+기본 주소:
 
 ```txt
 http://localhost:3000
 ```
 
-## 12. 데모 계정
+프론트에서 백엔드 주소를 바꾸려면:
 
-seed-data 로딩 시 데모 계정이 생성됩니다.
-
-```txt
-login_id: demo
-password: CareerLens123!
+```properties
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
 ```
 
-## 13. 권장 시연 순서
+## AI API 설정
 
-```txt
-1. 메인 페이지 진입
-2. 회원가입 또는 demo 로그인
-3. 마이페이지에서 프로필 입력/확인
-4. 맞춤채용정보 추천 진단 실행
-5. 추천 공고 카드와 부족 요소 확인
-6. 커리어 플래너 생성
-7. 로드맵 상세에서 과제/기대 산출물/검증 기준 확인
-8. AI 문서 분석 페이지 이동
-9. 텍스트 또는 GitHub repository URL 제출
-10. 검증 결과와 발급 배지 확인
-11. 마이페이지 검증 배지 화면 확인
-12. 지원 관리로 이동해 지원 파이프라인 확인
-13. 출국로드맵에서 입사 예정일 기준 일정 생성
-14. 행정로드맵에서 비자/행정 준비 흐름 확인
-15. 정착 지원 체크리스트 확인
-16. 자료실/비자정보/국가정보 연결 확인
+AI API 키는 프론트가 아니라 백엔드 환경변수에 넣습니다. API 키를 GitHub에 커밋하면 안 됩니다.
+
+OpenAI 예시:
+
+```properties
+AI_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-5.4
+AI_PLANNER_ENABLED=true
 ```
 
-## 14. 참고 문서
+현재 AI를 붙이는 것이 적절한 위치:
 
-```txt
-docs/current-implementation-status.md
-docs/recommendation-service.md
-docs/recommendation-data-contract.md
-docs/pattern-profile-guide.md
-docs/pattern-scoring-guide.md
-docs/csv-data-pipeline.md
-docs/ai-api-setup.md
-docs/departure-flight-api-integration.md
-docs/demo-scenario-and-script.md
-docs/local-db-setup.md
-docs/team-versions.md
+- 커리어 플래너 주차별 과제 생성
+- 이력서/자기소개서/포트폴리오 분석
+- GitHub repository 분석
+- 공고 요약/검수 보조
+- PatternProfile 생성 프롬프트 보조
+
+현재 마이페이지 프로필 입력 화면 자체에는 AI를 바로 붙이지 않는 것이 좋습니다. 사용자가 직접 입력한 정형 데이터가 추천 진단의 기준이 되어야 하기 때문입니다. AI는 입력값을 자동 판단하는 쪽보다, 입력 이후 해석/요약/검증/로드맵 생성에 붙이는 편이 더 설득력 있습니다.
+
+## 인증/JWT 설정
+
+로그인/회원가입 성공 시 백엔드는 JWT access token을 발급합니다. 프론트는 사용자 정보와 함께 token을 저장하고, 관리자 API 요청에는 `Authorization: Bearer {token}` 헤더를 보냅니다.
+
+환경변수 예시:
+
+```properties
+JWT_SECRET=충분히_긴_랜덤_문자열
+JWT_ISSUER=careerlens
+JWT_EXPIRATION_MINUTES=480
+ADMIN_LOGIN_IDS=admin,careerlens-admin
 ```
 
-## 15. 현재 주의할 점
-
-- 실제 크롤링은 구현하지 않았습니다.
-- LinkedIn 직원 자동 수집은 하지 않습니다.
-- 공고/직원/패턴 데이터는 seed/manual 기반입니다.
-- 인증은 캡스톤 시연용 수준입니다.
-- AI는 보조 기능이며 합격 가능성을 보장하지 않습니다.
-- PDF가 이미지 기반이면 텍스트 추출이 어려울 수 있습니다.
-- 실제 기업 지원 제출, 결제, 실시간 비자 최신 판단 기능은 없습니다.
-- 항공편 API는 Amadeus 공식 API를 사용할 수 있지만, 예약/가격 보장 기능은 아닙니다.
-
-## 16. 프로젝트 한 줄 설명
+현재 JWT로 보호하는 API:
 
 ```txt
-CareerLens는 공고 추천에서 끝나는 서비스가 아니라,
-추천 결과를 준비 과제로 바꾸고,
-사용자가 만든 산출물을 검증해서
-해외취업 준비 증빙까지 누적하는 데이터 기반 커리어 진단 플랫폼입니다.
+/api/jobs/external/**
 ```
 
-## 17. 현재 작업 진행도
+주의:
 
-2026년 5월 7일 기준으로 보면, CareerLens는 아이디어 초안 단계는 지나갔고
-중간발표에서 실제로 흐름을 보여줄 수 있는 시연용 프로토타입 단계에 들어와 있습니다.
+- 기존 브라우저 localStorage에 저장된 로그인 정보에는 token이 없을 수 있습니다.
+- `/jobs/import`에서 401이 뜨면 로그아웃하거나 localStorage를 지운 뒤 다시 로그인해야 합니다.
+- 공유 서버나 배포 환경에서는 `JWT_SECRET` 기본값을 그대로 쓰면 안 됩니다.
 
-개인적으로 보는 진행도는 다음과 같습니다.
+관련 문서:
 
 ```txt
-중간발표 시연용 완성도: 75~80%
-1번 맞춤채용정보 추천 진단 서비스: 75~80%
-커리어 플래너 연결 흐름: 65~70%
-AI 문서 분석/검증 배지 흐름: 55~60%
-전체 플랫폼 완성도: 45~55%
-상용 서비스 기준 완성도: 25~35%
+docs/auth-jwt-security-update.md
+docs/auth-authorization-guide.md
 ```
 
-현재 강점:
+## Greenhouse 자동 동기화 설정
 
-- 회원가입, 로그인, 마이페이지, 프로필 저장 흐름이 연결되어 있음
-- 사용자 프로필과 공고/PatternProfile 기반 추천 진단이 실제 API로 동작함
-- 추천 결과에서 커리어 플래너를 생성할 수 있음
-- 플래너 과제에 기대 산출물과 검증 기준이 포함됨
-- 텍스트, GitHub repository, PDF/DOCX 기반 AI 문서 분석 흐름이 있음
-- 검증 점수 기반 배지 발급 구조가 있음
-- 전체 공고 조회, 지원 관리, 정착 지원까지 메뉴 흐름이 잡혀 있음
+```properties
+GREENHOUSE_SYNC_ENABLED=true
+GREENHOUSE_SYNC_BOARD_TOKENS=airbnb,stripe,reddit,databricks,figma,greenhouse,anthropic,doordashusa,asana,discord,duolingo,gitlab,mixpanel,webflow
+GREENHOUSE_SYNC_DEFAULT_COUNTRY=ALL
+GREENHOUSE_SYNC_DEFAULT_JOB_FAMILY=ALL
+GREENHOUSE_SYNC_LIMIT_PER_BOARD=50
+GREENHOUSE_SYNC_CREATE_PATTERN_PROFILE=true
+GREENHOUSE_SYNC_DEFAULT_DEADLINE_OFFSET_DAYS=0
+GREENHOUSE_SYNC_FIXED_DELAY_MILLIS=21600000
+```
 
-아직 부족한 부분:
+주의:
 
-- 관리자용 공고/직원표본/패턴 등록 화면은 아직 없음
-- 공고 데이터는 자동 수집이 아니라 seed/manual 기반임
-- 지원 관리와 정착 지원은 1차 시연용 수준임
-- AI 결과 품질을 안정화하기 위한 프롬프트/검증 로직 보강이 더 필요함
-- 실제 배포, 보안, 권한 관리, 테스트 코드는 상용 수준이 아님
-- 크롤링이나 외부 공고 API 연동은 법적/정책 검토 후 별도 설계가 필요함
+- `GREENHOUSE_SYNC_ENABLED=true`로 켜도 신규 공고가 자동으로 무조건 저장되지는 않습니다.
+- 자동 동기화는 이미 관리자가 검수해서 DB에 저장한 공고의 원문/정규화 정보를 갱신하는 용도입니다.
+- 신규 공고 저장은 `/jobs/import` 관리자 화면에서 미리보기 후 체크박스로 선택해서 진행합니다.
 
-다음 우선순위:
+## 팀 작업 규칙
+
+브랜치 구조:
 
 ```txt
-1. AI 플래너 결과 품질 안정화
-2. GitHub/PDF/DOCX 검증 결과 UI 보강
-3. 공고/직원표본/PatternProfile 데이터 관리 방식 문서화
-4. 지원 관리와 정착 지원을 실제 시연 흐름처럼 보강
-5. 관리자용 seed 데이터 등록/검수 흐름 설계
-6. 발표용 시연 시나리오와 대본 정리
+main
+dev
+feature/기능명
 ```
 
-중간발표에서는 “완성된 상용 서비스”가 아니라,
-해외취업 준비 과정을 데이터 기반으로 진단하고 실행 로드맵으로 연결하는
-서비스 플랫폼의 핵심 흐름을 구현했다는 방향으로 설명하는 것이 적절합니다.
+권장 흐름:
+
+```txt
+1. dev 최신화
+2. feature/기능명 브랜치 생성
+3. 작업
+4. 변경 파일과 작업 내용을 노션에 공유
+5. 공통 파일 또는 다른 담당자 파일을 건드린 경우 담당자에게 먼저 공유
+6. PR 또는 dev merge
+7. 카톡에 반영 사실 공유
+```
+
+노션 공유 시 최소 작성 항목:
+
+```txt
+작업 브랜치:
+작업 요약:
+변경 파일:
+영향받는 화면/API:
+환경변수 변경 여부:
+테스트 방법:
+남은 TODO:
+```
+
+## 현재 주의사항
+
+- 외부 공고 API는 회사별 Greenhouse board token 기반입니다. 전체 글로벌 공고 검색 API가 아닙니다.
+- 공고별 연봉/비자/마감일은 원문 공개 여부에 따라 비어 있을 수 있습니다.
+- 공고 마감일은 Greenhouse 공개 API에서 제공하지 않는 경우가 많으므로 임의 생성하지 않습니다.
+- 추천 진단에서 외부 공고의 `salary_score`, `work_life_balance_score`, `company_value_score`는 `null`일 수 있습니다.
+- 400/500 에러가 화면에 그대로 노출되는 부분은 이후 전역 예외 처리와 사용자 친화 메시지로 개선해야 합니다.
+- API 키는 절대 README, docs, GitHub, 카카오톡에 원문으로 공유하지 않습니다.
+
+## 노션 문서 권장 구조
+
+```txt
+프로젝트 개요
+- CareerLens 프로젝트 개요
+
+기획 문서
+- 요구사항 명세서
+- 서비스 기능 정의
+- 사용자 흐름 정리
+
+설계 문서
+- 캡스톤 디자인 설계안
+- DB 설계
+- API 설계
+
+화면 설계
+- 화면 정의서
+- 메인페이지 스토리보드
+- 맞춤채용정보 추천 진단 화면 흐름
+
+데이터 문서
+- 공고 데이터 정리
+- 합격자 표본 정리
+- PatternProfile 정리
+- Greenhouse 외부 공고 연동 정리
+
+알고리즘 문서
+- 추천 알고리즘 정리
+- 점수 산정 기준
+- 우선순위 가중치 기준
+
+개발 문서
+- 프론트엔드 구조 정리
+- 백엔드 구조 정리
+- 실행 방법 정리
+- 환경변수 설정 가이드
+
+회의록
+- N월 N주차 회의록
+- 교수님 피드백 정리
+
+트러블 슈팅
+- CORS/DB/Greenhouse/API 키/빌드 오류 기록
+
+가이드 문서
+- 시연 순서 가이드
+- 팀원 작업 가이드
+
+발표/제출 문서
+- 중간발표 자료
+- 최종발표 자료
+- 발표 대본
+- 제출용 캡처 정리
+```

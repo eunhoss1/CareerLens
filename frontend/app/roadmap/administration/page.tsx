@@ -101,10 +101,10 @@ export default function AdministrationRoadmapPage() {
   const doneCount = adminItems.filter((item) => item.status === "DONE").length;
   const inProgressCount = adminItems.filter((item) => item.status === "IN_PROGRESS").length;
   const completionRate = adminItems.length === 0 ? 0 : Math.round((doneCount / adminItems.length) * 100);
-  const groupedByCountry = adminItems.reduce<Record<string, SettlementChecklistItem[]>>((acc, item) => {
-    acc[item.country] = [...(acc[item.country] ?? []), item];
-    return acc;
-  }, {});
+  // const groupedByCountry = adminItems.reduce<Record<string, SettlementChecklistItem[]>>((acc, item) => {
+  //   acc[item.country] = [...(acc[item.country] ?? []), item];
+  //   return acc;
+  // }, {});
 
   return (
     <PageShell>
@@ -112,7 +112,6 @@ export default function AdministrationRoadmapPage() {
       <PageHeader
         kicker="ADMINISTRATION ROADMAP"
         title="행정로드맵"
-        description="비자, 회사 제출 서류, 출국 전 행정 패키지, 입국 후 초기 행정 처리를 하나의 준비 흐름으로 정리합니다."
         actions={
           <>
             <LinkButton href="/roadmap/departure" variant="secondary">출국로드맵으로</LinkButton>
@@ -153,7 +152,7 @@ export default function AdministrationRoadmapPage() {
                 <p className="mt-4 text-sm leading-6 text-slate-600">
                   {guidance?.summary ?? "정착 체크리스트를 기준으로 비자, 출국 전 준비, 초기 행정 항목을 정리합니다."}
                 </p>
-                <div className="mt-5 border border-line bg-panel p-4">
+                <div className="mt-5 rounded-xl border border-line bg-panel p-4">
                   <p className="text-xs font-bold text-slate-500">우선 확인 항목</p>
                   <ul className="mt-3 space-y-2">
                     {(guidance?.priority_actions ?? adminItems.slice(0, 4).map((item) => `${item.country} - ${item.checklist_title}`)).slice(0, 4).map((action) => (
@@ -171,7 +170,7 @@ export default function AdministrationRoadmapPage() {
                 />
                 <div className="mt-5 grid gap-3 md:grid-cols-2">
                   {officialSourceCards.map((card) => (
-                    <div key={card.country} className="border border-line bg-panel p-4">
+                    <div key={card.country} className="rounded-xl border border-line bg-panel p-4">
                       <Badge tone="brand">{card.country}</Badge>
                       <h3 className="mt-3 text-base font-semibold text-night">{card.title}</h3>
                       <p className="mt-2 text-sm leading-6 text-slate-600">{card.description}</p>
@@ -191,13 +190,15 @@ export default function AdministrationRoadmapPage() {
                     <p className="text-sm leading-6 text-slate-600">{stage.description}</p>
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
                       {matchingItems(stage.phase, adminItems).map((item) => (
-                        <div key={item.item_id} className="border border-line bg-panel p-4">
+                        <div key={item.item_id} className="rounded-xl border border-line bg-panel p-4">
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="text-sm font-semibold text-night">{item.country} · {item.checklist_title}</p>
                               <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
                             </div>
-                            <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
+                            <Badge tone={statusTone(item.status)} className={item.status === "NOT_STARTED" ? "min-w-[55px] justify-center" : ""}>
+                              {statusLabel(item.status)}
+                            </Badge>
                           </div>
                         </div>
                       ))}
@@ -207,29 +208,31 @@ export default function AdministrationRoadmapPage() {
               </div>
             </section>
 
-            <Card className="p-5">
+            {/* <Card className="p-5">
               <SectionHeader kicker="COUNTRY DOSSIER" title="국가별 행정 항목" />
               <div className="mt-5 grid gap-4 lg:grid-cols-2">
                 {Object.entries(groupedByCountry).map(([country, countryItems]) => (
-                  <div key={country} className="border border-line bg-panel p-4">
+                  <div key={country} className="rounded-xl border border-line bg-panel p-4">
                     <div className="flex items-center justify-between gap-3">
                       <h3 className="text-lg font-semibold text-night">{country}</h3>
                       <Badge tone={countryItems.every((item) => item.status === "DONE") ? "success" : "warning"}>
                         {countryItems.filter((item) => item.status === "DONE").length}/{countryItems.length}
                       </Badge>
                     </div>
-                    <ul className="mt-4 space-y-2">
+                    <ul className="mt-3 space-y-2">
                       {countryItems.map((item) => (
                         <li key={item.item_id} className="flex items-start justify-between gap-3 border-b border-line pb-2 text-sm last:border-b-0 last:pb-0">
                           <span className="leading-6 text-slate-700">{item.checklist_title}</span>
-                          <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
+                          <Badge tone={statusTone(item.status)} className={item.status === "NOT_STARTED" ? "min-w-[55px] justify-center" : ""}>
+                            {statusLabel(item.status)}
+                          </Badge>
                         </li>
                       ))}
                     </ul>
                   </div>
                 ))}
               </div>
-            </Card>
+            </Card> */}
 
             <Card className="p-5">
               <p className="text-xs leading-5 text-slate-500">

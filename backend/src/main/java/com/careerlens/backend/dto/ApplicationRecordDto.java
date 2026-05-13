@@ -21,6 +21,10 @@ public record ApplicationRecordDto(
         String jobTitle,
         @JsonProperty("job_family")
         String jobFamily,
+        @JsonProperty("external_ref")
+        String externalRef,
+        @JsonProperty("application_url")
+        String applicationUrl,
         @JsonProperty("salary_range")
         String salaryRange,
         @JsonProperty("work_type")
@@ -28,8 +32,16 @@ public record ApplicationRecordDto(
         String status,
         @JsonProperty("next_action")
         String nextAction,
+        @JsonProperty("candidate_notes")
+        String candidateNotes,
         @JsonProperty("required_documents")
         List<String> requiredDocuments,
+        @JsonProperty("company_brief")
+        String companyBrief,
+        @JsonProperty("workspace_focus_items")
+        List<String> workspaceFocusItems,
+        @JsonProperty("risk_notes")
+        List<String> riskNotes,
         @JsonProperty("application_deadline")
         LocalDate applicationDeadline,
         @JsonProperty("days_until_deadline")
@@ -51,6 +63,8 @@ public record ApplicationRecordDto(
         @JsonProperty("created_at")
         LocalDateTime createdAt,
         @JsonProperty("updated_at")
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        @JsonProperty("last_activity_at")
+        LocalDateTime lastActivityAt
 ) {
 }

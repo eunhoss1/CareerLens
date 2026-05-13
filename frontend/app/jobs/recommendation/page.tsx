@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
-import { Badge, Button, Card, EmptyState, LinkButton, MetricCard, PageHeader, PageShell, ScoreBar, SelectInput } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, LinkButton, MetricCard, PageHeader, PageShell, ScoreBar } from "@/components/ui";
 import { getStoredUser, type AuthUser } from "@/lib/auth";
 import {
   demoProfile,
@@ -15,10 +15,7 @@ import {
   type UserProfileRequest
 } from "@/lib/recommendation";
 import { createPlannerRoadmap } from "@/lib/planner";
-
-const countries = ["United States", "Japan"];
-const jobFamilies = ["Backend", "Frontend"];
-const languageLevels = ["BASIC", "CONVERSATIONAL", "BUSINESS", "FLUENT", "NATIVE"];
+import { countryLabel, languageLevelLabel } from "@/lib/display-labels";
 
 export default function RecommendationPage() {
   const router = useRouter();
@@ -59,7 +56,7 @@ export default function RecommendationPage() {
       setResult(response);
       setSelectedJobId(response.recommendations[0]?.job_id ?? null);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "추천 진단 중 오류가 발생했습니다.");
+      setErrorMessage(error instanceof Error ? error.message : "적합도 진단 중 오류가 발생했습니다.");
     } finally {
       setIsLoading(false);
     }
@@ -72,7 +69,7 @@ export default function RecommendationPage() {
       const roadmap = await createPlannerRoadmap(diagnosisId);
       router.push(`/planner/${roadmap.roadmap_id}`);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "커리어 개발 플래너 생성 중 오류가 발생했습니다.");
+      setErrorMessage(error instanceof Error ? error.message : "커리어 플래너 생성 중 오류가 발생했습니다.");
     } finally {
       setCreatingPlannerId(null);
     }
@@ -83,35 +80,32 @@ export default function RecommendationPage() {
       <SiteHeader />
       <PageHeader
         kicker="CAREERLENS MATCH"
-        title="맞춤채용정보 추천 진단"
-        description="수동 조사 공고, 익명화 직원 표본, 저장된 PatternProfile을 기준으로 사용자의 해외취업 프로필을 비교합니다. 공고마다 다른 평가 가중치와 사용자 우선순위를 함께 반영해 상위 5개 공고를 추천합니다."
+        title="적합도 진단 서비스"
         actions={
           <>
-            <LinkButton href="/mypage" variant="secondary">마이페이지</LinkButton>
-            <Button type="button" onClick={runDiagnosis} disabled={isLoading}>{isLoading ? "진단 실행 중" : "추천 진단 실행"}</Button>
+            <LinkButton href="/mypage" variant="secondary">프로필 확인</LinkButton>
+            <Button type="button" onClick={runDiagnosis} disabled={isLoading}>{isLoading ? "진단 중" : "적합도 진단 실행"}</Button>
           </>
         }
       />
 
-      <section className="lens-container grid gap-5 py-6 lg:grid-cols-[360px_1fr]">
-        <aside className="space-y-5">
+      <section className="lens-container grid gap-6 py-8 lg:grid-cols-[300px_1fr]">
+        <aside>
           <ProfileCard profile={profile} user={user} />
-          <ProfileControls profile={profile} setProfile={setProfile} disabled={Boolean(user)} />
         </aside>
 
-        <div className="space-y-5">
-          <SummaryBanner result={result} isLoading={isLoading} errorMessage={errorMessage} />
+        <div className="space-y-6">
+          <SummaryBanner result={result} isLoading={isLoading} errorMessage={errorMessage} onRun={runDiagnosis} />
 
           {isLoading && <LoadingState />}
           {!isLoading && !result && (
             <EmptyState
-              title="아직 생성된 추천 결과가 없습니다."
-              description="왼쪽 프로필 조건을 확인하고 추천 진단을 실행하세요. 로그인 사용자는 마이페이지에 저장된 프로필을 기준으로 진단합니다."
-              action={<Button type="button" onClick={runDiagnosis}>추천 진단 실행</Button>}
+              title="아직 생성된 진단 결과가 없습니다."
+              action={<Button type="button" onClick={runDiagnosis}>적합도 진단 실행</Button>}
             />
           )}
           {!isLoading && result && (
-            <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
               <div className="space-y-4">
                 {result.recommendations.map((recommendation, index) => (
                   <RecommendationCard
@@ -138,77 +132,69 @@ export default function RecommendationPage() {
 function ProfileCard({ profile, user }: { profile: UserProfileRequest; user: AuthUser | null }) {
   const priorities = priorityLabels(profile);
   return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-bold tracking-[0.16em] text-brand">USER PROFILE</p>
-          <h2 className="mt-3 text-xl font-semibold text-night">{profile.display_name}</h2>
-          <p className="mt-1 text-sm text-slate-600">{user ? "DB 저장 프로필 기준" : "데모 입력 기준"}</p>
-        </div>
-        <Badge tone="brand">{profile.target_country}</Badge>
+    <Card className="sticky top-5 rounded-2xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+      <div>
+        <p className="text-xs font-extrabold tracking-[0.14em] text-brand">PROFILE DOSSIER</p>
+        <h2 className="mt-3 text-xl font-bold text-night">{profile.display_name}</h2>
       </div>
 
       <dl className="mt-5 grid grid-cols-2 gap-3">
-        <MetricCard label="희망 직무군" value={profile.target_job_family} />
+        <MetricCard label="희망 국가" value={countryLabel(profile.target_country)} />
+        <MetricCard label="직무군" value={profile.target_job_family} />
         <MetricCard label="총 경력" value={`${profile.experience_years ?? 0}년`} />
-        <MetricCard label="관련 경력" value={`${profile.related_experience_years ?? 0}년`} />
-        <MetricCard label="언어 수준" value={profile.language_level} />
+        <MetricCard label="언어" value={languageLevelLabel(profile.language_level)} />
       </dl>
 
-      <div className="mt-5">
-        <p className="text-xs font-semibold text-slate-500">선택 우선순위</p>
+      <div className="mt-5 border-t border-slate-100 pt-4">
+        <p className="text-xs font-semibold text-slate-500">추천 우선순위</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {priorities.map((priority) => <Badge key={priority} tone="success">{priority}</Badge>)}
-          {priorities.length === 0 && <Badge tone="muted">우선순위 없음</Badge>}
+          {priorities.length === 0 && <Badge tone="muted">기본 가중치</Badge>}
         </div>
       </div>
+
+      <LinkButton href="/mypage" variant="secondary" className="mt-5 w-full rounded-lg">
+        프로필 수정
+      </LinkButton>
     </Card>
   );
 }
 
-function ProfileControls({ profile, setProfile, disabled }: { profile: UserProfileRequest; setProfile: (profile: UserProfileRequest) => void; disabled: boolean }) {
-  return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-night">빠른 진단 조건</p>
-          <p className="mt-1 text-xs leading-5 text-slate-600">로그인 사용자는 마이페이지 저장 프로필을 우선 사용합니다.</p>
-        </div>
-        {disabled && <Badge tone="muted">DB 기준</Badge>}
-      </div>
-      <div className="mt-4 space-y-3">
-        <Select label="희망 국가" value={profile.target_country} options={countries} disabled={disabled} onChange={(value) => setProfile({ ...profile, target_country: value })} />
-        <Select label="희망 직무군" value={profile.target_job_family} options={jobFamilies} disabled={disabled} onChange={(value) => setProfile({ ...profile, target_job_family: value })} />
-        <Select label="언어 수준" value={profile.language_level} options={languageLevels} disabled={disabled} onChange={(value) => setProfile({ ...profile, language_level: value })} />
-        <NumberInput label="경력 연차" value={profile.experience_years ?? 0} disabled={disabled} onChange={(value) => setProfile({ ...profile, experience_years: value })} />
-      </div>
-    </Card>
-  );
-}
-
-function SummaryBanner({ result, isLoading, errorMessage }: { result: RecommendationResponse | null; isLoading: boolean; errorMessage: string | null }) {
+function SummaryBanner({
+  result,
+  isLoading,
+  errorMessage,
+  onRun
+}: {
+  result: RecommendationResponse | null;
+  isLoading: boolean;
+  errorMessage: string | null;
+  onRun: () => void;
+}) {
   if (errorMessage) {
-    return <div role="alert" className="border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">{errorMessage}</div>;
+    return <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">{errorMessage}</div>;
   }
 
   return (
-    <Card className="p-5">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <Card className="rounded-2xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+      <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-xs font-bold tracking-[0.16em] text-brand">DIAGNOSIS SUMMARY</p>
-          <h2 className="mt-2 text-xl font-semibold text-night">
-            {result ? `상위 ${result.returned_recommendation_count}개 공고 추천` : isLoading ? "추천 후보 분석 중" : "추천 진단을 실행하세요"}
+          <p className="text-xs font-extrabold tracking-[0.14em] text-brand">DIAGNOSIS SUMMARY</p>
+          <h2 className="mt-2 text-2xl font-bold text-night">
+            {result ? `상위 ${result.returned_recommendation_count}개 공고 분석` : isLoading ? "공고별 적합도 계산 중" : "적합도 진단을 실행하세요"}
           </h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            {result?.criteria_summary ?? "국가/직무군/언어/경력으로 1차 필터링한 뒤 공고별 가중치, PatternProfile, 사용자 우선순위를 반영합니다."}
-          </p>
         </div>
         <div className="grid grid-cols-3 gap-3">
           <MetricCard label="총 후보" value={String(result?.total_candidate_count ?? 0)} />
-          <MetricCard label="추천 공고" value={String(result?.returned_recommendation_count ?? 0)} />
-          <MetricCard label="준비도" value={result?.overall_readiness_label ?? "-"} />
+          <MetricCard label="추천" value={String(result?.returned_recommendation_count ?? 0)} />
+          <MetricCard label="상태" value={result?.overall_readiness_label ?? "-"} />
         </div>
       </div>
+      {!result && !isLoading && (
+        <div className="mt-5 border-t border-slate-100 pt-4">
+          <Button type="button" onClick={onRun}>적합도 진단 실행</Button>
+        </div>
+      )}
     </Card>
   );
 }
@@ -228,55 +214,48 @@ function RecommendationCard({
   onCreatePlanner: () => void;
   isCreatingPlanner: boolean;
 }) {
+  const metrics = categoryMetrics(recommendation);
   return (
-    <Card className={`p-5 transition ${selected ? "border-brand shadow-panel" : ""}`}>
+    <Card className={`rounded-2xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:border-brand/30 ${selected ? "border-brand shadow-[0_22px_60px_rgba(15,23,42,0.12)]" : ""}`}>
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone="default">TOP {rank}</Badge>
-            <Badge tone={recommendation.recommendation_grade === "A" ? "success" : recommendation.recommendation_grade === "B" ? "brand" : "warning"}>
-              등급 {recommendation.recommendation_grade}
-            </Badge>
-            <Badge tone="success">{recommendation.primary_recommendation_category}</Badge>
+            <Badge tone={gradeTone(recommendation.recommendation_grade)}>등급 {recommendation.recommendation_grade}</Badge>
+            <Badge tone={readinessTone(recommendation.readiness_status)}>{recommendation.readiness_label}</Badge>
           </div>
-          <h3 className="mt-3 text-xl font-semibold text-night">{recommendation.company_name}</h3>
-          <p className="mt-1 text-sm text-slate-600">{recommendation.country} · {recommendation.job_title}</p>
+          <h3 className="mt-4 text-xl font-bold text-night">{recommendation.company_name}</h3>
+          <p className="mt-1 text-sm font-medium text-slate-600">
+            {countryLabel(recommendation.country)} · {recommendation.job_title}
+          </p>
         </div>
-        <div className="border border-line bg-panel px-4 py-3 text-left md:text-right">
-          <p className="text-3xl font-semibold text-brand">{recommendation.score_breakdown.total_score}</p>
-          <p className="mt-1 text-xs font-semibold text-slate-500">{recommendation.readiness_label}</p>
+        <div className="min-w-[96px] rounded-xl bg-slate-50 px-4 py-3 text-right">
+          <p className="text-xs font-bold text-slate-400">TOTAL</p>
+          <p className="mt-1 text-3xl font-extrabold text-brand">{recommendation.score_breakdown.total_score}</p>
         </div>
       </div>
 
-      <p className="mt-4 text-sm leading-6 text-slate-700">{recommendation.recommendation_summary}</p>
+      <p className="mt-4 line-clamp-2 text-sm leading-6 text-slate-600">{recommendation.recommendation_summary}</p>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-5">
-        {categoryMetrics(recommendation).map((metric) => (
-          <CategoryScore key={metric.label} {...metric} />
-        ))}
-      </div>
-
-      <div className="mt-4 border border-line bg-panel px-4 py-3">
-        <p className="text-xs font-bold text-brand">공고별 평가기준</p>
-        <p className="mt-1 text-sm leading-6 text-slate-700">
-          {recommendation.evaluation_rationale || "수동 정리된 공고 요구사항과 패턴 데이터를 기준으로 가중치를 설정했습니다."}
-        </p>
-      </div>
-
-      <div className="mt-4">
-        <p className="text-xs font-semibold text-slate-500">부족 요소</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {recommendation.missing_items.slice(0, 4).map((item) => <Badge key={item} tone="warning">{item}</Badge>)}
-          {recommendation.missing_items.length === 0 && <Badge tone="success">큰 부족 요소 없음</Badge>}
+      <div className="mt-5 rounded-xl bg-slate-50/80 px-4 py-3">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+          {metrics.map((metric) => (
+            <CompactMetric key={metric.label} {...metric} />
+          ))}
         </div>
       </div>
 
       <div className="mt-5 flex flex-wrap gap-2">
-        <Button type="button" variant="secondary" onClick={onSelect}>상세 비교 보기</Button>
+        {recommendation.missing_items.slice(0, 4).map((item) => <Badge key={item} tone="warning">{item}</Badge>)}
+        {recommendation.missing_items.length === 0 && <Badge tone="success">큰 부족 요소 없음</Badge>}
+      </div>
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        <Button type="button" variant="secondary" onClick={onSelect}>비교 보기</Button>
         <Button type="button" onClick={onCreatePlanner} disabled={isCreatingPlanner}>
-          {isCreatingPlanner ? "플래너 생성 중" : "커리어 개발 플래너 생성"}
+          {isCreatingPlanner ? "생성 중" : "커리어 플래너 생성"}
         </Button>
-        <Button type="button" variant="subtle" disabled>기업 지원 시작</Button>
+        <Button type="button" variant="subtle" disabled>기업 지원 준비</Button>
       </div>
     </Card>
   );
@@ -286,54 +265,44 @@ function ComparisonPanel({ recommendation }: { recommendation: JobRecommendation
   if (!recommendation) return null;
 
   return (
-    <aside className="h-fit border border-line bg-white p-5 shadow-sm xl:sticky xl:top-5">
-      <p className="text-xs font-bold tracking-[0.16em] text-brand">ANALYSIS PANEL</p>
-      <h2 className="mt-2 text-lg font-semibold text-night">{recommendation.company_name}</h2>
-      <p className="mt-1 text-sm text-slate-600">{recommendation.job_title}</p>
+    <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)] xl:sticky xl:top-5">
+      <p className="text-xs font-extrabold tracking-[0.14em] text-brand">ANALYSIS PANEL</p>
+      <h2 className="mt-2 text-lg font-bold text-night">{recommendation.company_name}</h2>
+      <p className="mt-1 text-sm text-slate-500">{recommendation.job_title}</p>
 
       <div className="mt-5 space-y-4">
         <ScoreBar label="기술 적합도" value={recommendation.score_breakdown.skill_score} />
         <ScoreBar label="경력 적합도" value={recommendation.score_breakdown.experience_score} />
         <ScoreBar label="언어 적합도" value={recommendation.score_breakdown.language_score} />
-        <ScoreBar label="학력/자격 적합도" value={recommendation.score_breakdown.education_score} />
         <ScoreBar label="포트폴리오 적합도" value={recommendation.score_breakdown.portfolio_score} />
       </div>
 
-      <div className="mt-5 border border-line bg-panel p-4">
-        <p className="text-sm font-semibold text-night">최종 점수 가중치</p>
-        <div className="mt-3 space-y-3">
-          {categoryMetrics(recommendation).map((metric) => (
-            <ScoreBar key={metric.label} label={metric.label} value={metric.score} weight={metric.weight} />
-          ))}
-        </div>
+      <div className="mt-5 rounded-xl bg-slate-50/80 p-4">
+        <p className="text-sm font-bold text-night">공고별 평가 기준</p>
+        <p className="mt-2 text-sm leading-6 text-slate-600">{evaluationText(recommendation)}</p>
       </div>
 
-      <div className="mt-4 border border-line bg-white p-4">
-        <p className="text-sm font-semibold text-night">비교 기준 패턴</p>
-        <p className="mt-2 text-sm font-semibold text-brand">{recommendation.pattern_title || recommendation.pattern_ref}</p>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          {recommendation.pattern_evidence_summary || "이 패턴은 수동 조사 공고와 익명화 직원 표본에서 추출한 추천 계산 기준입니다."}
-        </p>
+      <div className="mt-4 rounded-xl border border-slate-100 bg-white p-4">
+        <p className="text-sm font-bold text-night">비교 기준 PatternProfile</p>
+        <p className="mt-2 text-sm font-bold text-brand">{recommendation.pattern_title || recommendation.pattern_ref}</p>
+        <p className="mt-2 text-sm leading-6 text-slate-600">{patternText(recommendation)}</p>
       </div>
 
-      <div className="mt-4 border border-line bg-panel p-4">
-        <p className="text-sm font-semibold text-night">다음 액션</p>
+      <div className="mt-4 rounded-xl bg-slate-50/80 p-4">
+        <p className="text-sm font-bold text-night">다음 액션</p>
         <p className="mt-2 text-sm leading-6 text-slate-600">{recommendation.next_action_summary}</p>
       </div>
     </aside>
   );
 }
 
-function CategoryScore({ label, score, weight }: { label: string; score: number; weight: number }) {
+function CompactMetric({ label, score }: { label: string; score: number; weight: number }) {
   return (
-    <div className="border border-line bg-panel p-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-slate-500">{label}</p>
-        <span className="text-[11px] font-semibold text-slate-500">{weight}%</span>
-      </div>
-      <p className="mt-2 text-lg font-semibold text-night">{score}</p>
-      <div className="mt-2 h-1.5 border border-line bg-white">
-        <div className="h-full bg-brand" style={{ width: `${clamp(score)}%` }} />
+    <div>
+      <p className="min-h-[28px] text-[10px] font-bold text-slate-400">{label}</p>
+      <p className="mt-1 text-sm font-extrabold text-night">{score}</p>
+      <div className="mt-2 h-1.5 rounded-full bg-slate-200">
+        <div className="h-full rounded-full bg-brand" style={{ width: `${clamp(score)}%` }} />
       </div>
     </div>
   );
@@ -343,11 +312,11 @@ function LoadingState() {
   return (
     <div className="grid gap-4 md:grid-cols-2">
       {[0, 1, 2, 3].map((item) => (
-        <Card key={item} className="h-64 animate-pulse p-5">
-          <div className="h-4 w-32 bg-slate-200" />
-          <div className="mt-4 h-6 w-56 bg-slate-200" />
-          <div className="mt-6 h-3 w-full bg-slate-200" />
-          <div className="mt-3 h-3 w-3/4 bg-slate-200" />
+        <Card key={item} className="h-64 animate-pulse rounded-2xl border-slate-200 p-5">
+          <div className="h-4 w-32 rounded bg-slate-200" />
+          <div className="mt-4 h-6 w-56 rounded bg-slate-200" />
+          <div className="mt-6 h-3 w-full rounded bg-slate-200" />
+          <div className="mt-3 h-3 w-3/4 rounded bg-slate-200" />
         </Card>
       ))}
     </div>
@@ -358,25 +327,8 @@ function NoCandidateState() {
   return (
     <EmptyState
       title="조건에 맞는 공고가 없습니다."
-      description="희망 국가, 직무군, 언어 수준, 경력 조건을 완화해 다시 진단하세요."
+      description="희망 국가, 직무군, 언어 수준, 경력 조건을 확인하세요. 공고에 PatternProfile이 연결되어 있어야 진단 결과로 표시됩니다."
     />
-  );
-}
-
-function Select({ label, value, options, disabled, onChange }: { label: string; value: string; options: string[]; disabled: boolean; onChange: (value: string) => void }) {
-  return (
-    <SelectInput label={label} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
-      {options.map((option) => <option key={option}>{option}</option>)}
-    </SelectInput>
-  );
-}
-
-function NumberInput({ label, value, disabled, onChange }: { label: string; value: number; disabled: boolean; onChange: (value: number) => void }) {
-  return (
-    <label className="block text-sm font-medium text-slate-700">
-      {label}
-      <input type="number" min={0} value={value} disabled={disabled} onChange={(event) => onChange(Number(event.target.value))} className="mt-1 h-10 w-full border border-line bg-white px-3 text-sm disabled:bg-slate-100" />
-    </label>
   );
 }
 
@@ -386,7 +338,7 @@ function categoryMetrics(recommendation: JobRecommendation) {
     { label: "연봉", score: recommendation.salary_score ?? 0, weight: recommendation.salary_weight ?? 0 },
     { label: "워라밸", score: recommendation.work_life_balance_score ?? 0, weight: recommendation.work_life_balance_weight ?? 0 },
     { label: "기업 가치", score: recommendation.company_value_score ?? 0, weight: recommendation.company_value_weight ?? 0 },
-    { label: "직무 적합도", score: recommendation.job_fit_score ?? 0, weight: recommendation.job_fit_weight ?? 0 }
+    { label: "직무적합도", score: recommendation.job_fit_score ?? 0, weight: recommendation.job_fit_weight ?? 0 }
   ];
 }
 
@@ -398,6 +350,27 @@ function priorityLabels(profile: UserProfileRequest) {
   if (profile.prioritize_company_value) labels.push("기업 가치");
   if (profile.prioritize_job_fit) labels.push("직무 적합도");
   return labels;
+}
+
+function evaluationText(recommendation: JobRecommendation) {
+  const core = `${recommendation.company_name} ${recommendation.job_title} 공고의 요구조건과 사용자 프로필을 비교했습니다.`;
+  return `${core} 기술, 경력, 언어, 포트폴리오 적합도를 우선 반영하고 선택한 우선순위 점수를 보조 지표로 사용합니다.`;
+}
+
+function patternText(recommendation: JobRecommendation) {
+  return "공고 요구사항과 직무 패턴을 기준으로 만든 비교 기준입니다. 이 패턴을 사용자 프로필과 대조해 강점과 부족 요소를 분리합니다.";
+}
+
+function gradeTone(grade: string) {
+  if (grade === "A") return "success";
+  if (grade === "B") return "brand";
+  return "warning";
+}
+
+function readinessTone(status: string) {
+  if (status === "IMMEDIATE_APPLY") return "success";
+  if (status === "PREPARE_THEN_APPLY") return "brand";
+  return "warning";
 }
 
 function clamp(value: number) {

@@ -40,6 +40,9 @@ public class ApplicationRecord {
     @Column(length = 1000)
     private String nextAction;
 
+    @Column(length = 2000)
+    private String candidateNotes;
+
     @ElementCollection
     @CollectionTable(name = "application_required_documents", joinColumns = @JoinColumn(name = "application_id"))
     @Column(name = "document_name")
@@ -47,6 +50,7 @@ public class ApplicationRecord {
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private LocalDateTime lastActivityAt;
 
     public Long getId() {
         return id;
@@ -92,6 +96,14 @@ public class ApplicationRecord {
         this.nextAction = nextAction;
     }
 
+    public String getCandidateNotes() {
+        return candidateNotes;
+    }
+
+    public void setCandidateNotes(String candidateNotes) {
+        this.candidateNotes = candidateNotes;
+    }
+
     public List<String> getRequiredDocuments() {
         return requiredDocuments;
     }
@@ -114,5 +126,13 @@ public class ApplicationRecord {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public LocalDateTime getLastActivityAt() {
+        return lastActivityAt;
+    }
+
+    public void setLastActivityAt(LocalDateTime lastActivityAt) {
+        this.lastActivityAt = lastActivityAt;
     }
 }

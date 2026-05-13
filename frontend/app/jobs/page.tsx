@@ -1,35 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Badge, Button, Card, EmptyState, PageHeader, PageShell, ScoreBar, SelectInput, TextInput } from "@/components/ui";
+import { JobCard } from "@/components/jobs/JobCard";
+import { JobFilterBar, type JobFilterState } from "@/components/jobs/JobFilterBar";
+import { JobStats } from "@/components/jobs/JobStats";
+import { SiteHeader } from "@/components/site-header";
+import { Button, Card, EmptyState, LinkButton, PageHeader, PageShell } from "@/components/ui";
 import { getStoredUser } from "@/lib/auth";
-import { fetchJobs, type DeadlineStatus, type JobPosting } from "@/lib/jobs";
+import { fetchJobs, type JobPosting } from "@/lib/jobs";
 import { createPlannerRoadmap } from "@/lib/planner";
 import { diagnoseStoredProfileForJob } from "@/lib/recommendation";
 
-type FilterState = {
-  country: string;
-  jobFamily: string;
-  query: string;
-};
-
-const deadlineLabel: Record<DeadlineStatus, string> = {
-  ROLLING: "상시",
-  CLOSED: "마감",
-  URGENT: "마감 임박",
-  CLOSING_SOON: "마감 예정",
-  OPEN: "접수 중"
-};
+const JOBS_PER_PAGE = 8;
 
 export default function JobsPage() {
   const router = useRouter();
   const [jobs, setJobs] = useState<JobPosting[]>([]);
-  const [filters, setFilters] = useState<FilterState>({ country: "ALL", jobFamily: "ALL", query: "" });
+  const [filters, setFilters] = useState<JobFilterState>({ country: "ALL", jobFamily: "ALL", query: "" });
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [creatingJobId, setCreatingJobId] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     fetchJobs()
@@ -37,6 +29,10 @@ export default function JobsPage() {
       .catch((error: Error) => setErrorMessage(error.message))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters.country, filters.jobFamily, filters.query]);
 
   const countries = useMemo(() => uniqueValues(jobs.map((job) => job.country)), [jobs]);
   const jobFamilies = useMemo(() => uniqueValues(jobs.map((job) => job.job_family)), [jobs]);
@@ -52,6 +48,11 @@ export default function JobsPage() {
       return matchesCountry && matchesFamily && matchesQuery;
     });
   }, [filters, jobs]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredJobs.length / JOBS_PER_PAGE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStartIndex = (safeCurrentPage - 1) * JOBS_PER_PAGE;
+  const visibleJobs = filteredJobs.slice(pageStartIndex, pageStartIndex + JOBS_PER_PAGE);
 
   async function handleCreateRoadmap(job: JobPosting) {
     const user = getStoredUser();
@@ -79,62 +80,22 @@ export default function JobsPage() {
 
   return (
     <PageShell>
+      <SiteHeader />
       <PageHeader
         kicker="JOB POSTINGS"
         title="전체 공고 조회"
-        description="수동 조사 또는 seed-data로 정리한 공고를 한곳에서 확인하고, 관심 공고를 바로 내 프로필 기준 로드맵으로 전환합니다."
         actions={
           <>
-            <Link href="/jobs/recommendation" className="border border-line bg-white px-4 py-2 text-sm font-semibold text-night hover:border-night">
-              맞춤추천 진단
-            </Link>
-            <Link href="/onboarding/profile" className="bg-night px-4 py-2 text-sm font-semibold text-white hover:bg-[#24343a]">
-              프로필 보강
-            </Link>
+            <LinkButton href="/jobs/recommendation" variant="secondary">맞춤추천 진단</LinkButton>
+            <LinkButton href="/onboarding/profile">프로필 보강</LinkButton>
           </>
         }
       />
 
       <div className="lens-container py-8">
-        <Card className="p-5">
-          <div className="grid gap-4 md:grid-cols-[1fr_1fr_1.4fr]">
-            <SelectInput
-              label="국가"
-              value={filters.country}
-              onChange={(event) => setFilters((current) => ({ ...current, country: event.target.value }))}
-            >
-              <option value="ALL">전체 국가</option>
-              {countries.map((country) => (
-                <option key={country} value={country}>
-                  {countryLabel(country)}
-                </option>
-              ))}
-            </SelectInput>
-            <SelectInput
-              label="직무군"
-              value={filters.jobFamily}
-              onChange={(event) => setFilters((current) => ({ ...current, jobFamily: event.target.value }))}
-            >
-              <option value="ALL">전체 직무군</option>
-              {jobFamilies.map((family) => (
-                <option key={family} value={family}>
-                  {family}
-                </option>
-              ))}
-            </SelectInput>
-            <TextInput
-              label="공고 검색"
-              placeholder="회사명, 직무명, 기술스택 검색"
-              value={filters.query}
-              onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
-            />
-          </div>
-          <div className="mt-5 grid gap-3 border-t border-line pt-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label="전체 공고" value={`${jobs.length}개`} />
-            <Stat label="현재 표시" value={`${filteredJobs.length}개`} />
-            <Stat label="마감 임박" value={`${jobs.filter((job) => job.deadline_status === "URGENT").length}개`} />
-            <Stat label="로드맵 생성" value="공고별 가능" />
-          </div>
+        <Card className="rounded-2xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+          <JobFilterBar filters={filters} countries={countries} jobFamilies={jobFamilies} onChange={setFilters} />
+          <JobStats jobs={jobs} filteredCount={filteredJobs.length} />
         </Card>
 
         {errorMessage && (
@@ -150,84 +111,31 @@ export default function JobsPage() {
             <EmptyState title="조건에 맞는 공고가 없습니다" description="국가, 직무군, 검색어를 조정하거나 맞춤추천 진단에서 프로필 조건을 다시 확인하세요." />
           </div>
         ) : (
-          <div className="mt-6 grid gap-4 xl:grid-cols-2">
-            {filteredJobs.map((job) => (
-              <JobCard
-                key={job.job_id}
-                job={job}
-                creating={creatingJobId === job.job_id}
-                onCreateRoadmap={() => handleCreateRoadmap(job)}
-              />
-            ))}
-          </div>
+          <>
+            <div className="mt-6 grid gap-4 xl:grid-cols-2">
+              {visibleJobs.map((job) => (
+                <JobCard
+                  key={job.job_id}
+                  job={job}
+                  creating={creatingJobId === job.job_id}
+                  onCreateRoadmap={() => handleCreateRoadmap(job)}
+                />
+              ))}
+            </div>
+
+            <JobsPagination
+              currentPage={safeCurrentPage}
+              totalPages={totalPages}
+              totalCount={filteredJobs.length}
+              start={pageStartIndex + 1}
+              end={Math.min(pageStartIndex + visibleJobs.length, filteredJobs.length)}
+              onChange={setCurrentPage}
+            />
+
+          </>
         )}
       </div>
     </PageShell>
-  );
-}
-
-function JobCard({ job, creating, onCreateRoadmap }: { job: JobPosting; creating: boolean; onCreateRoadmap: () => void }) {
-  return (
-    <Card className="flex flex-col p-5">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <div className="flex flex-wrap gap-2">
-            <Badge tone="brand">{countryLabel(job.country)}</Badge>
-            <Badge tone="muted">{job.job_family}</Badge>
-            <Badge tone={deadlineTone(job.deadline_status)}>{deadlineText(job)}</Badge>
-          </div>
-          <h2 className="mt-4 text-xl font-semibold leading-7 text-night">{job.company_name}</h2>
-          <p className="mt-1 text-base font-medium text-ink">{job.job_title}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            {job.work_type} · 최소 {job.min_experience_years ?? 0}년 · {job.salary_range || "연봉 미기재"}
-          </p>
-        </div>
-        <div className="min-w-[132px] border border-line bg-panel p-3 text-right">
-          <p className="text-xs font-semibold text-slate-500">DEADLINE</p>
-          <p className="mt-1 text-lg font-semibold text-night">{formatDate(job.application_deadline)}</p>
-          <p className="mt-1 text-xs text-slate-500">{daysText(job)}</p>
-        </div>
-      </div>
-
-      <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_220px]">
-        <div>
-          <p className="text-xs font-bold tracking-[0.14em] text-brand">REQUIRED SKILLS</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {job.required_skills.slice(0, 7).map((skill) => (
-              <span key={skill} className="border border-line bg-white px-2.5 py-1 text-xs font-medium text-slate-700">
-                {skill}
-              </span>
-            ))}
-          </div>
-          <p className="mt-4 text-sm leading-6 text-slate-600">
-            {job.evaluation_rationale || "공고별 평가 가중치와 PatternProfile 근거를 활용해 사용자 프로필 기반 진단을 생성합니다."}
-          </p>
-        </div>
-        <div className="space-y-3 border border-line bg-panel p-3">
-          <ScoreBar label="연봉 매력도" value={job.salary_score ?? 60} />
-          <ScoreBar label="워라밸" value={job.work_life_balance_score ?? 60} tone="success" />
-          <ScoreBar label="기업 가치" value={job.company_value_score ?? 70} tone="warning" />
-        </div>
-      </div>
-
-      <div className="mt-5 flex flex-col gap-2 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-slate-600">
-          비자 조건: <span className="font-medium text-night">{job.visa_requirement || "미기재"}</span>
-        </p>
-        <Button onClick={onCreateRoadmap} disabled={creating || job.deadline_status === "CLOSED"}>
-          {creating ? "로드맵 생성 중" : "내 프로필 기준 로드맵 생성"}
-        </Button>
-      </div>
-    </Card>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="border border-line bg-panel p-3">
-      <p className="text-xs font-semibold text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-night">{value}</p>
-    </div>
   );
 }
 
@@ -235,31 +143,45 @@ function uniqueValues(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort();
 }
 
-function countryLabel(country: string) {
-  if (country === "United States") return "미국";
-  if (country === "Japan") return "일본";
-  return country;
-}
-
-function deadlineTone(status: DeadlineStatus) {
-  if (status === "URGENT" || status === "CLOSING_SOON") return "warning";
-  if (status === "CLOSED") return "risk";
-  if (status === "OPEN") return "success";
-  return "muted";
-}
-
-function deadlineText(job: JobPosting) {
-  return deadlineLabel[job.deadline_status] ?? "상태 미정";
-}
-
-function formatDate(value: string | null) {
-  if (!value) return "상시";
-  return value.replaceAll("-", ".");
-}
-
-function daysText(job: JobPosting) {
-  if (job.days_until_deadline === null) return "상시 채용";
-  if (job.days_until_deadline < 0) return "마감된 공고";
-  if (job.days_until_deadline === 0) return "오늘 마감";
-  return `D-${job.days_until_deadline}`;
+function JobsPagination({
+  currentPage,
+  totalPages,
+  totalCount,
+  start,
+  end,
+  onChange
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalCount: number;
+  start: number;
+  end: number;
+  onChange: (page: number) => void;
+}) {
+  return (
+    <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm font-medium text-slate-600">
+        {totalCount}개 중 <span className="text-night">{start}-{end}</span>개 표시
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="secondary" disabled={currentPage <= 1} onClick={() => onChange(currentPage - 1)}>
+          이전
+        </Button>
+        {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
+          <Button
+            key={page}
+            type="button"
+            variant={page === currentPage ? "primary" : "secondary"}
+            className="min-w-10 px-3"
+            onClick={() => onChange(page)}
+          >
+            {page}
+          </Button>
+        ))}
+        <Button type="button" variant="secondary" disabled={currentPage >= totalPages} onClick={() => onChange(currentPage + 1)}>
+          다음
+        </Button>
+      </div>
+    </div>
+  );
 }

@@ -12,6 +12,10 @@ import com.careerlens.backend.repository.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -19,14 +23,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class SettlementService {
@@ -34,17 +32,31 @@ public class SettlementService {
     private static final String STATUS_NOT_STARTED = "NOT_STARTED";
     private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
     private static final String STATUS_DONE = "DONE";
+    private static final String GENERATION_RULE_BASED = "RULE_BASED";
+    private static final String GENERATION_AI_PREFIX = "AI_ASSISTED:";
+    private static final Set<String> SUPPORTED_STATUSES = Set.of(STATUS_NOT_STARTED, STATUS_IN_PROGRESS, STATUS_DONE);
+    private static final Set<String> SUPPORTED_RISK_LEVELS = Set.of("LOW", "MEDIUM", "HIGH");
+    private static final Duration HTTP_CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration AI_REQUEST_TIMEOUT = Duration.ofSeconds(35);
+    private static final int AI_MAX_OUTPUT_TOKENS = 1400;
+    private static final double AI_TEMPERATURE = 0.2;
+    private static final List<DefaultChecklistTemplate> DEFAULT_CHECKLISTS = List.of(
+            new DefaultChecklistTemplate("미국", "비자/행정", "비자 스폰서십 조건 확인", "공고의 visa requirement와 본인의 체류 가능 조건을 비교하고 필요한 증빙을 정리합니다. 최신 비자 판단은 공식기관 자료와 전문가 확인이 필요합니다.", 1),
+            new DefaultChecklistTemplate("미국", "비자/행정", "학력/경력 증빙 영문본 정리", "졸업증명, 성적증명, 경력증명, 추천인 정보를 영문 제출 가능 형태로 정리합니다.", 2),
+            new DefaultChecklistTemplate("미국", "출국 전 준비", "오퍼 이후 출국 일정 초안 작성", "입사 예정일, 비자 처리 예상 기간, 항공권/숙소 예약 시점을 역산해 4~8주 일정으로 정리합니다.", 3),
+            new DefaultChecklistTemplate("미국", "초기 정착", "도착 후 생활 기반 체크", "임시 숙소, 은행 계좌, 휴대폰, 의료보험 등 초기 정착 항목을 확인합니다.", 4),
+            new DefaultChecklistTemplate("일본", "비자/행정", "재류자격 및 회사 제출 서류 확인", "내정 후 필요한 재류자격, 학력/경력 증빙, 회사 제출 서류를 점검합니다. 최신 절차는 공식기관 기준으로 재확인합니다.", 5),
+            new DefaultChecklistTemplate("일본", "출국 전 준비", "일본어 증빙과 생활 서류 정리", "JLPT/비즈니스 일본어 증빙, 계약 관련 서류, 입사 전 제출 서류 준비 계획을 세웁니다.", 6),
+            new DefaultChecklistTemplate("일본", "초기 정착", "거주지와 행정 등록 준비", "주소 등록, 은행, 통신, 건강보험 등 입국 후 행정 절차를 체크합니다.", 7),
+            new DefaultChecklistTemplate("일본", "초기 정착", "초기 생활 비용과 이동 동선 정리", "초기 월세, 보증금, 교통, 통신, 생활비를 예산표로 정리하고 첫 2주 이동 동선을 기록합니다.", 8)
+    );
 
     private final SettlementChecklistRepository settlementChecklistRepository;
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
-    private final boolean aiEnabled;
-    private final String provider;
-    private final String apiKey;
-    private final String model;
-    private final String responsesUrl;
+    private final AiSettings aiSettings;
 
     public SettlementService(
             SettlementChecklistRepository settlementChecklistRepository,
@@ -64,28 +76,23 @@ public class SettlementService {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
-        this.aiEnabled = aiEnabled;
-        this.provider = provider == null ? "openai" : provider.trim().toLowerCase(Locale.ROOT);
-        if ("groq".equals(this.provider)) {
-            this.apiKey = groqApiKey;
-            this.model = groqModel;
-            this.responsesUrl = groqResponsesUrl;
-        } else {
-            this.apiKey = openAiApiKey;
-            this.model = openAiModel;
-            this.responsesUrl = openAiResponsesUrl;
-        }
+        this.httpClient = HttpClient.newBuilder().connectTimeout(HTTP_CONNECT_TIMEOUT).build();
+        this.aiSettings = AiSettings.from(
+                aiEnabled,
+                provider,
+                openAiApiKey,
+                openAiModel,
+                openAiResponsesUrl,
+                groqApiKey,
+                groqModel,
+                groqResponsesUrl
+        );
     }
 
     @Transactional
     public List<SettlementChecklistDto> getUserChecklists(Long userId) {
-        if (!settlementChecklistRepository.existsByUserId(userId)) {
-            initializeDefaultChecklists(userId);
-        }
-        return settlementChecklistRepository.findByUserIdOrderByCountryAscSortOrderAsc(userId).stream()
-                .map(this::toDto)
-                .collect(Collectors.toCollection(ArrayList::new));
+        ensureDefaultChecklists(userId);
+        return toDtos(loadUserChecklists(userId));
     }
 
     @Transactional
@@ -99,71 +106,53 @@ public class SettlementService {
 
     @Transactional
     public SettlementGuidanceDto generateGuidance(Long userId) {
-        if (!settlementChecklistRepository.existsByUserId(userId)) {
-            initializeDefaultChecklists(userId);
-        }
-        List<SettlementChecklist> checklists = settlementChecklistRepository.findByUserIdOrderByCountryAscSortOrderAsc(userId);
+        ensureDefaultChecklists(userId);
+        List<SettlementChecklist> checklists = loadUserChecklists(userId);
         UserProfile profile = userProfileRepository.findByUserId(userId).orElse(null);
-        SettlementGuidanceDto fallback = buildRuleBasedGuidance(checklists, profile, "RULE_BASED");
+        SettlementGuidanceDto fallback = buildRuleBasedGuidance(checklists, profile, GENERATION_RULE_BASED);
         if (!isAiConfigured()) {
             return fallback;
         }
 
         try {
             SettlementGuidanceDto aiGuidance = requestAiGuidance(checklists, profile, fallback);
-            if (aiGuidance.summary() == null || aiGuidance.summary().isBlank() || aiGuidance.priorityActions().isEmpty()) {
-                return fallback;
-            }
-            return aiGuidance;
+            return isUsableGuidance(aiGuidance) ? aiGuidance : fallback;
         } catch (RuntimeException exception) {
             return fallback;
         }
     }
 
+    private void ensureDefaultChecklists(Long userId) {
+        if (!settlementChecklistRepository.existsByUserId(userId)) {
+            initializeDefaultChecklists(userId);
+        }
+    }
+
+    private List<SettlementChecklist> loadUserChecklists(Long userId) {
+        return settlementChecklistRepository.findByUserIdOrderByCountryAscSortOrderAsc(userId);
+    }
+
     private void initializeDefaultChecklists(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
-        List<SettlementChecklist> defaults = new ArrayList<>();
-        add(defaults, user, "미국", "비자/행정", "비자 스폰서십 조건 확인", "공고의 visa requirement와 본인의 체류 가능 조건을 비교하고 필요한 증빙을 정리합니다. 최신 비자 판단은 공식기관 자료와 전문가 확인이 필요합니다.", 1);
-        add(defaults, user, "미국", "비자/행정", "학력/경력 증빙 영문본 정리", "졸업증명, 성적증명, 경력증명, 추천인 정보를 영문 제출 가능 형태로 정리합니다.", 2);
-        add(defaults, user, "미국", "출국 전 준비", "오퍼 이후 출국 일정 초안 작성", "입사 예정일, 비자 처리 예상 기간, 항공권/숙소 예약 시점을 역산해 4~8주 일정으로 정리합니다.", 3);
-        add(defaults, user, "미국", "초기 정착", "도착 후 생활 기반 체크", "임시 숙소, 은행 계좌, 휴대폰, 의료보험 등 초기 정착 항목을 확인합니다.", 4);
-        add(defaults, user, "일본", "비자/행정", "재류자격 및 회사 제출 서류 확인", "내정 후 필요한 재류자격, 학력/경력 증빙, 회사 제출 서류를 점검합니다. 최신 절차는 공식기관 기준으로 재확인합니다.", 5);
-        add(defaults, user, "일본", "출국 전 준비", "일본어 증빙과 생활 서류 정리", "JLPT/비즈니스 일본어 증빙, 계약 관련 서류, 입사 전 제출 서류 준비 계획을 세웁니다.", 6);
-        add(defaults, user, "일본", "초기 정착", "거주지와 행정 등록 준비", "주소 등록, 은행, 통신, 건강보험 등 입국 후 행정 절차를 체크합니다.", 7);
-        add(defaults, user, "일본", "초기 정착", "초기 생활 비용과 이동 동선 정리", "초기 월세, 보증금, 교통, 통신, 생활비를 예산표로 정리하고 첫 2주 이동 동선을 기록합니다.", 8);
+        List<SettlementChecklist> defaults = DEFAULT_CHECKLISTS.stream()
+                .map(template -> template.toEntity(user))
+                .collect(Collectors.toCollection(ArrayList::new));
         settlementChecklistRepository.saveAll(defaults);
-    }
-
-    private void add(
-            List<SettlementChecklist> checklists,
-            User user,
-            String country,
-            String category,
-            String title,
-            String description,
-            int sortOrder
-    ) {
-        LocalDateTime now = LocalDateTime.now();
-        SettlementChecklist checklist = new SettlementChecklist();
-        checklist.setUser(user);
-        checklist.setCountry(country);
-        checklist.setCategory(category);
-        checklist.setChecklistTitle(title);
-        checklist.setDescription(description);
-        checklist.setStatus(STATUS_NOT_STARTED);
-        checklist.setSortOrder(sortOrder);
-        checklist.setCreatedAt(now);
-        checklist.setUpdatedAt(now);
-        checklists.add(checklist);
     }
 
     private String normalizeStatus(String status) {
         String normalized = status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
-        if (STATUS_NOT_STARTED.equals(normalized) || STATUS_IN_PROGRESS.equals(normalized) || STATUS_DONE.equals(normalized)) {
+        if (SUPPORTED_STATUSES.contains(normalized)) {
             return normalized;
         }
         throw new IllegalArgumentException("Unsupported settlement checklist status: " + status);
+    }
+
+    private List<SettlementChecklistDto> toDtos(List<SettlementChecklist> checklists) {
+        return checklists.stream()
+                .map(this::toDto)
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 
     private SettlementChecklistDto toDto(SettlementChecklist checklist) {
@@ -182,7 +171,14 @@ public class SettlementService {
     }
 
     private boolean isAiConfigured() {
-        return aiEnabled && apiKey != null && !apiKey.isBlank();
+        return aiSettings.isConfigured();
+    }
+
+    private boolean isUsableGuidance(SettlementGuidanceDto guidance) {
+        return guidance.summary() != null
+                && !guidance.summary().isBlank()
+                && guidance.priorityActions() != null
+                && !guidance.priorityActions().isEmpty();
     }
 
     private SettlementGuidanceDto requestAiGuidance(
@@ -190,19 +186,8 @@ public class SettlementService {
             UserProfile profile,
             SettlementGuidanceDto fallback
     ) {
-        ObjectNode request = objectMapper.createObjectNode();
-        request.put("model", model);
-        request.put("temperature", 0.2);
-        request.put("max_output_tokens", 1400);
-        request.put("input", buildGuidancePrompt(checklists, profile, fallback));
-
-        HttpRequest httpRequest = HttpRequest.newBuilder()
-                .uri(URI.create(responsesUrl))
-                .timeout(Duration.ofSeconds(35))
-                .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer " + apiKey)
-                .POST(HttpRequest.BodyPublishers.ofString(request.toString()))
-                .build();
+        ObjectNode requestBody = buildAiRequest(buildGuidancePrompt(checklists, profile, fallback));
+        HttpRequest httpRequest = buildAiHttpRequest(requestBody);
 
         try {
             HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
@@ -222,15 +207,30 @@ public class SettlementService {
         }
     }
 
+    private ObjectNode buildAiRequest(String prompt) {
+        ObjectNode request = objectMapper.createObjectNode();
+        request.put("model", aiSettings.model());
+        request.put("temperature", AI_TEMPERATURE);
+        request.put("max_output_tokens", AI_MAX_OUTPUT_TOKENS);
+        request.put("input", prompt);
+        return request;
+    }
+
+    private HttpRequest buildAiHttpRequest(ObjectNode requestBody) {
+        return HttpRequest.newBuilder()
+                .uri(URI.create(aiSettings.responsesUrl()))
+                .timeout(AI_REQUEST_TIMEOUT)
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + aiSettings.apiKey())
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
+                .build();
+    }
+
     private String buildGuidancePrompt(List<SettlementChecklist> checklists, UserProfile profile, SettlementGuidanceDto fallback) {
         String checklistText = checklists.stream()
-                .map(item -> "- [%s] %s / %s / %s: %s".formatted(
-                        safe(item.getStatus()),
-                        safe(item.getCountry()),
-                        safe(item.getCategory()),
-                        safe(item.getChecklistTitle()),
-                        safe(item.getDescription())))
+                .map(this::formatChecklistForPrompt)
                 .collect(Collectors.joining("\n"));
+        PromptProfile promptProfile = PromptProfile.from(profile);
 
         return """
                 당신은 CareerLens의 해외취업 정착 준비 보조 분석기다.
@@ -269,81 +269,92 @@ public class SettlementService {
                 체크리스트:
                 %s
                 """.formatted(
-                profile == null ? "미기재" : safe(profile.getTargetCountry()),
-                profile == null ? "미기재" : safe(profile.getCurrentCountry()),
-                profile == null ? "미기재" : safe(profile.getNationality()),
-                profile == null ? "미기재" : safe(profile.getTargetJobFamily()),
-                profile == null ? "미기재" : safe(profile.getDesiredJobTitle()),
-                profile == null ? "미기재" : safe(profile.getAvailableStartDate()),
-                profile == null || profile.getVisaSponsorshipNeeded() == null ? "미기재" : profile.getVisaSponsorshipNeeded(),
-                profile == null ? "미기재" : safe(profile.getEnglishLevel()),
-                profile == null ? "미기재" : safe(profile.getJapaneseLevel()),
+                promptProfile.targetCountry(),
+                promptProfile.currentCountry(),
+                promptProfile.nationality(),
+                promptProfile.targetJobFamily(),
+                promptProfile.desiredJobTitle(),
+                promptProfile.availableStartDate(),
+                promptProfile.visaSponsorshipNeeded(),
+                promptProfile.englishLevel(),
+                promptProfile.japaneseLevel(),
                 fallback.completionRate(),
                 fallback.summary(),
                 checklistText
         );
     }
 
+    private String formatChecklistForPrompt(SettlementChecklist item) {
+        return "- [%s] %s / %s / %s: %s".formatted(
+                safe(item.getStatus()),
+                safe(item.getCountry()),
+                safe(item.getCategory()),
+                safe(item.getChecklistTitle()),
+                safe(item.getDescription())
+        );
+    }
+
     private SettlementGuidanceDto parseGuidance(JsonNode root, SettlementGuidanceDto fallback) {
         String summary = text(root, "summary");
         List<String> priorityActions = strings(root.path("priority_actions"));
-        List<SettlementCountrySummaryDto> countrySummaries = new ArrayList<>();
-        JsonNode countries = root.path("country_summaries");
-        if (countries.isArray()) {
-            for (JsonNode node : countries) {
-                String country = text(node, "country");
-                if (country.isBlank()) {
-                    continue;
-                }
-                Integer completionRate = fallback.countrySummaries().stream()
-                        .filter(item -> country.equals(item.country()))
-                        .findFirst()
-                        .map(SettlementCountrySummaryDto::completionRate)
-                        .orElse(0);
-                countrySummaries.add(new SettlementCountrySummaryDto(
-                        country,
-                        completionRate,
-                        riskLevel(text(node, "risk_level")),
-                        strings(node.path("next_actions"))
-                ));
-            }
-        }
+        List<SettlementCountrySummaryDto> countrySummaries = parseCountrySummaries(root.path("country_summaries"), fallback);
         if (countrySummaries.isEmpty()) {
             countrySummaries = fallback.countrySummaries();
         }
+
         return new SettlementGuidanceDto(
                 fallback.overallStatus(),
                 fallback.completionRate(),
                 summary.isBlank() ? fallback.summary() : summary,
                 priorityActions.isEmpty() ? fallback.priorityActions() : priorityActions,
                 countrySummaries,
-                "AI_ASSISTED:" + provider.toUpperCase(Locale.ROOT),
+                GENERATION_AI_PREFIX + aiSettings.provider().toUpperCase(Locale.ROOT),
                 disclaimer()
+        );
+    }
+
+    private List<SettlementCountrySummaryDto> parseCountrySummaries(JsonNode countries, SettlementGuidanceDto fallback) {
+        if (!countries.isArray()) {
+            return new ArrayList<>();
+        }
+
+        Map<String, Integer> fallbackCompletionRates = fallback.countrySummaries().stream()
+                .collect(Collectors.toMap(
+                        SettlementCountrySummaryDto::country,
+                        SettlementCountrySummaryDto::completionRate,
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                ));
+        List<SettlementCountrySummaryDto> summaries = new ArrayList<>();
+        for (JsonNode node : countries) {
+            String country = text(node, "country");
+            if (!country.isBlank()) {
+                summaries.add(toCountrySummary(node, country, fallbackCompletionRates));
+            }
+        }
+        return summaries;
+    }
+
+    private SettlementCountrySummaryDto toCountrySummary(JsonNode node, String country, Map<String, Integer> fallbackCompletionRates) {
+        return new SettlementCountrySummaryDto(
+                country,
+                fallbackCompletionRates.getOrDefault(country, 0),
+                riskLevel(text(node, "risk_level")),
+                strings(node.path("next_actions"))
         );
     }
 
     private SettlementGuidanceDto buildRuleBasedGuidance(List<SettlementChecklist> checklists, UserProfile profile, String generationMode) {
         int completionRate = completionRate(checklists);
-        String targetCountry = profile == null ? "" : safe(profile.getTargetCountry());
-        String visaNeed = profile != null && Boolean.TRUE.equals(profile.getVisaSponsorshipNeeded())
-                ? "비자 스폰서십 확인을 우선순위에 두어야 합니다."
-                : "비자 조건과 입사 가능 시점을 함께 확인해야 합니다.";
-        String summary = "현재 정착 준비 완료율은 " + completionRate + "%입니다. "
-                + (targetCountry.isBlank() || "미기재".equals(targetCountry) ? "미국/일본 기본 체크리스트를 기준으로" : targetCountry + " 목표 국가 기준으로")
-                + " 비자, 출국 전 서류, 초기 정착 항목을 순서대로 확인하는 단계입니다. "
-                + visaNeed;
-        List<String> priorityActions = checklists.stream()
-                .filter(item -> !STATUS_DONE.equals(item.getStatus()))
-                .limit(4)
-                .map(item -> item.getCountry() + " - " + item.getChecklistTitle())
-                .collect(Collectors.toCollection(ArrayList::new));
+        List<String> priorityActions = priorityActions(checklists);
         if (priorityActions.isEmpty()) {
             priorityActions.add("완료된 항목의 증빙 파일과 공식기관 확인 링크를 정리하세요.");
         }
+
         return new SettlementGuidanceDto(
                 completionRate >= 70 ? "ON_TRACK" : completionRate >= 35 ? "NEEDS_ATTENTION" : "EARLY_STAGE",
                 completionRate,
-                summary,
+                ruleBasedSummary(completionRate, profile),
                 priorityActions,
                 countrySummaries(checklists),
                 generationMode,
@@ -351,23 +362,55 @@ public class SettlementService {
         );
     }
 
+    private String ruleBasedSummary(int completionRate, UserProfile profile) {
+        String targetCountry = profile == null ? "" : safe(profile.getTargetCountry());
+        String countryBasis = targetCountry.isBlank() || "미기재".equals(targetCountry)
+                ? "미국/일본 기본 체크리스트를 기준으로"
+                : targetCountry + " 목표 국가 기준으로";
+        String visaNeed = profile != null && Boolean.TRUE.equals(profile.getVisaSponsorshipNeeded())
+                ? "비자 스폰서십 확인을 우선순위에 두어야 합니다."
+                : "비자 조건과 입사 가능 시점을 함께 확인해야 합니다.";
+
+        return "현재 정착 준비 완료율은 " + completionRate + "%입니다. "
+                + countryBasis
+                + " 비자, 출국 전 서류, 초기 정착 항목을 순서대로 확인하는 단계입니다. "
+                + visaNeed;
+    }
+
+    private List<String> priorityActions(List<SettlementChecklist> checklists) {
+        return checklists.stream()
+                .filter(item -> !STATUS_DONE.equals(item.getStatus()))
+                .limit(4)
+                .map(item -> item.getCountry() + " - " + item.getChecklistTitle())
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
+
     private List<SettlementCountrySummaryDto> countrySummaries(List<SettlementChecklist> checklists) {
         Map<String, List<SettlementChecklist>> byCountry = checklists.stream()
-                .collect(Collectors.groupingBy(SettlementChecklist::getCountry));
+                .collect(Collectors.groupingBy(SettlementChecklist::getCountry, LinkedHashMap::new, Collectors.toList()));
         return byCountry.entrySet().stream()
-                .map(entry -> {
-                    int rate = completionRate(entry.getValue());
-                    List<String> actions = entry.getValue().stream()
-                            .filter(item -> !STATUS_DONE.equals(item.getStatus()))
-                            .limit(3)
-                            .map(SettlementChecklist::getChecklistTitle)
-                            .collect(Collectors.toCollection(ArrayList::new));
-                    if (actions.isEmpty()) {
-                        actions.add("완료 항목의 증빙과 공식기관 확인 메모를 정리");
-                    }
-                    return new SettlementCountrySummaryDto(entry.getKey(), rate, rate >= 70 ? "LOW" : rate >= 35 ? "MEDIUM" : "HIGH", actions);
-                })
+                .map(entry -> countrySummary(entry.getKey(), entry.getValue()))
                 .collect(Collectors.toCollection(ArrayList::new));
+    }
+
+    private SettlementCountrySummaryDto countrySummary(String country, List<SettlementChecklist> checklists) {
+        int rate = completionRate(checklists);
+        List<String> actions = checklists.stream()
+                .filter(item -> !STATUS_DONE.equals(item.getStatus()))
+                .limit(3)
+                .map(SettlementChecklist::getChecklistTitle)
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (actions.isEmpty()) {
+            actions.add("완료 항목의 증빙과 공식기관 확인 메모를 정리");
+        }
+        return new SettlementCountrySummaryDto(country, rate, riskLevelForCompletionRate(rate), actions);
+    }
+
+    private String riskLevelForCompletionRate(int rate) {
+        if (rate >= 70) {
+            return "LOW";
+        }
+        return rate >= 35 ? "MEDIUM" : "HIGH";
     }
 
     private int completionRate(List<SettlementChecklist> checklists) {
@@ -427,7 +470,7 @@ public class SettlementService {
 
     private String riskLevel(String value) {
         String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
-        if ("LOW".equals(normalized) || "MEDIUM".equals(normalized) || "HIGH".equals(normalized)) {
+        if (SUPPORTED_RISK_LEVELS.contains(normalized)) {
             return normalized;
         }
         return "MEDIUM";
@@ -437,7 +480,102 @@ public class SettlementService {
         return "이 안내는 CareerLens에 저장된 체크리스트와 사용자 입력을 바탕으로 만든 시연용 요약입니다. 비자, 세금, 체류자격, 행정 절차의 최신 판단은 반드시 공식기관과 전문가를 통해 확인해야 합니다.";
     }
 
-    private String safe(String value) {
+    private static String safe(String value) {
         return value == null || value.isBlank() ? "미기재" : value;
+    }
+
+    private record AiSettings(
+            boolean enabled,
+            String provider,
+            String apiKey,
+            String model,
+            String responsesUrl
+    ) {
+        static AiSettings from(
+                boolean enabled,
+                String provider,
+                String openAiApiKey,
+                String openAiModel,
+                String openAiResponsesUrl,
+                String groqApiKey,
+                String groqModel,
+                String groqResponsesUrl
+        ) {
+            String normalizedProvider = provider == null ? "openai" : provider.trim().toLowerCase(Locale.ROOT);
+            if ("groq".equals(normalizedProvider)) {
+                return new AiSettings(enabled, normalizedProvider, groqApiKey, groqModel, groqResponsesUrl);
+            }
+            return new AiSettings(enabled, normalizedProvider, openAiApiKey, openAiModel, openAiResponsesUrl);
+        }
+
+        boolean isConfigured() {
+            return enabled && apiKey != null && !apiKey.isBlank();
+        }
+    }
+
+    private record PromptProfile(
+            String targetCountry,
+            String currentCountry,
+            String nationality,
+            String targetJobFamily,
+            String desiredJobTitle,
+            String availableStartDate,
+            String visaSponsorshipNeeded,
+            String englishLevel,
+            String japaneseLevel
+    ) {
+        static PromptProfile from(UserProfile profile) {
+            if (profile == null) {
+                return new PromptProfile(
+                        "미기재",
+                        "미기재",
+                        "미기재",
+                        "미기재",
+                        "미기재",
+                        "미기재",
+                        "미기재",
+                        "미기재",
+                        "미기재"
+                );
+            }
+
+            String visaSponsorshipNeeded = profile.getVisaSponsorshipNeeded() == null
+                    ? "미기재"
+                    : profile.getVisaSponsorshipNeeded().toString();
+            return new PromptProfile(
+                    safe(profile.getTargetCountry()),
+                    safe(profile.getCurrentCountry()),
+                    safe(profile.getNationality()),
+                    safe(profile.getTargetJobFamily()),
+                    safe(profile.getDesiredJobTitle()),
+                    safe(profile.getAvailableStartDate()),
+                    visaSponsorshipNeeded,
+                    safe(profile.getEnglishLevel()),
+                    safe(profile.getJapaneseLevel())
+            );
+        }
+    }
+
+    private record DefaultChecklistTemplate(
+            String country,
+            String category,
+            String title,
+            String description,
+            int sortOrder
+    ) {
+        SettlementChecklist toEntity(User user) {
+            LocalDateTime now = LocalDateTime.now();
+            SettlementChecklist checklist = new SettlementChecklist();
+            checklist.setUser(user);
+            checklist.setCountry(country);
+            checklist.setCategory(category);
+            checklist.setChecklistTitle(title);
+            checklist.setDescription(description);
+            checklist.setStatus(STATUS_NOT_STARTED);
+            checklist.setSortOrder(sortOrder);
+            checklist.setCreatedAt(now);
+            checklist.setUpdatedAt(now);
+            return checklist;
+        }
     }
 }
