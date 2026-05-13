@@ -197,7 +197,9 @@ export default function AdministrationRoadmapPage() {
                               <p className="text-sm font-semibold text-night">{item.country} · {item.checklist_title}</p>
                               <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
                             </div>
-                            <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
+                            <Badge tone={statusTone(item.status)} className={item.status === "NOT_STARTED" ? "min-w-[55px] justify-center" : ""}>
+                              {statusLabel(item.status)}
+                            </Badge>
                           </div>
                         </div>
                       ))}
@@ -207,7 +209,7 @@ export default function AdministrationRoadmapPage() {
               </div>
             </section>
 
-            <Card className="p-5">
+            {/* <Card className="p-5">
               <SectionHeader kicker="COUNTRY DOSSIER" title="국가별 행정 항목" />
               <div className="mt-5 grid gap-4 lg:grid-cols-2">
                 {Object.entries(groupedByCountry).map(([country, countryItems]) => (
@@ -218,18 +220,20 @@ export default function AdministrationRoadmapPage() {
                         {countryItems.filter((item) => item.status === "DONE").length}/{countryItems.length}
                       </Badge>
                     </div>
-                    <ul className="mt-4 space-y-2">
+                    <ul className="mt-3 space-y-2">
                       {countryItems.map((item) => (
                         <li key={item.item_id} className="flex items-start justify-between gap-3 border-b border-line pb-2 text-sm last:border-b-0 last:pb-0">
                           <span className="leading-6 text-slate-700">{item.checklist_title}</span>
-                          <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
+                          <Badge tone={statusTone(item.status)} className={item.status === "NOT_STARTED" ? "min-w-[55px] justify-center" : ""}>
+                            {statusLabel(item.status)}
+                          </Badge>
                         </li>
                       ))}
                     </ul>
                   </div>
                 ))}
               </div>
-            </Card>
+            </Card> */}
 
             <Card className="p-5">
               <p className="text-xs leading-5 text-slate-500">

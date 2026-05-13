@@ -9,14 +9,12 @@ import {
 } from "./display";
 
 export function SettlementGuidanceSection({
-  groupedByCountry,
   guidance,
   guidanceError,
   isGuidanceLoading,
   isUserReady,
   onRefreshGuidance
 }: {
-  groupedByCountry: Record<string, SettlementChecklistItem[]>;
   guidance: SettlementGuidance | null;
   guidanceError: string | null;
   isGuidanceLoading: boolean;
@@ -24,7 +22,7 @@ export function SettlementGuidanceSection({
   onRefreshGuidance: () => void;
 }) {
   return (
-    <section className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+    <section className="mt-6">
       <SettlementBriefCard
         guidance={guidance}
         guidanceError={guidanceError}
@@ -32,7 +30,6 @@ export function SettlementGuidanceSection({
         isUserReady={isUserReady}
         onRefreshGuidance={onRefreshGuidance}
       />
-      <CountryRiskCard guidance={guidance} groupedByCountry={groupedByCountry} />
     </section>
   );
 }

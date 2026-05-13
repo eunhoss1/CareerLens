@@ -70,7 +70,9 @@ function ChecklistRow({
           <p className="text-sm font-semibold text-night">{item.checklist_title}</p>
           <p className="mt-1 text-sm leading-6 text-slate-600">{item.description}</p>
         </div>
-        <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
+        <Badge tone={statusTone(item.status)} className={item.status === "NOT_STARTED" ? "min-w-[55px] justify-center" : ""}>
+          {statusLabel(item.status)}
+        </Badge>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         {statusOptions.map((option) => (
@@ -80,7 +82,7 @@ function ChecklistRow({
             variant={item.status === option.value ? "primary" : "secondary"}
             disabled={isUpdating}
             onClick={() => onStatusChange(item, option.value)}
-            className="min-h-9 px-3 text-xs"
+            className={`min-h-9 px-3 text-xs ${option.value === "NOT_STARTED" ? "min-w-[55px]" : ""}`}
           >
             {option.label}
           </Button>
