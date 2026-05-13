@@ -104,7 +104,6 @@ export default function SettlementPage() {
         <SettlementMetrics totalCount={items.length} inProgressCount={inProgressCount} doneCount={doneCount} />
 
         <SettlementGuidanceSection
-          groupedByCountry={groupedByCountry}
           guidance={guidance}
           guidanceError={guidanceError}
           isGuidanceLoading={isGuidanceLoading}

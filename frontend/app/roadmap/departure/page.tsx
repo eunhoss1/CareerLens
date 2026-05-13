@@ -41,13 +41,12 @@ export default function DepartureRoadmapPage() {
       <PageHeader
         kicker="DEPARTURE ROADMAP"
         title="출국로드맵"
-        description="입사 예정일을 기준으로 입국 권장일, 항공편 확인 기간, 출국 전 준비 일정을 정리합니다."
         actions={<LinkButton href="/roadmap/administration">행정로드맵으로</LinkButton>}
       />
 
       <section className="lens-container grid gap-6 py-6 lg:grid-cols-[360px_1fr]">
         <aside className="space-y-4">
-          <Card className="rounded-2xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+          <Card className="p-5">
             <p className="lens-kicker">TRAVEL INPUT</p>
             <h2 className="mt-3 text-2xl font-semibold text-night">출국 조건 입력</h2>
             <div className="mt-5 space-y-4">
@@ -78,12 +77,16 @@ export default function DepartureRoadmapPage() {
             </div>
           </Card>
 
-          <Card className="rounded-2xl border-slate-200 p-5 shadow-sm">
-            <p className="lens-kicker">CHECK POINT</p>
-            <h2 className="mt-3 text-xl font-semibold text-night">출국 전 확인 항목</h2>
-            <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-              <p>입사일보다 여유 있게 도착할 수 있도록 항공권, 숙소, 비자 상태를 함께 확인합니다.</p>
-              <p>항공편은 실제 예약 전 항공사 또는 예약 사이트에서 가격과 조건을 다시 확인해야 합니다.</p>
+          <Card className="p-5">
+            <p className="lens-kicker">FLIGHT DATA POLICY</p>
+            <h2 className="mt-3 text-xl font-semibold text-night">항공 데이터 연동 방향</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              항공사/OTA 사이트를 크롤링하지 않고, 승인된 Flight API 또는 사용자가 직접 확인한 항공편 정보를 입력하는 구조로 확장합니다.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Badge tone="brand">API-ready</Badge>
+              <Badge tone="muted">No scraping</Badge>
+              <Badge tone="warning">공식 확인 필요</Badge>
             </div>
           </Card>
         </aside>
@@ -100,10 +103,13 @@ export default function DepartureRoadmapPage() {
 
           {plan && (
             <>
-              <Card className="rounded-2xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+              <Card className="p-5">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
                     <div className="flex flex-wrap gap-2">
+                      <Badge tone={plan.generation_mode.includes("AI") ? "brand" : "muted"}>
+                        {plan.generation_mode.includes("AI") ? "AI 보조" : "규칙 기반"}
+                      </Badge>
                       <Badge tone={urgencyTone(plan.urgency_status)}>{urgencyLabel(plan.urgency_status)}</Badge>
                     </div>
                     <h2 className="mt-4 text-2xl font-semibold text-night">
@@ -122,7 +128,7 @@ export default function DepartureRoadmapPage() {
                 <MetricCard label="출국 준비 D-day" value={dDayLabel(plan.days_until_departure_window)} helper="후보 기간 시작 기준" />
               </div>
 
-              <Card className="rounded-2xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+              <Card className="p-5">
                 <p className="lens-kicker">FLIGHT SEARCH BRIEF</p>
                 <h2 className="mt-3 text-xl font-semibold text-night">항공편 탐색 기준</h2>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -133,7 +139,7 @@ export default function DepartureRoadmapPage() {
                 {plan.flight_offers.length > 0 && (
                   <div className="mt-5 grid gap-3">
                     {plan.flight_offers.map((offer, index) => (
-                      <div key={`${offer.provider}-${offer.departure_at}-${index}`} className="border border-line bg-white p-4">
+                      <div key={`${offer.provider}-${offer.departure_at}-${index}`} className="rounded-xl border border-line bg-white p-4">
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div>
                             <p className="text-sm font-semibold text-night">
@@ -146,7 +152,7 @@ export default function DepartureRoadmapPage() {
                               {offer.carrier_name || offer.carrier_code} {offer.flight_number} · {offer.duration || "소요시간 미기재"}
                             </p>
                           </div>
-                          <div className="border border-line bg-panel px-3 py-2 text-right">
+                          <div className="rounded-xl border border-line bg-panel px-3 py-2 text-right">
                             <p className="text-xs font-bold text-slate-500">{offer.provider}</p>
                             <p className="mt-1 text-base font-semibold text-night">
                               {offer.currency} {offer.total_price || "미기재"}
@@ -158,11 +164,16 @@ export default function DepartureRoadmapPage() {
                     ))}
                   </div>
                 )}
-                <div className="mt-5 grid gap-3 md:grid-cols-3">
-                  <CheckCard title="가격" description="최종 결제 전 세금, 수하물, 환불 조건을 확인하세요." />
-                  <CheckCard title="도착 시간" description="입국 심사와 숙소 이동 시간을 고려해 도착 시간을 선택하세요." />
-                  <CheckCard title="변경 가능성" description="비자와 입사 일정이 바뀔 수 있다면 변경 수수료를 확인하세요." />
-                </div>
+                {/* <div className="mt-5 grid gap-3 md:grid-cols-3">
+                  {plan.flight_api_providers.map((provider) => (
+                    <div key={provider.provider} className="rounded-xl border border-line bg-panel p-4">
+                      <p className="text-sm font-semibold text-night">{provider.provider}</p>
+                      <p className="mt-2 text-xs font-bold text-brand">{provider.integrationStatus}</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{provider.useCase}</p>
+                      <p className="mt-2 text-xs leading-5 text-slate-500">{provider.note}</p>
+                    </div>
+                  ))}
+                </div> */}
               </Card>
 
               <section className="border-l border-night pl-4">
@@ -194,15 +205,6 @@ export default function DepartureRoadmapPage() {
   function update<Key extends keyof DeparturePlanRequest>(key: Key, value: DeparturePlanRequest[Key]) {
     setForm((current) => ({ ...current, [key]: value }));
   }
-}
-
-function CheckCard({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <p className="text-sm font-bold text-night">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
-    </div>
-  );
 }
 
 function dDayLabel(days: number) {
