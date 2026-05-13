@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Card, EmptyState, LinkButton, MetricCard, PageHeader, PageShell, ScoreBar } from "@/components/ui";
 import { getStoredUser, type AuthUser } from "@/lib/auth";
@@ -24,6 +24,21 @@ export default function PlannerListPage() {
       .finally(() => setIsLoading(false));
   }, []);
 
+  const roadmapSummaries = useMemo(() => {
+    return roadmaps.map((roadmap) => {
+      const completed = roadmap.completed_task_count ?? roadmap.tasks.filter((task) => task.status === "DONE").length;
+      const total = roadmap.total_task_count ?? roadmap.tasks.length;
+      const completionRate = roadmap.completion_rate ?? (total === 0 ? 0 : Math.round((completed / total) * 100));
+      return { roadmap, completed, total, completionRate };
+    });
+  }, [roadmaps]);
+
+  const nextRoadmap = roadmapSummaries.find((item) => item.completionRate < 100) ?? roadmapSummaries[0] ?? null;
+  const totalTasks = roadmapSummaries.reduce((sum, item) => sum + item.total, 0);
+  const completedTasks = roadmapSummaries.reduce((sum, item) => sum + item.completed, 0);
+  const inProgressRoadmaps = roadmapSummaries.filter((item) => item.completionRate > 0 && item.completionRate < 100).length;
+  const averageCompletion = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
+
   return (
     <PageShell>
       <SiteHeader />
@@ -41,14 +56,39 @@ export default function PlannerListPage() {
           <EmptyState title="아직 생성된 플래너가 없습니다." description="맞춤채용정보 추천 진단에서 공고 카드를 선택해 커리어 플래너를 생성하세요." action={<LinkButton href="/jobs/recommendation">추천 진단으로</LinkButton>} />
         )}
 
+        {!isLoading && user && roadmapSummaries.length > 0 && (
+          <Card className="mb-5 rounded-2xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+            <div className="grid gap-5 lg:grid-cols-[1.4fr_0.9fr]">
+              <div>
+                <p className="text-sm font-bold text-brand">진행 요약</p>
+                <h2 className="mt-2 text-2xl font-bold text-night">이어갈 로드맵</h2>
+                {nextRoadmap && (
+                  <div className="mt-5 rounded-xl border-l-4 border-brand bg-slate-50 px-4 py-4">
+                    <p className="text-xs font-bold text-slate-500">다음 추천</p>
+                    <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-lg font-bold text-night">{nextRoadmap.roadmap.title}</p>
+                      <LinkButton href={`/planner/${nextRoadmap.roadmap.roadmap_id}`} variant="secondary" className="rounded-lg">
+                        바로 이어하기
+                      </LinkButton>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <MetricCard label="로드맵" value={`${roadmapSummaries.length}개`} />
+                <MetricCard label="진행 중" value={`${inProgressRoadmaps}개`} />
+                <MetricCard label="전체 완료율" value={`${averageCompletion}%`} />
+                <MetricCard label="완료 과제" value={`${completedTasks}/${totalTasks}`} />
+              </div>
+            </div>
+          </Card>
+        )}
+
         <div className="grid gap-4 md:grid-cols-2">
-          {roadmaps.map((roadmap) => {
-            const completed = roadmap.completed_task_count ?? roadmap.tasks.filter((task) => task.status === "DONE").length;
-            const total = roadmap.total_task_count ?? roadmap.tasks.length;
-            const completionRate = roadmap.completion_rate ?? (total === 0 ? 0 : Math.round((completed / total) * 100));
+          {roadmapSummaries.map(({ roadmap, completed, total, completionRate }) => {
             return (
               <a key={roadmap.roadmap_id} href={`/planner/${roadmap.roadmap_id}`} className="block">
-                <Card className="rounded-2xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:border-brand/30 hover:shadow-[0_22px_60px_rgba(15,23,42,0.10)]">
+                <Card className="rounded-2xl border-slate-200 p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-brand/30 hover:shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-brand">{roadmap.target_company}</p>
@@ -57,18 +97,17 @@ export default function PlannerListPage() {
                     </div>
                     <Badge tone={readinessTone(roadmap.readiness_status)}>{readinessLabel(roadmap.readiness_status)}</Badge>
                   </div>
-                  <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">{roadmapSummary(roadmap)}</p>
-                  <div className="mt-4 grid grid-cols-3 gap-3">
-                    <MetricCard label="점수" value={`${roadmap.total_score}`} />
-                    <MetricCard label="기간" value={`${roadmap.duration_weeks}주`} />
-                    <MetricCard label="과제" value={`${total}개`} />
+                  <div className="mt-5 grid grid-cols-3 gap-4 border-y border-slate-100 py-4">
+                    <SmallMetric label="점수" value={`${roadmap.total_score}`} />
+                    <SmallMetric label="기간" value={`${roadmap.duration_weeks}주`} />
+                    <SmallMetric label="과제" value={`${completed}/${total}`} />
                   </div>
                   <div className="mt-4">
                     <ScoreBar label="완료율" value={completionRate} tone={completionRate >= 80 ? "success" : "brand"} />
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Badge tone={completionRate >= 100 ? "success" : "warning"}>{completed}개 완료</Badge>
-                    <Badge tone="muted">{new Date(roadmap.created_at).toLocaleDateString("ko-KR")}</Badge>
+                    <Badge tone="muted">생성일 {new Date(roadmap.created_at).toLocaleDateString("ko-KR")}</Badge>
                   </div>
                 </Card>
               </a>
@@ -77,6 +116,15 @@ export default function PlannerListPage() {
         </div>
       </section>
     </PageShell>
+  );
+}
+
+function SmallMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-bold text-slate-500">{label}</p>
+      <p className="mt-1 text-xl font-extrabold text-night">{value}</p>
+    </div>
   );
 }
 
@@ -91,11 +139,4 @@ function readinessTone(status: string) {
   if (status === "IMMEDIATE_APPLY") return "success";
   if (status === "PREPARE_THEN_APPLY") return "brand";
   return "warning";
-}
-
-function roadmapSummary(roadmap: PlannerRoadmap) {
-  if (!roadmap.summary || roadmap.summary.includes("AI 보조 생성")) {
-    return `${roadmap.target_company} ${roadmap.target_job_title} 지원을 위한 ${roadmap.duration_weeks}주 준비 로드맵입니다.`;
-  }
-  return roadmap.summary;
 }
