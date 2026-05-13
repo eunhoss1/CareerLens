@@ -152,7 +152,7 @@ export default function ApplicationsPage() {
 
         {records.length > 0 && (
           <div className="mt-8 grid gap-5 xl:grid-cols-[1fr_360px]">
-            <Card className="p-5">
+            <Card className="rounded-2xl p-5">
               <div className="flex flex-col gap-4 border-b border-line pb-4 lg:flex-row lg:items-end lg:justify-between">
                 <SectionHeader
                   kicker="APPLICATION LIST"
@@ -220,7 +220,7 @@ function ApplicationListCard({
   onSelect: () => void;
 }) {
   return (
-    <article className={`border bg-white p-4 transition ${isSelected ? "border-brand shadow-sm" : "border-line hover:border-slate-400"}`}>
+    <article className={`rounded-2xl border bg-white p-4 transition ${isSelected ? "border-brand shadow-sm" : "border-line hover:border-slate-400"}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap gap-2">
@@ -231,7 +231,7 @@ function ApplicationListCard({
           <h3 className="mt-1 line-clamp-2 text-base font-semibold leading-6 text-night">{record.job_title}</h3>
           <p className="mt-1 text-xs text-slate-500">{record.country} · {record.work_type} · {record.salary_range || "연봉 미기재"}</p>
         </div>
-        <div className="min-w-16 border border-line bg-panel px-2 py-2 text-center">
+        <div className="min-w-16 rounded-xl border border-line bg-panel px-2 py-2 text-center">
           <p className="text-[10px] font-bold text-slate-500">준비도</p>
           <p className="text-xl font-semibold text-night">{record.readiness_score}</p>
         </div>
@@ -271,7 +271,7 @@ function ApplicationActionPanel({ record, documentReadyCount }: { record: Applic
   const verifiedCount = record.document_checklist.filter((item) => item.status === "DONE" || item.status === "VERIFIED").length;
 
   return (
-    <Card className="p-5">
+    <Card className="rounded-2xl p-5">
       <p className="lens-kicker">SELECTED APPLICATION</p>
       <h2 className="mt-3 text-xl font-semibold leading-7 text-night">{record.company_name}</h2>
       <p className="mt-1 text-sm font-semibold text-slate-700">{record.job_title}</p>
@@ -287,7 +287,7 @@ function ApplicationActionPanel({ record, documentReadyCount }: { record: Applic
         <ScoreBar label="로드맵 완료율" value={record.roadmap_completion_rate} tone="brand" />
       </div>
 
-      <div className="mt-5 border border-line bg-panel p-4">
+      <div className="mt-5 rounded-xl border border-line bg-panel p-4">
         <p className="text-xs font-bold text-slate-500">다음 액션</p>
         <p className="mt-2 text-sm leading-6 text-slate-700">{record.next_action}</p>
       </div>
@@ -296,7 +296,7 @@ function ApplicationActionPanel({ record, documentReadyCount }: { record: Applic
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Checklist</p>
         <div className="mt-3 space-y-2">
           {record.document_checklist.slice(0, 4).map((item) => (
-            <div key={item.key} className="flex items-start justify-between gap-3 border border-line bg-white px-3 py-2">
+            <div key={item.key} className="flex items-start justify-between gap-3 rounded-xl border border-line bg-white px-3 py-2">
               <div>
                 <p className="text-sm font-semibold text-night">{item.label}</p>
                 <p className="mt-1 text-xs text-slate-500">{item.helper_text}</p>
