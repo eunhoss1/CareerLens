@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { JobCard } from "@/components/jobs/JobCard";
-import { JobDetailPanel } from "@/components/jobs/JobDetailPanel";
 import { JobFilterBar, type JobFilterState } from "@/components/jobs/JobFilterBar";
 import { JobStats } from "@/components/jobs/JobStats";
 import { SiteHeader } from "@/components/site-header";
@@ -13,7 +12,7 @@ import { fetchJobs, type JobPosting } from "@/lib/jobs";
 import { createPlannerRoadmap } from "@/lib/planner";
 import { diagnoseStoredProfileForJob } from "@/lib/recommendation";
 
-const JOBS_PER_PAGE = 6;
+const JOBS_PER_PAGE = 8;
 
 export default function JobsPage() {
   const router = useRouter();
@@ -22,7 +21,6 @@ export default function JobsPage() {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [creatingJobId, setCreatingJobId] = useState<number | null>(null);
-  const [selectedJob, setSelectedJob] = useState<JobPosting | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
@@ -34,7 +32,6 @@ export default function JobsPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-    setSelectedJob(null);
   }, [filters.country, filters.jobFamily, filters.query]);
 
   const countries = useMemo(() => uniqueValues(jobs.map((job) => job.country)), [jobs]);
@@ -87,7 +84,7 @@ export default function JobsPage() {
       <PageHeader
         kicker="JOB POSTINGS"
         title="전체 공고 조회"
-        description="공고를 6개씩 확인하고, 상세 근거를 검토한 뒤 내 프로필 기준 로드맵으로 전환합니다."
+        description="검수된 공고와 실시간 수집 공고를 한곳에서 확인하고, 내 프로필 기준 로드맵으로 전환합니다."
         actions={
           <>
             <LinkButton href="/jobs/recommendation" variant="secondary">맞춤추천 진단</LinkButton>
@@ -97,7 +94,7 @@ export default function JobsPage() {
       />
 
       <div className="lens-container py-8">
-        <Card className="p-5">
+        <Card className="rounded-2xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
           <JobFilterBar filters={filters} countries={countries} jobFamilies={jobFamilies} onChange={setFilters} />
           <JobStats jobs={jobs} filteredCount={filteredJobs.length} />
         </Card>
@@ -121,9 +118,7 @@ export default function JobsPage() {
                 <JobCard
                   key={job.job_id}
                   job={job}
-                  selected={selectedJob?.job_id === job.job_id}
                   creating={creatingJobId === job.job_id}
-                  onOpenDetail={() => setSelectedJob(job)}
                   onCreateRoadmap={() => handleCreateRoadmap(job)}
                 />
               ))}
@@ -138,14 +133,6 @@ export default function JobsPage() {
               onChange={setCurrentPage}
             />
 
-            {selectedJob && (
-              <JobDetailPanel
-                job={selectedJob}
-                creating={creatingJobId === selectedJob.job_id}
-                onClose={() => setSelectedJob(null)}
-                onCreateRoadmap={() => handleCreateRoadmap(selectedJob)}
-              />
-            )}
           </>
         )}
       </div>
@@ -173,7 +160,7 @@ function JobsPagination({
   onChange: (page: number) => void;
 }) {
   return (
-    <div className="mt-6 flex flex-col gap-3 border border-line bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
       <p className="text-sm font-medium text-slate-600">
         {totalCount}개 중 <span className="text-night">{start}-{end}</span>개 표시
       </p>
