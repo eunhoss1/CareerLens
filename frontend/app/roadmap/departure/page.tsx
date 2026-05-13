@@ -165,7 +165,7 @@ export default function DepartureRoadmapPage() {
                     ))}
                   </div>
                 )}
-                <div className="mt-5 grid gap-3 md:grid-cols-3">
+                {/* <div className="mt-5 grid gap-3 md:grid-cols-3">
                   {plan.flight_api_providers.map((provider) => (
                     <div key={provider.provider} className="border border-line bg-panel p-4">
                       <p className="text-sm font-semibold text-night">{provider.provider}</p>
@@ -174,7 +174,7 @@ export default function DepartureRoadmapPage() {
                       <p className="mt-2 text-xs leading-5 text-slate-500">{provider.note}</p>
                     </div>
                   ))}
-                </div>
+                </div> */}
               </Card>
 
               <section className="border-l border-night pl-4">

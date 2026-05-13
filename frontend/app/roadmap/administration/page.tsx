@@ -101,10 +101,10 @@ export default function AdministrationRoadmapPage() {
   const doneCount = adminItems.filter((item) => item.status === "DONE").length;
   const inProgressCount = adminItems.filter((item) => item.status === "IN_PROGRESS").length;
   const completionRate = adminItems.length === 0 ? 0 : Math.round((doneCount / adminItems.length) * 100);
-  const groupedByCountry = adminItems.reduce<Record<string, SettlementChecklistItem[]>>((acc, item) => {
-    acc[item.country] = [...(acc[item.country] ?? []), item];
-    return acc;
-  }, {});
+  // const groupedByCountry = adminItems.reduce<Record<string, SettlementChecklistItem[]>>((acc, item) => {
+  //   acc[item.country] = [...(acc[item.country] ?? []), item];
+  //   return acc;
+  // }, {});
 
   return (
     <PageShell>
