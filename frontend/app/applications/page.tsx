@@ -159,13 +159,13 @@ export default function ApplicationsPage() {
                   title="지원 후보 목록"
                   description="공고는 한 페이지에 4개씩 표시됩니다. 공고를 선택하면 오른쪽에서 다음 액션과 제출 준비 상태를 바로 확인할 수 있습니다."
                 />
-                <div className="flex flex-wrap gap-2">
+                <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4 lg:w-auto">
                   {stageFilters.map((filter) => (
                     <Button
                       key={filter.key}
                       type="button"
                       variant={stageFilter === filter.key ? "primary" : "secondary"}
-                      className="min-h-9 px-3 text-xs"
+                      className="min-h-9 whitespace-nowrap px-3 text-xs"
                       onClick={() => setStageFilter(filter.key)}
                     >
                       {filter.label} {counts[filter.key]}

@@ -444,32 +444,32 @@ function buildApplyAssistant(record: ApplicationRecord): AssistantSection[] {
       ]
     },
     {
-      title: "회사별 질문",
-      description: "지원 동기, 직무 적합성, 유입 경로, 이전 근무 여부처럼 회사마다 표현이 달라지는 질문입니다.",
+      title: "공통 지원 질문",
+      description: "여러 기업의 Apply Form에서 반복되는 질문을 현재 공고 기준으로 답변 준비표에 연결합니다.",
       fields: [
         {
           label: `Why ${company}?`,
           description: `${company}의 제품/시장/기술 방향과 본인의 프로젝트 경험을 연결하는 200~400단어 답변 초안을 준비합니다.`,
           status: "AI_DRAFT",
-          source: "Anthropic, Discord, Figma 등"
+          source: "글로벌 채용 지원서 공통 질문"
         },
         {
           label: `Why ${jobTitle}?`,
           description: "공고 요구 기술과 본인 경험을 연결하는 답변입니다. 적합도 진단의 강점과 부족 요소를 근거로 사용할 수 있습니다.",
           status: "AI_DRAFT",
-          source: "직무별 지원 질문"
+          source: "직무 적합성 질문"
         },
         {
           label: "How did you hear about this job?",
           description: "Greenhouse 공개 공고, 회사 채용 페이지, LinkedIn 등 실제 유입 경로를 사용자가 직접 선택합니다.",
           status: "EXTERNAL",
-          source: "Webflow, Mixpanel, Databricks 등"
+          source: "Greenhouse 계열 Apply Form에서 반복"
         },
         {
-          label: "민감정보 / 인구통계",
+          label: "인구통계 선택 항목",
           description: "성별, 인종, 장애, 군복무 등 선택형 인구통계 항목은 추천이나 자동 작성 대상에서 제외합니다.",
           status: "SENSITIVE",
-          source: "미국 ATS Apply Form에서 반복"
+          source: "EEO/자발적 자기식별 항목"
         }
       ]
     }
