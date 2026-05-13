@@ -95,7 +95,9 @@ export default function PlannerListPage() {
                       <h2 className="mt-2 text-lg font-semibold text-night">{roadmap.title}</h2>
                       <p className="mt-1 text-sm text-slate-500">{roadmap.target_job_title}</p>
                     </div>
-                    <Badge tone={readinessTone(roadmap.readiness_status)}>{readinessLabel(roadmap.readiness_status)}</Badge>
+                    <Badge tone={readinessTone(roadmap.readiness_status)} className="shrink-0 whitespace-nowrap">
+                      {readinessLabel(roadmap.readiness_status)}
+                    </Badge>
                   </div>
                   <div className="mt-5 grid grid-cols-3 gap-4 border-y border-slate-100 py-4">
                     <SmallMetric label="점수" value={`${roadmap.total_score}`} />

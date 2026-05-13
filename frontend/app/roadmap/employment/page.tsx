@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
-import { Badge, Card, LinkButton, PageHeader, PageShell, StepCard } from "@/components/ui";
+import { Badge, Card, LinkButton, PageHeader, PageShell } from "@/components/ui";
 
 const modules = [
   {
@@ -35,16 +35,10 @@ export default function EmploymentRoadmapPage() {
       />
 
       <section className="lens-container py-6">
-        <div className="mb-6 grid gap-3 md:grid-cols-3">
-          <StepCard index={1} title="추천 진단" description="맞춤추천에서 공고별 부족 요소와 준비도를 진단합니다." />
-          <StepCard index={2} title="취업 준비" description="부족 요소를 플래너 과제와 문서 보완 항목으로 전환합니다." />
-          <StepCard index={3} title="지원 관리" description="준비된 공고를 지원 파이프라인으로 넘겨 상태를 추적합니다." />
-        </div>
-
-        <div className="mt-8">
-          <p className="text-xs font-extrabold tracking-[0.14em] text-brand">CAREER WORKSPACE</p>
-          <h2 className="mt-2 text-2xl font-bold text-night">취업 준비 작업실</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-500">진단 결과를 실제 제출 준비까지 이어가기 위한 주요 작업을 선택하세요.</p>
+        <div>
+          <p className="text-xs font-extrabold tracking-[0.14em] text-brand">APPLICATION PREP</p>
+          <h2 className="mt-2 text-2xl font-bold text-night">지원 준비 대시보드</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-500">로드맵, 문서 점검, 지원 관리를 한곳에서 이어갑니다.</p>
         </div>
 
         <div className="mt-6 grid gap-5 lg:grid-cols-3">
