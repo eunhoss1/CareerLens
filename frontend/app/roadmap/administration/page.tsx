@@ -112,7 +112,7 @@ export default function AdministrationRoadmapPage() {
       <PageHeader
         kicker="ADMINISTRATION ROADMAP"
         title="행정로드맵"
-        description="비자, 회사 제출 서류, 출국 전 행정 패키지, 입국 후 초기 행정 처리를 하나의 준비 흐름으로 정리합니다."
+        description="비자, 회사 제출 서류, 보험, 주소 등록 등 출국 전후 행정 절차를 순서대로 정리합니다."
         actions={
           <>
             <LinkButton href="/roadmap/departure" variant="secondary">출국로드맵으로</LinkButton>
@@ -140,11 +140,11 @@ export default function AdministrationRoadmapPage() {
               <MetricCard label="행정 체크 항목" value={adminItems.length} helper="비자/행정/보험 중심" />
               <MetricCard label="진행 중" value={inProgressCount} helper="확인 또는 처리 중" />
               <MetricCard label="완료" value={doneCount} helper="사용자별 저장 상태" />
-              <MetricCard label="생성 방식" value={guidance?.generation_mode.includes("AI") ? "AI 보조" : "규칙 기반"} helper="정착 안내 요약 기준" />
+              <MetricCard label="준비율" value={`${completionRate}%`} helper="완료 항목 기준" />
             </div>
 
             <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-              <Card className="p-5">
+              <Card className="rounded-2xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
                 <p className="lens-kicker">ADMIN READINESS</p>
                 <h2 className="mt-3 text-2xl font-semibold text-night">행정 준비율</h2>
                 <div className="mt-5">
@@ -163,11 +163,11 @@ export default function AdministrationRoadmapPage() {
                 </div>
               </Card>
 
-              <Card className="p-5">
+              <Card className="rounded-2xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
                 <SectionHeader
-                  kicker="OFFICIAL SOURCE POLICY"
-                  title="공식 자료 확인 원칙"
-                  description="AI는 체크리스트 요약과 우선순위 정리에만 사용하고, 비자/체류자격의 최신 판단은 공식기관 자료로 최종 확인합니다."
+                  kicker="OFFICIAL SOURCES"
+                  title="공식 자료 확인"
+                  description="비자와 체류자격은 국가별 공식기관 자료와 회사 안내를 기준으로 최종 확인합니다."
                 />
                 <div className="mt-5 grid gap-3 md:grid-cols-2">
                   {officialSourceCards.map((card) => (

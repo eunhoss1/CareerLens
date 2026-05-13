@@ -15,6 +15,7 @@ import {
   type UserProfileRequest
 } from "@/lib/recommendation";
 import { createPlannerRoadmap } from "@/lib/planner";
+import { countryLabel } from "@/lib/display-labels";
 
 export default function RecommendationPage() {
   const router = useRouter();
@@ -141,7 +142,7 @@ function ProfileCard({ profile, user }: { profile: UserProfileRequest; user: Aut
       </div>
 
       <dl className="mt-5 grid grid-cols-2 gap-3">
-        <MetricCard label="희망 국가" value={countryName(profile.target_country)} />
+        <MetricCard label="희망 국가" value={countryLabel(profile.target_country)} />
         <MetricCard label="직무군" value={profile.target_job_family} />
         <MetricCard label="총 경력" value={`${profile.experience_years ?? 0}년`} />
         <MetricCard label="언어" value={profile.language_level} />
@@ -229,7 +230,7 @@ function RecommendationCard({
           </div>
           <h3 className="mt-4 text-xl font-bold text-night">{recommendation.company_name}</h3>
           <p className="mt-1 text-sm font-medium text-slate-600">
-            {countryName(recommendation.country)} · {recommendation.job_title}
+            {countryLabel(recommendation.country)} · {recommendation.job_title}
           </p>
         </div>
         <div className="min-w-[96px] rounded-xl bg-slate-50 px-4 py-3 text-right">
@@ -365,24 +366,6 @@ function evaluationText(recommendation: JobRecommendation) {
 
 function patternText(recommendation: JobRecommendation) {
   return "공고 요구사항과 직무 패턴을 기준으로 만든 비교 기준입니다. 이 패턴을 사용자 프로필과 대조해 강점과 부족 요소를 분리합니다.";
-}
-
-function countryName(country: string) {
-  const labels: Record<string, string> = {
-    "United States": "미국",
-    "USA": "미국",
-    "US": "미국",
-    "Japan": "일본",
-    "Canada": "캐나다",
-    "Ireland": "아일랜드",
-    "United Kingdom": "영국",
-    "Germany": "독일",
-    "France": "프랑스",
-    "Singapore": "싱가포르",
-    "India": "인도",
-    "Brazil": "브라질"
-  };
-  return labels[country] ?? country;
 }
 
 function gradeTone(grade: string) {
