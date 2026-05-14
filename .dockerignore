@@ -1,0 +1,15 @@
+.git
+.gitignore
+.idea
+.vscode
+docs
+frontend/.next
+frontend/node_modules
+frontend/*.log
+frontend/*.tsbuildinfo
+backend/target
+backend/*.log
+seed-data/raw
+*.log
+Dockerfile
+docker-compose*.yml
