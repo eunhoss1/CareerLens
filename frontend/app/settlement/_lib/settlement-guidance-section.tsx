@@ -13,16 +13,18 @@ export function SettlementGuidanceSection({
   guidanceError,
   isGuidanceLoading,
   isUserReady,
-  onRefreshGuidance
+  onRefreshGuidance,
+  className = "mt-6"
 }: {
   guidance: SettlementGuidance | null;
   guidanceError: string | null;
   isGuidanceLoading: boolean;
   isUserReady: boolean;
   onRefreshGuidance: () => void;
+  className?: string;
 }) {
   return (
-    <section className="mt-6">
+    <section className={className}>
       <SettlementBriefCard
         guidance={guidance}
         guidanceError={guidanceError}
