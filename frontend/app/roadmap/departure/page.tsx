@@ -1,15 +1,55 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
-import { Badge, Button, Card, EmptyState, LinkButton, MetricCard, PageHeader, PageShell, SelectInput, TextInput, TimelineCard } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, LinkButton, MetricCard, PageHeader, PageShell, TextInput, TimelineCard } from "@/components/ui";
+import { getStoredUser } from "@/lib/auth";
 import { generateDeparturePlan, type DeparturePlan, type DeparturePlanRequest } from "@/lib/departure";
+import { countryLabel } from "@/lib/display-labels";
+import { fetchUserProfile, type UserProfileSummary } from "@/lib/recommendation";
+
+type CountryOption = {
+  value: string;
+  aliases: string[];
+};
+
+type CityAirport = {
+  city: string;
+  airport_code: string;
+};
+
+const countryOptions: CountryOption[] = [
+  {
+    value: "일본",
+    aliases: ["Japan", "JP", "일본"]
+  },
+  {
+    value: "미국",
+    aliases: ["United States", "United States of America", "USA", "US", "U.S.", "미국"]
+  }
+];
+
+const cityAirports: Record<string, CityAirport[]> = {
+  Japan: [
+    { city: "Tokyo", airport_code: "HND" },
+    { city: "Osaka", airport_code: "KIX" },
+    { city: "Fukuoka", airport_code: "FUK" },
+    { city: "Nagoya", airport_code: "NGO" }
+  ],
+  UnitedStates: [
+    { city: "San Francisco", airport_code: "SFO" },
+    { city: "Seattle", airport_code: "SEA" },
+    { city: "New York", airport_code: "JFK" },
+    { city: "Austin", airport_code: "AUS" },
+    { city: "Los Angeles", airport_code: "LAX" }
+  ]
+};
 
 const defaultRequest: DeparturePlanRequest = {
-  target_country: "일본",
-  destination_city: "도쿄",
+  target_country: "",
+  destination_city: "",
   origin_airport: "ICN",
-  destination_airport: "HND",
+  destination_airport: "",
   start_date: "2026-06-20",
   arrival_buffer_days: 14,
   visa_status: "내정 후 회사 제출 서류 확인 필요",
@@ -21,6 +61,44 @@ export default function DepartureRoadmapPage() {
   const [plan, setPlan] = useState<DeparturePlan | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [profileCountryMessage, setProfileCountryMessage] = useState("해외 취업 프로필의 희망국가를 불러오는 중입니다.");
+  const [profileCityMessage, setProfileCityMessage] = useState("해외 취업 프로필의 희망도시를 불러오는 중입니다.");
+
+  useEffect(() => {
+    const storedUser = getStoredUser();
+    let ignore = false;
+
+    if (!storedUser) {
+      setProfileCountryMessage("로그인 후 해외 취업 프로필 설정의 희망국가가 자동 입력됩니다.");
+      setProfileCityMessage("로그인 후 해외 취업 프로필 설정의 희망도시가 자동 입력됩니다.");
+      return;
+    }
+
+    fetchUserProfile(storedUser.user_id)
+      .then((profile) => {
+        if (ignore) return;
+        if (profile.target_country) {
+          applyProfileCountryDefaults(profile);
+          setProfileCountryMessage("해외 취업 프로필 설정의 희망국가에서 자동 입력되었습니다.");
+          setProfileCityMessage(profile.target_city && profile.target_city !== "Not specified"
+            ? "해외 취업 프로필 설정의 희망도시에서 자동 입력되었습니다."
+            : "해외 취업 프로필 설정에서 희망도시를 먼저 저장하세요.");
+          return;
+        }
+        setProfileCountryMessage("해외 취업 프로필 설정에서 희망국가를 먼저 저장하세요.");
+        setProfileCityMessage("해외 취업 프로필 설정에서 희망도시를 먼저 저장하세요.");
+      })
+      .catch(() => {
+        if (!ignore) {
+          setProfileCountryMessage("해외 취업 프로필의 희망국가를 불러오지 못했습니다.");
+          setProfileCityMessage("해외 취업 프로필의 희망도시를 불러오지 못했습니다.");
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   async function submitPlan() {
     setIsLoading(true);
@@ -50,14 +128,11 @@ export default function DepartureRoadmapPage() {
             <p className="lens-kicker">TRAVEL INPUT</p>
             <h2 className="mt-3 text-2xl font-semibold text-night">출국 조건 입력</h2>
             <div className="mt-5 space-y-4">
-              <SelectInput label="목표 국가" value={form.target_country} onChange={(event) => update("target_country", event.target.value)}>
-                <option value="일본">일본</option>
-                <option value="미국">미국</option>
-              </SelectInput>
-              <TextInput label="도착 도시" value={form.destination_city} onChange={(event) => update("destination_city", event.target.value)} />
+              <TextInput label="목표 국가" helper={profileCountryMessage} value={form.target_country} disabled />
+              <TextInput label="도착 도시" helper={profileCityMessage} value={form.destination_city} disabled />
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                 <TextInput label="출발 공항" helper="IATA" value={form.origin_airport} onChange={(event) => update("origin_airport", event.target.value.toUpperCase())} />
-                <TextInput label="도착 공항" helper="IATA" value={form.destination_airport} onChange={(event) => update("destination_airport", event.target.value.toUpperCase())} />
+                <TextInput label="도착 공항" helper="IATA" value={form.destination_airport} disabled />
               </div>
               <TextInput label="입사 예정일" type="date" value={form.start_date} onChange={(event) => update("start_date", event.target.value)} />
               <TextInput
@@ -71,7 +146,7 @@ export default function DepartureRoadmapPage() {
               />
               <TextInput label="비자 상태" value={form.visa_status} onChange={(event) => update("visa_status", event.target.value)} />
               <TextInput label="숙소 상태" value={form.housing_status} onChange={(event) => update("housing_status", event.target.value)} />
-              <Button type="button" disabled={isLoading} onClick={submitPlan} className="w-full">
+              <Button type="button" disabled={isLoading || !form.target_country || !form.destination_city || !form.destination_airport} onClick={submitPlan} className="w-full">
                 {isLoading ? "로드맵 생성 중" : "출국 로드맵 생성"}
               </Button>
             </div>
@@ -204,7 +279,56 @@ export default function DepartureRoadmapPage() {
 
   function update<Key extends keyof DeparturePlanRequest>(key: Key, value: DeparturePlanRequest[Key]) {
     setForm((current) => ({ ...current, [key]: value }));
+    setPlan(null);
   }
+
+  function applyProfileCountryDefaults(profile: UserProfileSummary) {
+    const country = countryOptionFor(profile.target_country);
+    const destinationCity = profile.target_city && profile.target_city !== "Not specified" ? profile.target_city : "";
+    const destinationAirport = airportCodeForCity(destinationCity);
+
+    if (country) {
+      setForm((current) => ({
+        ...current,
+        target_country: country.value,
+        destination_city: destinationCity,
+        destination_airport: destinationAirport
+      }));
+      setPlan(null);
+      return;
+    }
+
+    const targetCountry = countryLabel(profile.target_country);
+    if (targetCountry !== "미기재") {
+      setForm((current) => ({
+        ...current,
+        target_country: targetCountry,
+        destination_city: destinationCity,
+        destination_airport: destinationAirport
+      }));
+      setPlan(null);
+    }
+  }
+}
+
+function countryOptionFor(country: string | null | undefined) {
+  const value = country?.trim();
+  if (!value) return null;
+
+  const displayValue = countryLabel(value);
+  return countryOptions.find((option) =>
+    option.value === value
+    || option.value === displayValue
+    || option.aliases.some((alias) => alias.toLowerCase() === value.toLowerCase())
+  ) ?? null;
+}
+
+function airportCodeForCity(city: string | null | undefined) {
+  const normalizedCity = city?.trim().toLowerCase();
+  if (!normalizedCity) return "";
+
+  const airports = Object.values(cityAirports).flat();
+  return airports.find((airport) => airport.city.toLowerCase() === normalizedCity)?.airport_code ?? "";
 }
 
 function dDayLabel(days: number) {
