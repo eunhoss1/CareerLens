@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Button, Card, EmptyState, LinkButton, MetricCard, PageHeader, PageShell, SelectInput, TextInput, TimelineCard } from "@/components/ui";
-import { generateDeparturePlan, type DeparturePlan, type DeparturePlanRequest } from "@/lib/departure";
+import { generateDeparturePlan, generateDeparturePlanFromRoadmap, type DeparturePlan, type DeparturePlanRequest } from "@/lib/departure";
 
 const defaultRequest: DeparturePlanRequest = {
   target_country: "일본",
@@ -21,6 +21,17 @@ export default function DepartureRoadmapPage() {
   const [plan, setPlan] = useState<DeparturePlan | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const linkedRoadmapId = Number(new URLSearchParams(window.location.search).get("roadmapId") ?? 0);
+    if (!linkedRoadmapId) return;
+    setIsLoading(true);
+    setErrorMessage(null);
+    generateDeparturePlanFromRoadmap(linkedRoadmapId)
+      .then(setPlan)
+      .catch((error) => setErrorMessage(error instanceof Error ? error.message : "출국 로드맵을 생성하지 못했습니다."))
+      .finally(() => setIsLoading(false));
+  }, []);
 
   async function submitPlan() {
     setIsLoading(true);

@@ -1,3 +1,5 @@
+import { apiFetch, authHeaders, readApiError } from "@/lib/auth";
+
 export type SettlementStatus = "NOT_STARTED" | "IN_PROGRESS" | "DONE";
 
 export type SettlementChecklistItem = {
@@ -31,45 +33,59 @@ export type SettlementGuidance = {
 const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
 export async function fetchSettlementChecklists(userId: number): Promise<SettlementChecklistItem[]> {
-  const response = await fetch(`${baseUrl}/api/settlement/users/${userId}/checklists`, {
+  const response = await apiFetch(`${baseUrl}/api/settlement/users/${userId}/checklists`, {
+    headers: authHeaders(),
     cache: "no-store"
-  });
+  }, "정착 체크리스트 조회");
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Settlement checklist request failed.");
+    throw new Error(await readApiError(response, "Settlement checklist request failed."));
   }
 
   return response.json();
 }
 
 export async function updateSettlementChecklistStatus(itemId: number, status: SettlementStatus): Promise<SettlementChecklistItem> {
-  const response = await fetch(`${baseUrl}/api/settlement/checklists/${itemId}/status`, {
+  const response = await apiFetch(`${baseUrl}/api/settlement/checklists/${itemId}/status`, {
     method: "PATCH",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      ...authHeaders()
     },
     body: JSON.stringify({ status }),
     cache: "no-store"
-  });
+  }, "정착 체크리스트 상태 변경");
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Settlement checklist status update failed.");
+    throw new Error(await readApiError(response, "Settlement checklist status update failed."));
   }
 
   return response.json();
 }
 
 export async function generateSettlementGuidance(userId: number): Promise<SettlementGuidance> {
-  const response = await fetch(`${baseUrl}/api/settlement/users/${userId}/guidance`, {
+  const response = await apiFetch(`${baseUrl}/api/settlement/users/${userId}/guidance`, {
     method: "POST",
+    headers: authHeaders(),
     cache: "no-store"
-  });
+  }, "행정 로드맵 안내 생성");
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Settlement guidance request failed.");
+    throw new Error(await readApiError(response, "Settlement guidance request failed."));
+  }
+
+  return response.json();
+}
+
+export async function generateSettlementGuidanceFromRoadmap(roadmapId: number): Promise<SettlementGuidance> {
+  const response = await apiFetch(`${baseUrl}/api/settlement/roadmaps/${roadmapId}/guidance`, {
+    method: "POST",
+    headers: authHeaders(),
+    cache: "no-store"
+  }, "행정 로드맵 안내 생성");
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Settlement guidance request failed."));
   }
 
   return response.json();

@@ -1,6 +1,11 @@
 package com.careerlens.backend.service;
 
 import com.careerlens.backend.dto.*;
+import com.careerlens.backend.entity.JobPosting;
+import com.careerlens.backend.entity.PlannerRoadmap;
+import com.careerlens.backend.repository.PlannerRoadmapRepository;
+import com.careerlens.backend.security.AccessGuard;
+import com.careerlens.backend.security.JwtClaims;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -39,6 +44,7 @@ public class DeparturePlanService {
     private static final Duration AMADEUS_REQUEST_TIMEOUT = Duration.ofSeconds(20);
 
     private final ObjectMapper objectMapper;
+    private final PlannerRoadmapRepository plannerRoadmapRepository;
     private final HttpClient httpClient;
     private final boolean aiEnabled;
     private final String provider;
@@ -61,6 +67,7 @@ public class DeparturePlanService {
 
     public DeparturePlanService(
             ObjectMapper objectMapper,
+            PlannerRoadmapRepository plannerRoadmapRepository,
             @Value("${app.ai.openai.enabled:false}") boolean aiEnabled,
             @Value("${app.ai.provider:openai}") String provider,
             @Value("${app.ai.openai.api-key:}") String openAiApiKey,
@@ -82,6 +89,7 @@ public class DeparturePlanService {
             @Value("${app.travel.amadeus.currency-code:KRW}") String amadeusCurrencyCode
     ) {
         this.objectMapper = objectMapper;
+        this.plannerRoadmapRepository = plannerRoadmapRepository;
         this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
         this.aiEnabled = aiEnabled;
         this.provider = provider == null ? "openai" : provider.trim().toLowerCase(Locale.ROOT);
@@ -113,6 +121,12 @@ public class DeparturePlanService {
     }
 
     public DeparturePlanDto generatePlan(DeparturePlanRequestDto request) {
+        return generatePlan(request, null);
+    }
+
+    public DeparturePlanDto generatePlan(DeparturePlanRequestDto request, JwtClaims claims) {
+        AccessGuard.requireUserId(claims);
+        validateBusinessInput(request);
         DeparturePlanDto fallback = buildRuleBasedPlan(request, "RULE_BASED");
         if (!isAiConfigured()) {
             return fallback;
@@ -123,6 +137,85 @@ public class DeparturePlanService {
             return hasUsableAiPlan(aiPlan) ? aiPlan : fallback;
         } catch (RuntimeException exception) {
             return fallback;
+        }
+    }
+
+    public DeparturePlanDto generatePlanFromRoadmap(Long roadmapId, JwtClaims claims) {
+        PlannerRoadmap roadmap = plannerRoadmapRepository.findWithDetailsById(roadmapId)
+                .orElseThrow(() -> new IllegalArgumentException("Planner roadmap not found: " + roadmapId));
+        Long ownerUserId = roadmap.getUser() == null ? null : roadmap.getUser().getId();
+        AccessGuard.requireUserOrAdmin(claims, ownerUserId);
+
+        JobPosting job = roadmap.getDiagnosisResult() == null ? null : roadmap.getDiagnosisResult().getJobPosting();
+        DeparturePlanRequestDto request = requestFromRoadmap(roadmap, job);
+        return generatePlan(request, claims);
+    }
+
+    private DeparturePlanRequestDto requestFromRoadmap(PlannerRoadmap roadmap, JobPosting job) {
+        String country = firstNonBlank(job == null ? null : job.getCountry(), "United States");
+        String city = destinationCityFor(country, job == null ? null : job.getWorkType());
+        LocalDate startDate = job != null && job.getApplicationDeadline() != null
+                ? job.getApplicationDeadline().plusWeeks(8)
+                : LocalDate.now().plusWeeks(Math.max(4, roadmap.getDurationWeeks() == null ? 8 : roadmap.getDurationWeeks()));
+
+        return new DeparturePlanRequestDto(
+                country,
+                city,
+                "ICN",
+                airportCodeFor(country, city),
+                startDate,
+                DEFAULT_ARRIVAL_BUFFER_DAYS,
+                firstNonBlank(job == null ? null : job.getVisaRequirement(), "비자 조건 확인 필요"),
+                "임시 숙소 미정"
+        );
+    }
+
+    private String destinationCityFor(String country, String workType) {
+        if (workType != null && workType.toLowerCase(Locale.ROOT).contains("remote")) {
+            return "Remote base";
+        }
+        String normalized = country == null ? "" : country.toLowerCase(Locale.ROOT);
+        if (normalized.contains("japan") || normalized.contains("일본")) {
+            return "Tokyo";
+        }
+        if (normalized.contains("canada")) {
+            return "Toronto";
+        }
+        if (normalized.contains("united kingdom") || normalized.contains("uk")) {
+            return "London";
+        }
+        if (normalized.contains("germany")) {
+            return "Munich";
+        }
+        if (normalized.contains("ireland")) {
+            return "Dublin";
+        }
+        return "Seattle";
+    }
+
+    private String airportCodeFor(String country, String city) {
+        String value = ((country == null ? "" : country) + " " + (city == null ? "" : city)).toLowerCase(Locale.ROOT);
+        if (value.contains("japan") || value.contains("tokyo") || value.contains("일본")) {
+            return "NRT";
+        }
+        if (value.contains("canada") || value.contains("toronto")) {
+            return "YYZ";
+        }
+        if (value.contains("united kingdom") || value.contains("london") || value.contains("uk")) {
+            return "LHR";
+        }
+        if (value.contains("germany") || value.contains("munich")) {
+            return "MUC";
+        }
+        if (value.contains("ireland") || value.contains("dublin")) {
+            return "DUB";
+        }
+        return "SEA";
+    }
+
+    private void validateBusinessInput(DeparturePlanRequestDto request) {
+        if (request.startDate().isBefore(LocalDate.now().minusDays(1))) {
+            throw new IllegalArgumentException("입사 예정일은 과거 날짜로 설정할 수 없습니다.");
         }
     }
 

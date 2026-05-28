@@ -3,12 +3,16 @@ package com.careerlens.backend.service;
 import com.careerlens.backend.dto.SettlementChecklistDto;
 import com.careerlens.backend.dto.SettlementCountrySummaryDto;
 import com.careerlens.backend.dto.SettlementGuidanceDto;
+import com.careerlens.backend.entity.PlannerRoadmap;
 import com.careerlens.backend.entity.SettlementChecklist;
 import com.careerlens.backend.entity.User;
 import com.careerlens.backend.entity.UserProfile;
+import com.careerlens.backend.repository.PlannerRoadmapRepository;
 import com.careerlens.backend.repository.SettlementChecklistRepository;
 import com.careerlens.backend.repository.UserProfileRepository;
 import com.careerlens.backend.repository.UserRepository;
+import com.careerlens.backend.security.AccessGuard;
+import com.careerlens.backend.security.JwtClaims;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -52,6 +56,7 @@ public class SettlementService {
     );
 
     private final SettlementChecklistRepository settlementChecklistRepository;
+    private final PlannerRoadmapRepository plannerRoadmapRepository;
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
     private final ObjectMapper objectMapper;
@@ -60,6 +65,7 @@ public class SettlementService {
 
     public SettlementService(
             SettlementChecklistRepository settlementChecklistRepository,
+            PlannerRoadmapRepository plannerRoadmapRepository,
             UserRepository userRepository,
             UserProfileRepository userProfileRepository,
             ObjectMapper objectMapper,
@@ -73,6 +79,7 @@ public class SettlementService {
             @Value("${app.ai.groq.responses-url:https://api.groq.com/openai/v1/responses}") String groqResponsesUrl
     ) {
         this.settlementChecklistRepository = settlementChecklistRepository;
+        this.plannerRoadmapRepository = plannerRoadmapRepository;
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.objectMapper = objectMapper;
@@ -97,8 +104,14 @@ public class SettlementService {
 
     @Transactional
     public SettlementChecklistDto updateStatus(Long itemId, String status) {
+        return updateStatus(itemId, status, null);
+    }
+
+    @Transactional
+    public SettlementChecklistDto updateStatus(Long itemId, String status, JwtClaims claims) {
         SettlementChecklist checklist = settlementChecklistRepository.findById(itemId)
                 .orElseThrow(() -> new IllegalArgumentException("Settlement checklist not found: " + itemId));
+        verifyChecklistOwner(checklist, claims);
         checklist.setStatus(normalizeStatus(status));
         checklist.setUpdatedAt(LocalDateTime.now());
         return toDto(settlementChecklistRepository.save(checklist));
@@ -120,6 +133,23 @@ public class SettlementService {
         } catch (RuntimeException exception) {
             return fallback;
         }
+    }
+
+    @Transactional
+    public SettlementGuidanceDto generateGuidanceFromRoadmap(Long roadmapId, JwtClaims claims) {
+        PlannerRoadmap roadmap = plannerRoadmapRepository.findWithDetailsById(roadmapId)
+                .orElseThrow(() -> new IllegalArgumentException("Planner roadmap not found: " + roadmapId));
+        Long ownerUserId = roadmap.getUser() == null ? null : roadmap.getUser().getId();
+        AccessGuard.requireUserOrAdmin(claims, ownerUserId);
+        return generateGuidance(ownerUserId);
+    }
+
+    private void verifyChecklistOwner(SettlementChecklist checklist, JwtClaims claims) {
+        if (claims == null) {
+            return;
+        }
+        Long ownerUserId = checklist.getUser() == null ? null : checklist.getUser().getId();
+        AccessGuard.requireUserOrAdmin(claims, ownerUserId);
     }
 
     private void ensureDefaultChecklists(Long userId) {

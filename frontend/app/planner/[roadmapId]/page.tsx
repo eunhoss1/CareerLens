@@ -86,6 +86,8 @@ export default function PlannerRoadmapPage() {
           <>
             <LinkButton href="/planner" variant="secondary">목록</LinkButton>
             <LinkButton href="/roadmap/employment/documents" variant="secondary">문서 분석</LinkButton>
+            <LinkButton href={`/roadmap/departure?roadmapId=${roadmapId}`} variant="secondary">출국 로드맵</LinkButton>
+            <LinkButton href={`/roadmap/administration?roadmapId=${roadmapId}`} variant="secondary">행정 로드맵</LinkButton>
             <Button type="button" variant="secondary" disabled={!roadmap || creatingApplication} onClick={moveToApplicationPipeline}>
               {creatingApplication ? "생성 중" : "지원 준비로 넘기기"}
             </Button>

@@ -18,6 +18,7 @@ import { getStoredUser, type AuthUser } from "@/lib/auth";
 import {
   fetchSettlementChecklists,
   generateSettlementGuidance,
+  generateSettlementGuidanceFromRoadmap,
   type SettlementChecklistItem,
   type SettlementGuidance
 } from "@/lib/settlement";
@@ -68,6 +69,7 @@ export default function AdministrationRoadmapPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    const linkedRoadmapId = Number(new URLSearchParams(window.location.search).get("roadmapId") ?? 0);
     const storedUser = getStoredUser();
     setUser(storedUser);
     if (!storedUser) {
@@ -77,7 +79,7 @@ export default function AdministrationRoadmapPage() {
 
     Promise.all([
       fetchSettlementChecklists(storedUser.user_id),
-      generateSettlementGuidance(storedUser.user_id)
+      linkedRoadmapId ? generateSettlementGuidanceFromRoadmap(linkedRoadmapId) : generateSettlementGuidance(storedUser.user_id)
     ])
       .then(([loadedItems, generatedGuidance]) => {
         setItems(loadedItems);

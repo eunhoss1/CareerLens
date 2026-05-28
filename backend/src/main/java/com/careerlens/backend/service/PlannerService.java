@@ -9,6 +9,8 @@ import com.careerlens.backend.entity.PlannerTask;
 import com.careerlens.backend.repository.DiagnosisResultRepository;
 import com.careerlens.backend.repository.PlannerRoadmapRepository;
 import com.careerlens.backend.repository.PlannerTaskRepository;
+import com.careerlens.backend.security.AccessGuard;
+import com.careerlens.backend.security.JwtClaims;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
@@ -51,12 +53,19 @@ public class PlannerService {
 
     @Transactional
     public PlannerRoadmapDto createFromDiagnosis(Long diagnosisId) {
+        return createFromDiagnosis(diagnosisId, null);
+    }
+
+    @Transactional
+    public PlannerRoadmapDto createFromDiagnosis(Long diagnosisId, JwtClaims claims) {
         PlannerRoadmap existing = findExistingRoadmap(diagnosisId);
         if (existing != null) {
+            verifyRoadmapOwner(existing, claims);
             return toDto(existing);
         }
 
         DiagnosisResult diagnosis = findDiagnosis(diagnosisId);
+        verifyDiagnosisOwner(diagnosis, claims);
         int durationWeeks = durationWeeks(diagnosis);
         boolean aiConfigured = plannerTaskDraftService.isAiConfigured();
 
@@ -67,8 +76,14 @@ public class PlannerService {
 
     @Transactional(readOnly = true)
     public PlannerRoadmapDto getRoadmap(Long roadmapId) {
+        return getRoadmap(roadmapId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public PlannerRoadmapDto getRoadmap(Long roadmapId, JwtClaims claims) {
         PlannerRoadmap roadmap = plannerRoadmapRepository.findWithDetailsById(roadmapId)
                 .orElseThrow(() -> new IllegalArgumentException("Planner roadmap not found: " + roadmapId));
+        verifyRoadmapOwner(roadmap, claims);
         return toDto(roadmap);
     }
 
@@ -81,11 +96,33 @@ public class PlannerService {
 
     @Transactional
     public PlannerRoadmapDto updateTaskStatus(Long taskId, String status) {
+        return updateTaskStatus(taskId, status, null);
+    }
+
+    @Transactional
+    public PlannerRoadmapDto updateTaskStatus(Long taskId, String status, JwtClaims claims) {
         PlannerTask task = plannerTaskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Planner task not found: " + taskId));
+        verifyRoadmapOwner(task.getRoadmap(), claims);
         task.setStatus(normalizeStatus(status));
         plannerTaskRepository.save(task);
         return toDto(task.getRoadmap());
+    }
+
+    private void verifyDiagnosisOwner(DiagnosisResult diagnosis, JwtClaims claims) {
+        if (claims == null) {
+            return;
+        }
+        Long ownerUserId = diagnosis.getUser() == null ? null : diagnosis.getUser().getId();
+        AccessGuard.requireUserOrAdmin(claims, ownerUserId);
+    }
+
+    private void verifyRoadmapOwner(PlannerRoadmap roadmap, JwtClaims claims) {
+        if (claims == null) {
+            return;
+        }
+        Long ownerUserId = roadmap.getUser() == null ? null : roadmap.getUser().getId();
+        AccessGuard.requireUserOrAdmin(claims, ownerUserId);
     }
 
     // ===== 로드맵 생성: 진단 결과를 로드맵과 과제로 저장하는 내부 흐름 =====

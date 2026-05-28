@@ -43,7 +43,7 @@ export function isAdminUser(user: AuthUser | null) {
   return Boolean(user?.admin) || user?.role === "ADMIN";
 }
 
-export function authHeaders(): HeadersInit {
+export function authHeaders(): Record<string, string> {
   const user = getStoredUser();
   if (!user?.access_token) {
     return {};
@@ -51,6 +51,14 @@ export function authHeaders(): HeadersInit {
   return {
     Authorization: `${user.token_type ?? "Bearer"} ${user.access_token}`
   };
+}
+
+export async function apiFetch(input: RequestInfo | URL, init: RequestInit | undefined, context: string): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch {
+    throw new Error(`${context} 서버에 연결할 수 없습니다. 백엔드 실행 상태와 네트워크를 확인해주세요.`);
+  }
 }
 
 export async function signup(input: {
@@ -83,10 +91,10 @@ export async function checkEmailAvailability(email: string): Promise<Availabilit
 
 export async function fetchCurrentUser(): Promise<AuthUser> {
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-  const response = await fetch(`${baseUrl}/api/auth/me`, {
+  const response = await apiFetch(`${baseUrl}/api/auth/me`, {
     headers: authHeaders(),
     cache: "no-store"
-  });
+  }, "현재 사용자 조회");
 
   if (!response.ok) {
     throw new Error(await readApiError(response, "Current user request failed."));
@@ -97,14 +105,14 @@ export async function fetchCurrentUser(): Promise<AuthUser> {
 
 async function authRequest(path: string, input: object): Promise<AuthUser> {
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-  const response = await fetch(`${baseUrl}${path}`, {
+  const response = await apiFetch(`${baseUrl}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
     body: JSON.stringify(input),
     cache: "no-store"
-  });
+  }, "인증 요청");
 
   if (!response.ok) {
     throw new Error(await readApiError(response, "Authentication request failed."));
@@ -115,10 +123,10 @@ async function authRequest(path: string, input: object): Promise<AuthUser> {
 
 async function availabilityRequest(path: string): Promise<AvailabilityResponse> {
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-  const response = await fetch(`${baseUrl}${path}`, {
+  const response = await apiFetch(`${baseUrl}${path}`, {
     method: "GET",
     cache: "no-store"
-  });
+  }, "중복 확인");
 
   if (!response.ok) {
     throw new Error(await readApiError(response, "Availability request failed."));
@@ -127,7 +135,7 @@ async function availabilityRequest(path: string): Promise<AvailabilityResponse> 
   return response.json();
 }
 
-async function readApiError(response: Response, fallback: string) {
+export async function readApiError(response: Response, fallback: string) {
   const text = await response.text();
   if (!text) {
     return fallback;
