@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Button, Card, EmptyState, LinkButton, PageHeader, PageShell, ScoreBar, SelectInput } from "@/components/ui";
+import { isMembershipLimitMessage } from "@/lib/membership";
 import { fetchUserRoadmaps, type PlannerTask } from "@/lib/planner";
 import {
   verifyTaskFile,
@@ -252,8 +253,11 @@ export default function EmploymentDocumentsPage() {
               </Card>
 
               {errorMessage && (
-                <div role="alert" className="border border-coral/30 bg-red-50 px-4 py-3 text-sm font-medium text-coral">
-                  {errorMessage}
+                <div role="alert" className="rounded-2xl border border-coral/30 bg-red-50 px-4 py-3 text-sm font-medium text-coral">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <span>{errorMessage}</span>
+                    {isMembershipLimitMessage(errorMessage) && <LinkButton href="/membership">Pro 멤버십 보기</LinkButton>}
+                  </div>
                 </div>
               )}
 

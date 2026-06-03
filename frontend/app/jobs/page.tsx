@@ -9,6 +9,7 @@ import { SiteHeader } from "@/components/site-header";
 import { Button, Card, EmptyState, LinkButton, PageHeader, PageShell } from "@/components/ui";
 import { getStoredUser } from "@/lib/auth";
 import { fetchJobs, type JobPosting } from "@/lib/jobs";
+import { isMembershipLimitMessage } from "@/lib/membership";
 import { createPlannerRoadmap } from "@/lib/planner";
 import { diagnoseStoredProfileForJob } from "@/lib/recommendation";
 
@@ -99,8 +100,11 @@ export default function JobsPage() {
         </Card>
 
         {errorMessage && (
-          <div role="alert" className="mt-5 border border-coral/30 bg-red-50 px-4 py-3 text-sm font-medium text-coral">
-            {errorMessage}
+          <div role="alert" className="mt-5 rounded-2xl border border-coral/30 bg-red-50 px-4 py-3 text-sm font-medium text-coral">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span>{errorMessage}</span>
+              {isMembershipLimitMessage(errorMessage) && <LinkButton href="/membership">Pro 멤버십 보기</LinkButton>}
+            </div>
           </div>
         )}
 
