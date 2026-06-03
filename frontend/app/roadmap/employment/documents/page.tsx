@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Button, Card, EmptyState, LinkButton, PageHeader, PageShell, ScoreBar, SelectInput } from "@/components/ui";
-import { getStoredUser } from "@/lib/auth";
 import { fetchUserRoadmaps, type PlannerTask } from "@/lib/planner";
 import {
   verifyTaskFile,
@@ -22,6 +22,7 @@ type TaskOption = PlannerTask & {
 };
 
 export default function EmploymentDocumentsPage() {
+  const auth = useRequiredAuth();
   const [tasks, setTasks] = useState<TaskOption[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [submitMode, setSubmitMode] = useState<SubmitMode>("TEXT");
@@ -36,13 +37,15 @@ export default function EmploymentDocumentsPage() {
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
-    const user = getStoredUser();
-    if (!user) {
+    if (auth.isChecking) {
+      return;
+    }
+    if (!auth.user) {
       setIsLoadingTasks(false);
       return;
     }
 
-    fetchUserRoadmaps(user.user_id)
+    fetchUserRoadmaps(auth.user.user_id)
       .then((roadmaps) => {
         const options = roadmaps.flatMap((roadmap) =>
           roadmap.tasks.map((task) => ({
@@ -57,7 +60,7 @@ export default function EmploymentDocumentsPage() {
       })
       .catch((error: Error) => setErrorMessage(error.message))
       .finally(() => setIsLoadingTasks(false));
-  }, []);
+  }, [auth.isChecking, auth.user]);
 
   const selectedTask = useMemo(
     () => tasks.find((task) => task.task_id === selectedTaskId) ?? null,
@@ -97,6 +100,14 @@ export default function EmploymentDocumentsPage() {
     } finally {
       setIsAnalyzing(false);
     }
+  }
+
+  if (auth.isChecking) {
+    return <AuthCheckingScreen title="AI 문서 분석 접근 권한을 확인하는 중입니다." />;
+  }
+
+  if (!auth.user) {
+    return <AuthRequiredScreen title="AI 문서 분석은 로그인 후 이용할 수 있습니다." />;
   }
 
   return (

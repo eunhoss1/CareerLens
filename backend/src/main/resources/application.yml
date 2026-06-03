@@ -25,6 +25,11 @@ careerlens:
     processed-path: ../seed-data/processed
 
 app:
+  seed:
+    enabled: ${APP_SEED_ENABLED:false}
+    reset-enabled: ${APP_SEED_RESET_ENABLED:false}
+  resource-seed:
+    enabled: ${APP_RESOURCE_SEED_ENABLED:false}
   auth:
     admin-login-ids: ${ADMIN_LOGIN_IDS:admin,careerlens-admin}
     jwt:

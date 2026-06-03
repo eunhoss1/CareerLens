@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Button, Card, EmptyState, LinkButton, MetricCard, PageHeader, PageShell, ScoreBar } from "@/components/ui";
 import { createApplicationFromRoadmap } from "@/lib/applications";
@@ -11,6 +12,7 @@ import { fetchPlannerRoadmap, updatePlannerTaskStatus, type PlannerRoadmap, type
 export default function PlannerRoadmapPage() {
   const params = useParams<{ roadmapId: string }>();
   const router = useRouter();
+  const auth = useRequiredAuth();
   const roadmapId = Number(params.roadmapId);
   const [roadmap, setRoadmap] = useState<PlannerRoadmap | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -19,14 +21,14 @@ export default function PlannerRoadmapPage() {
   const [creatingApplication, setCreatingApplication] = useState(false);
 
   useEffect(() => {
-    if (!roadmapId) return;
+    if (auth.isChecking || !auth.user || !roadmapId) return;
     setIsLoading(true);
     setErrorMessage(null);
     fetchPlannerRoadmap(roadmapId)
       .then(setRoadmap)
       .catch((error) => setErrorMessage(error instanceof Error ? error.message : "로드맵을 불러오지 못했습니다."))
       .finally(() => setIsLoading(false));
-  }, [roadmapId]);
+  }, [auth.isChecking, auth.user, roadmapId]);
 
   const groupedTasks = useMemo(() => {
     const groups = new Map<number, PlannerTask[]>();
@@ -76,6 +78,14 @@ export default function PlannerRoadmapPage() {
     }
   }
 
+  if (auth.isChecking) {
+    return <AuthCheckingScreen title="커리어 플래너 접근 권한을 확인하는 중입니다." />;
+  }
+
+  if (!auth.user) {
+    return <AuthRequiredScreen title="커리어 플래너 상세는 로그인 후 이용할 수 있습니다." />;
+  }
+
   return (
     <PageShell>
       <SiteHeader />
@@ -86,6 +96,8 @@ export default function PlannerRoadmapPage() {
           <>
             <LinkButton href="/planner" variant="secondary">목록</LinkButton>
             <LinkButton href="/roadmap/employment/documents" variant="secondary">문서 분석</LinkButton>
+            <LinkButton href={`/roadmap/departure?roadmapId=${roadmapId}`} variant="secondary">출국 로드맵</LinkButton>
+            <LinkButton href={`/roadmap/administration?roadmapId=${roadmapId}`} variant="secondary">행정 로드맵</LinkButton>
             <Button type="button" variant="secondary" disabled={!roadmap || creatingApplication} onClick={moveToApplicationPipeline}>
               {creatingApplication ? "생성 중" : "지원 준비로 넘기기"}
             </Button>

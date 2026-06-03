@@ -1,9 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Button, Card, EmptyState, LinkButton, MetricCard, PageHeader, PageShell, SelectInput, TextInput, TimelineCard } from "@/components/ui";
-import { generateDeparturePlan, type DeparturePlan, type DeparturePlanRequest } from "@/lib/departure";
+import {
+  fetchDeparturePlanFromRoadmap,
+  generateDeparturePlan,
+  generateDeparturePlanFromRoadmap,
+  refreshDeparturePlanFromRoadmap,
+  type DeparturePlan,
+  type DeparturePlanRequest
+} from "@/lib/departure";
 
 const defaultRequest: DeparturePlanRequest = {
   target_country: "일본",
@@ -17,10 +25,45 @@ const defaultRequest: DeparturePlanRequest = {
 };
 
 export default function DepartureRoadmapPage() {
+  const auth = useRequiredAuth();
   const [form, setForm] = useState<DeparturePlanRequest>(defaultRequest);
   const [plan, setPlan] = useState<DeparturePlan | null>(null);
+  const [linkedRoadmapId, setLinkedRoadmapId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (auth.isChecking || !auth.user) return;
+    const roadmapId = Number(new URLSearchParams(window.location.search).get("roadmapId") ?? 0);
+    if (!roadmapId) return;
+    setLinkedRoadmapId(roadmapId);
+    setIsLoading(true);
+    setErrorMessage(null);
+    loadRoadmapPlan(roadmapId)
+      .then(setPlan)
+      .catch((error) => setErrorMessage(error instanceof Error ? error.message : "출국 로드맵을 생성하지 못했습니다."))
+      .finally(() => setIsLoading(false));
+  }, [auth.isChecking, auth.user]);
+
+  if (auth.isChecking) {
+    return <AuthCheckingScreen title="출국로드맵 접근 권한을 확인하는 중입니다." />;
+  }
+
+  if (!auth.user) {
+    return <AuthRequiredScreen title="출국로드맵은 로그인 후 이용할 수 있습니다." />;
+  }
+
+  async function loadRoadmapPlan(roadmapId: number) {
+    try {
+      return await fetchDeparturePlanFromRoadmap(roadmapId);
+    } catch (error) {
+      if (isMissingSavedPlan(error)) {
+        return generateDeparturePlanFromRoadmap(roadmapId);
+      }
+      throw error;
+    }
+  }
 
   async function submitPlan() {
     setIsLoading(true);
@@ -35,13 +78,40 @@ export default function DepartureRoadmapPage() {
     }
   }
 
+  async function refreshLinkedPlan() {
+    if (!linkedRoadmapId) return;
+    setIsRefreshing(true);
+    setErrorMessage(null);
+    try {
+      setPlan(await refreshDeparturePlanFromRoadmap(linkedRoadmapId));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "출국 로드맵을 갱신하지 못했습니다.");
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+
   return (
     <PageShell>
       <SiteHeader />
       <PageHeader
         kicker="DEPARTURE ROADMAP"
         title="출국로드맵"
-        actions={<LinkButton href="/roadmap/administration">행정로드맵으로</LinkButton>}
+        actions={
+          <>
+            <LinkButton
+              href={linkedRoadmapId ? `/roadmap/administration?roadmapId=${linkedRoadmapId}` : "/roadmap/administration"}
+              className="min-w-[132px] whitespace-nowrap"
+            >
+              행정로드맵 확인
+            </LinkButton>
+            {linkedRoadmapId && (
+              <Button type="button" variant="secondary" onClick={refreshLinkedPlan} disabled={isRefreshing || isLoading}>
+                {isRefreshing ? "갱신 중" : "최신 정보로 갱신"}
+              </Button>
+            )}
+          </>
+        }
       />
 
       <section className="lens-container grid gap-6 py-6 lg:grid-cols-[360px_1fr]">
@@ -116,8 +186,19 @@ export default function DepartureRoadmapPage() {
                       {plan.origin_airport} → {plan.destination_airport} 출국 준비
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-slate-600">{plan.summary}</p>
+                    {plan.updated_at && (
+                      <p className="mt-2 text-xs font-semibold text-slate-500">
+                        저장일 {formatDateTime(plan.created_at ?? plan.updated_at)} · 최근 갱신 {formatDateTime(plan.refreshed_at ?? plan.updated_at)}
+                      </p>
+                    )}
                   </div>
-                  <LinkButton href="/settlement" variant="secondary">정착 체크리스트로</LinkButton>
+                  <LinkButton
+                    href={linkedRoadmapId ? `/roadmap/administration?roadmapId=${linkedRoadmapId}` : "/roadmap/administration"}
+                    variant="secondary"
+                    className="shrink-0 whitespace-nowrap"
+                  >
+                    행정로드맵 확인
+                  </LinkButton>
                 </div>
               </Card>
 
@@ -249,6 +330,11 @@ function flightDataTone(status: string) {
   if (status === "LIVE_DUFFEL" || status === "LIVE_AMADEUS") return "success";
   if (status === "NO_RESULTS_OR_FAILED") return "warning";
   return "muted";
+}
+
+function isMissingSavedPlan(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return message.includes("not found") || message.includes("404");
 }
 
 function formatDateTime(value: string) {

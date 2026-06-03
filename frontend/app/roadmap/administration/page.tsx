@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
 import { SiteHeader } from "@/components/site-header";
 import {
   Badge,
+  Button,
   Card,
   EmptyState,
   LinkButton,
@@ -14,10 +16,12 @@ import {
   SectionHeader,
   TimelineCard
 } from "@/components/ui";
-import { getStoredUser, type AuthUser } from "@/lib/auth";
 import {
   fetchSettlementChecklists,
+  fetchSettlementGuidanceFromRoadmap,
   generateSettlementGuidance,
+  generateSettlementGuidanceFromRoadmap,
+  refreshSettlementGuidanceFromRoadmap,
   type SettlementChecklistItem,
   type SettlementGuidance
 } from "@/lib/settlement";
@@ -61,23 +65,22 @@ const officialSourceCards = [
 ];
 
 export default function AdministrationRoadmapPage() {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const auth = useRequiredAuth();
   const [items, setItems] = useState<SettlementChecklistItem[]>([]);
   const [guidance, setGuidance] = useState<SettlementGuidance | null>(null);
+  const [linkedRoadmapId, setLinkedRoadmapId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const storedUser = getStoredUser();
-    setUser(storedUser);
-    if (!storedUser) {
-      setIsLoading(false);
-      return;
-    }
+    if (auth.isChecking || !auth.user) return;
+    const linkedRoadmapId = Number(new URLSearchParams(window.location.search).get("roadmapId") ?? 0);
+    setLinkedRoadmapId(linkedRoadmapId || null);
 
     Promise.all([
-      fetchSettlementChecklists(storedUser.user_id),
-      generateSettlementGuidance(storedUser.user_id)
+      fetchSettlementChecklists(auth.user.user_id),
+      linkedRoadmapId ? loadRoadmapGuidance(linkedRoadmapId) : generateSettlementGuidance(auth.user.user_id)
     ])
       .then(([loadedItems, generatedGuidance]) => {
         setItems(loadedItems);
@@ -85,7 +88,31 @@ export default function AdministrationRoadmapPage() {
       })
       .catch((error) => setErrorMessage(error instanceof Error ? error.message : "행정로드맵 데이터를 불러오지 못했습니다."))
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [auth.isChecking, auth.user]);
+
+  async function loadRoadmapGuidance(roadmapId: number) {
+    try {
+      return await fetchSettlementGuidanceFromRoadmap(roadmapId);
+    } catch (error) {
+      if (isMissingSavedGuidance(error)) {
+        return generateSettlementGuidanceFromRoadmap(roadmapId);
+      }
+      throw error;
+    }
+  }
+
+  async function refreshLinkedGuidance() {
+    if (!linkedRoadmapId) return;
+    setIsRefreshing(true);
+    setErrorMessage(null);
+    try {
+      setGuidance(await refreshSettlementGuidanceFromRoadmap(linkedRoadmapId));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "행정로드맵을 갱신하지 못했습니다.");
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
 
   const adminItems = useMemo(() => {
     return items.filter((item) =>
@@ -106,6 +133,14 @@ export default function AdministrationRoadmapPage() {
   //   return acc;
   // }, {});
 
+  if (auth.isChecking) {
+    return <AuthCheckingScreen title="행정로드맵 접근 권한을 확인하는 중입니다." />;
+  }
+
+  if (!auth.user) {
+    return <AuthRequiredScreen title="행정로드맵은 로그인 후 이용할 수 있습니다." />;
+  }
+
   return (
     <PageShell>
       <SiteHeader />
@@ -114,8 +149,15 @@ export default function AdministrationRoadmapPage() {
         title="행정로드맵"
         actions={
           <>
-            <LinkButton href="/roadmap/departure" variant="secondary">출국로드맵으로</LinkButton>
-            <LinkButton href="/settlement">정착 체크리스트로</LinkButton>
+            <LinkButton href={linkedRoadmapId ? `/roadmap/departure?roadmapId=${linkedRoadmapId}` : "/roadmap/departure"} variant="secondary">
+              출국로드맵으로
+            </LinkButton>
+            <LinkButton href="/applications" variant="secondary">지원 관리로</LinkButton>
+            {linkedRoadmapId && (
+              <Button type="button" variant="secondary" onClick={refreshLinkedGuidance} disabled={isRefreshing || isLoading}>
+                {isRefreshing ? "갱신 중" : "최신 정보로 갱신"}
+              </Button>
+            )}
           </>
         }
       />
@@ -123,17 +165,9 @@ export default function AdministrationRoadmapPage() {
       <section className="lens-container py-6">
         {isLoading && <EmptyState title="행정로드맵을 불러오는 중입니다." description="사용자별 정착 체크리스트와 AI/규칙 기반 안내를 조합하고 있습니다." />}
 
-        {!isLoading && !user && (
-          <EmptyState
-            title="로그인이 필요합니다."
-            description="행정로드맵은 사용자별 체크리스트 상태를 바탕으로 구성되므로 로그인 후 사용할 수 있습니다."
-            action={<LinkButton href="/login">로그인으로 이동</LinkButton>}
-          />
-        )}
-
         {errorMessage && <EmptyState title="행정로드맵 데이터 처리 실패" description={errorMessage} />}
 
-        {!isLoading && user && (
+        {!isLoading && (
           <div className="space-y-6">
             <div className="grid gap-3 md:grid-cols-4">
               <MetricCard label="행정 체크 항목" value={adminItems.length} helper="비자/행정/보험 중심" />
@@ -152,6 +186,11 @@ export default function AdministrationRoadmapPage() {
                 <p className="mt-4 text-sm leading-6 text-slate-600">
                   {guidance?.summary ?? "정착 체크리스트를 기준으로 비자, 출국 전 준비, 초기 행정 항목을 정리합니다."}
                 </p>
+                {guidance?.updated_at && (
+                  <p className="mt-2 text-xs font-semibold text-slate-500">
+                    저장일 {formatDateTime(guidance.created_at ?? guidance.updated_at)} · 최근 갱신 {formatDateTime(guidance.refreshed_at ?? guidance.updated_at)}
+                  </p>
+                )}
                 <div className="mt-5 rounded-xl border border-line bg-panel p-4">
                   <p className="text-xs font-bold text-slate-500">우선 확인 항목</p>
                   <ul className="mt-3 space-y-2">
@@ -182,6 +221,19 @@ export default function AdministrationRoadmapPage() {
                 </div>
               </Card>
             </section>
+
+            <Card className="p-5">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="lens-kicker">NEXT WORKSPACE</p>
+                  <h2 className="mt-3 text-xl font-semibold text-night">지원 관리로 이어가기</h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    행정 준비 항목을 확인한 뒤 목표 공고의 서류 준비도와 제출 상태를 지원 관리에서 이어서 점검합니다.
+                  </p>
+                </div>
+                <LinkButton href="/applications">지원 관리로 이동</LinkButton>
+              </div>
+            </Card>
 
             <section className="border-l border-night pl-4">
               <div className="space-y-4">
@@ -236,8 +288,7 @@ export default function AdministrationRoadmapPage() {
 
             <Card className="p-5">
               <p className="text-xs leading-5 text-slate-500">
-                이 행정로드맵은 CareerLens에 저장된 체크리스트와 사용자 입력을 바탕으로 만든 시연용 안내입니다.
-                비자, 세금, 체류자격, 입국 요건, 행정 절차의 최신 판단은 반드시 공식기관과 전문가를 통해 확인해야 합니다.
+                비자, 세금, 체류자격, 입국 요건과 행정 절차는 변동될 수 있으므로 최종 제출 전 공식기관과 전문가를 통해 확인하세요.
               </p>
             </Card>
           </div>
@@ -270,4 +321,14 @@ function statusTone(status: string) {
   if (status === "DONE") return "success";
   if (status === "IN_PROGRESS") return "warning";
   return "muted";
+}
+
+function isMissingSavedGuidance(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return message.includes("not found") || message.includes("404");
+}
+
+function formatDateTime(value: string) {
+  if (!value) return "미기재";
+  return value.replace("T", " ");
 }

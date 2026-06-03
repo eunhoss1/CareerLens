@@ -1,30 +1,31 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Card, EmptyState, LinkButton, MetricCard, PageHeader, PageShell, SectionHeader } from "@/components/ui";
-import { getStoredUser, type AuthUser } from "@/lib/auth";
 import { fetchUserBadges, type VerificationBadge } from "@/lib/verifications";
 
 export default function MyPageBadgesPage() {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const auth = useRequiredAuth();
   const [badges, setBadges] = useState<VerificationBadge[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
-    const storedUser = getStoredUser();
-    setUser(storedUser);
-    if (!storedUser) {
+    if (auth.isChecking) {
+      return;
+    }
+    if (!auth.user) {
       setIsLoading(false);
       return;
     }
 
-    fetchUserBadges(storedUser.user_id)
+    fetchUserBadges(auth.user.user_id)
       .then(setBadges)
       .catch((error: Error) => setErrorMessage(error.message))
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [auth.isChecking, auth.user]);
 
   const summary = useMemo(() => {
     const gold = badges.filter((badge) => badge.badge_type.includes("GOLD")).length;
@@ -34,6 +35,14 @@ export default function MyPageBadgesPage() {
     const average = badges.length === 0 ? 0 : Math.round(badges.reduce((sum, badge) => sum + (badge.score_at_issue ?? 0), 0) / badges.length);
     return { gold, silver, bronze, github, average };
   }, [badges]);
+
+  if (auth.isChecking) {
+    return <AuthCheckingScreen title="검증 배지 접근 권한을 확인하는 중입니다." />;
+  }
+
+  if (!auth.user) {
+    return <AuthRequiredScreen title="검증 배지는 로그인 후 이용할 수 있습니다." />;
+  }
 
   return (
     <PageShell>
@@ -51,13 +60,7 @@ export default function MyPageBadgesPage() {
       />
 
       <section className="lens-container py-6">
-        {!user ? (
-          <EmptyState
-            title="로그인이 필요합니다"
-            description="검증 배지는 사용자별로 저장됩니다. 로그인 후 플래너 과제를 검증하면 배지가 누적됩니다."
-            action={<LinkButton href="/login">로그인</LinkButton>}
-          />
-        ) : isLoading ? (
+        {isLoading ? (
           <EmptyState title="검증 배지를 불러오는 중입니다" description="사용자의 검증 기록과 발급 배지를 확인하고 있습니다." />
         ) : (
           <div className="space-y-6">

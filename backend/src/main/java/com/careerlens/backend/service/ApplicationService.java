@@ -15,6 +15,8 @@ import com.careerlens.backend.repository.PlannerRoadmapRepository;
 import com.careerlens.backend.repository.PlannerTaskRepository;
 import com.careerlens.backend.repository.UserRepository;
 import com.careerlens.backend.repository.VerificationRequestRepository;
+import com.careerlens.backend.security.AccessGuard;
+import com.careerlens.backend.security.JwtClaims;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -67,20 +69,33 @@ public class ApplicationService {
 
     @Transactional(readOnly = true)
     public ApplicationRecordDto getApplication(Long applicationId) {
+        return getApplication(applicationId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public ApplicationRecordDto getApplication(Long applicationId, JwtClaims claims) {
         return applicationRecordRepository.findWithDetailsById(applicationId)
+                .map(record -> verifyOwner(record, claims))
                 .map(this::toDto)
                 .orElseThrow(() -> new IllegalArgumentException("Application record not found: " + applicationId));
     }
 
     @Transactional
     public ApplicationRecordDto createFromRoadmap(Long roadmapId) {
+        return createFromRoadmap(roadmapId, null);
+    }
+
+    @Transactional
+    public ApplicationRecordDto createFromRoadmap(Long roadmapId, JwtClaims claims) {
         ApplicationRecord existing = applicationRecordRepository.findByPlannerRoadmapId(roadmapId).orElse(null);
         if (existing != null) {
+            verifyOwner(existing, claims);
             return toDto(existing);
         }
 
         PlannerRoadmap roadmap = plannerRoadmapRepository.findWithDetailsById(roadmapId)
                 .orElseThrow(() -> new IllegalArgumentException("Planner roadmap not found: " + roadmapId));
+        verifyRoadmapOwner(roadmap, claims);
         if (roadmap.getDiagnosisResult() == null || roadmap.getDiagnosisResult().getJobPosting() == null) {
             throw new IllegalArgumentException("Planner roadmap is not connected to a diagnosis result.");
         }
@@ -130,8 +145,14 @@ public class ApplicationService {
 
     @Transactional
     public ApplicationRecordDto updateStatus(Long applicationId, String status) {
+        return updateStatus(applicationId, status, null);
+    }
+
+    @Transactional
+    public ApplicationRecordDto updateStatus(Long applicationId, String status, JwtClaims claims) {
         ApplicationRecord record = applicationRecordRepository.findWithDetailsById(applicationId)
                 .orElseThrow(() -> new IllegalArgumentException("Application record not found: " + applicationId));
+        verifyOwner(record, claims);
         String normalizedStatus = normalizeStatus(status);
         record.setStatus(normalizedStatus);
         record.setNextAction(nextActionFor(normalizedStatus, record.getJobPosting()));
@@ -142,8 +163,14 @@ public class ApplicationService {
 
     @Transactional
     public ApplicationRecordDto updateWorkspace(Long applicationId, ApplicationWorkspaceUpdateRequestDto request) {
+        return updateWorkspace(applicationId, request, null);
+    }
+
+    @Transactional
+    public ApplicationRecordDto updateWorkspace(Long applicationId, ApplicationWorkspaceUpdateRequestDto request, JwtClaims claims) {
         ApplicationRecord record = applicationRecordRepository.findWithDetailsById(applicationId)
                 .orElseThrow(() -> new IllegalArgumentException("Application record not found: " + applicationId));
+        verifyOwner(record, claims);
         if (request.candidateNotes() != null) {
             record.setCandidateNotes(trimToLength(request.candidateNotes(), 2000));
         }
@@ -153,6 +180,21 @@ public class ApplicationService {
         record.setUpdatedAt(LocalDateTime.now());
         record.setLastActivityAt(LocalDateTime.now());
         return toDto(applicationRecordRepository.save(record));
+    }
+
+    private ApplicationRecord verifyOwner(ApplicationRecord record, JwtClaims claims) {
+        if (claims != null) {
+            Long ownerUserId = record.getUser() == null ? null : record.getUser().getId();
+            AccessGuard.requireUserOrAdmin(claims, ownerUserId);
+        }
+        return record;
+    }
+
+    private void verifyRoadmapOwner(PlannerRoadmap roadmap, JwtClaims claims) {
+        if (claims != null) {
+            Long ownerUserId = roadmap.getUser() == null ? null : roadmap.getUser().getId();
+            AccessGuard.requireUserOrAdmin(claims, ownerUserId);
+        }
     }
 
     private ApplicationRecordDto toDto(ApplicationRecord record) {

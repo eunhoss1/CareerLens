@@ -1,6 +1,19 @@
+"use client";
+
+import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
 import { RoadmapPlaceholderPage } from "@/components/roadmap-placeholder";
 
 export default function AccountSettingsPage() {
+  const auth = useRequiredAuth();
+
+  if (auth.isChecking) {
+    return <AuthCheckingScreen title="계정 설정 접근 권한을 확인하는 중입니다." />;
+  }
+
+  if (!auth.user) {
+    return <AuthRequiredScreen title="계정 설정은 로그인 후 이용할 수 있습니다." />;
+  }
+
   return (
     <RoadmapPlaceholderPage
       kicker="ACCOUNT SETTINGS"

@@ -1,28 +1,29 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Card, EmptyState, LinkButton, MetricCard, PageHeader, PageShell, ScoreBar } from "@/components/ui";
-import { getStoredUser, type AuthUser } from "@/lib/auth";
 import { fetchUserRoadmaps, type PlannerRoadmap } from "@/lib/planner";
 
 export default function PlannerListPage() {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const auth = useRequiredAuth();
   const [roadmaps, setRoadmaps] = useState<PlannerRoadmap[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = getStoredUser();
-    setUser(storedUser);
-    if (!storedUser) {
+    if (auth.isChecking) {
+      return;
+    }
+    if (!auth.user) {
       setIsLoading(false);
       return;
     }
-    fetchUserRoadmaps(storedUser.user_id)
+    fetchUserRoadmaps(auth.user.user_id)
       .then(setRoadmaps)
       .catch(() => setRoadmaps([]))
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [auth.isChecking, auth.user]);
 
   const roadmapSummaries = useMemo(() => {
     return roadmaps.map((roadmap) => {
@@ -39,6 +40,14 @@ export default function PlannerListPage() {
   const inProgressRoadmaps = roadmapSummaries.filter((item) => item.completionRate > 0 && item.completionRate < 100).length;
   const averageCompletion = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
 
+  if (auth.isChecking) {
+    return <AuthCheckingScreen title="커리어 플래너 접근 권한을 확인하는 중입니다." />;
+  }
+
+  if (!auth.user) {
+    return <AuthRequiredScreen title="커리어 플래너는 로그인 후 이용할 수 있습니다." />;
+  }
+
   return (
     <PageShell>
       <SiteHeader />
@@ -50,12 +59,11 @@ export default function PlannerListPage() {
 
       <section className="lens-container py-6">
         {isLoading && <EmptyState title="로드맵을 불러오는 중입니다." description="저장된 커리어 플래너 목록을 확인하고 있습니다." />}
-        {!isLoading && !user && <EmptyState title="로그인이 필요합니다." description="회원가입 또는 로그인 후 추천 진단에서 커리어 플래너를 생성할 수 있습니다." action={<LinkButton href="/login">로그인</LinkButton>} />}
-        {!isLoading && user && roadmaps.length === 0 && (
+        {!isLoading && roadmaps.length === 0 && (
           <EmptyState title="아직 생성된 플래너가 없습니다." action={<LinkButton href="/jobs/recommendation">추천 진단으로</LinkButton>} />
         )}
 
-        {!isLoading && user && roadmapSummaries.length > 0 && (
+        {!isLoading && roadmapSummaries.length > 0 && (
           <Card className="mb-5 rounded-2xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
             <div className="grid gap-5 lg:grid-cols-[1.4fr_0.9fr]">
               <div>

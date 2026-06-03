@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
 import { SiteHeader } from "@/components/site-header";
 import { EmptyState, LinkButton, PageHeader, PageShell, SectionHeader, StepCard } from "@/components/ui";
-import { getStoredUser, type AuthUser } from "@/lib/auth";
 import {
   fetchSettlementChecklists,
   generateSettlementGuidance,
@@ -18,7 +18,7 @@ import { SettlementMetrics } from "./_lib/settlement-metrics";
 import { timeline } from "./_lib/constants";
 
 export default function SettlementPage() {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const auth = useRequiredAuth();
   const [items, setItems] = useState<SettlementChecklistItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isGuidanceLoading, setIsGuidanceLoading] = useState(false);
@@ -28,21 +28,22 @@ export default function SettlementPage() {
   const [updatingId, setUpdatingId] = useState<number | null>(null);
 
   useEffect(() => {
-    const storedUser = getStoredUser();
-    setUser(storedUser);
-    if (!storedUser) {
+    if (auth.isChecking) {
+      return;
+    }
+    if (!auth.user) {
       setIsLoading(false);
       return;
     }
 
-    fetchSettlementChecklists(storedUser.user_id)
+    fetchSettlementChecklists(auth.user.user_id)
       .then((loadedItems) => {
         setItems(loadedItems);
-        return refreshGuidance(storedUser.user_id);
+        return refreshGuidance(auth.user?.user_id);
       })
       .catch((error) => setErrorMessage(error instanceof Error ? error.message : "정착 체크리스트를 불러오지 못했습니다."))
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [auth.isChecking, auth.user]);
 
   const groupedByCountry = useMemo(() => {
     return items.reduce<Record<string, SettlementChecklistItem[]>>((acc, item) => {
@@ -68,7 +69,7 @@ export default function SettlementPage() {
     }
   }
 
-  async function refreshGuidance(userId = user?.user_id) {
+  async function refreshGuidance(userId = auth.user?.user_id) {
     if (!userId) {
       return;
     }
@@ -82,6 +83,14 @@ export default function SettlementPage() {
     } finally {
       setIsGuidanceLoading(false);
     }
+  }
+
+  if (auth.isChecking) {
+    return <AuthCheckingScreen title="정착 지원 접근 권한을 확인하는 중입니다." />;
+  }
+
+  if (!auth.user) {
+    return <AuthRequiredScreen title="정착 지원은 로그인 후 이용할 수 있습니다." />;
   }
 
   return (
@@ -107,7 +116,7 @@ export default function SettlementPage() {
           guidance={guidance}
           guidanceError={guidanceError}
           isGuidanceLoading={isGuidanceLoading}
-          isUserReady={Boolean(user)}
+          isUserReady={Boolean(auth.user)}
           onRefreshGuidance={() => refreshGuidance()}
         />
 
@@ -122,16 +131,6 @@ export default function SettlementPage() {
         {isLoading && (
           <div className="mt-6">
             <EmptyState title="정착 체크리스트를 불러오는 중입니다." description="로그인 사용자 기준으로 국가별 준비 항목을 확인하고 있습니다." />
-          </div>
-        )}
-
-        {!isLoading && !user && (
-          <div className="mt-6">
-            <EmptyState
-              title="로그인이 필요합니다."
-              description="정착 체크리스트는 사용자별 준비 상태를 저장하므로 로그인 후 사용할 수 있습니다."
-              action={<LinkButton href="/login">로그인으로 이동</LinkButton>}
-            />
           </div>
         )}
 
