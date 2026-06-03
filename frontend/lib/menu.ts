@@ -142,6 +142,12 @@ export const mainMenus: MenuItem[] = [
         description: "추천 진단에 사용할 해외취업 프로필을 입력합니다."
       },
       {
+        title: "멤버십",
+        href: "/membership",
+        status: "active",
+        description: "Pro 이용권과 월별 사용량을 확인합니다."
+      },
+      {
         title: "검증 배지",
         href: "/mypage/badges",
         status: "active",

@@ -15,6 +15,7 @@ import {
   type UserProfileRequest
 } from "@/lib/recommendation";
 import { createPlannerRoadmap } from "@/lib/planner";
+import { isMembershipLimitMessage } from "@/lib/membership";
 import { countryLabel, languageLevelLabel } from "@/lib/display-labels";
 
 export default function RecommendationPage() {
@@ -212,7 +213,14 @@ function SummaryBanner({
   }
 
   if (errorMessage) {
-    return <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">{errorMessage}</div>;
+    return (
+      <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <span>{errorMessage}</span>
+          {isMembershipLimitMessage(errorMessage) && <LinkButton href="/membership">Pro 멤버십 보기</LinkButton>}
+        </div>
+      </div>
+    );
   }
 
   return (

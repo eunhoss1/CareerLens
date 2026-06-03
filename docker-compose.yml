@@ -33,8 +33,14 @@ services:
       APP_RESOURCE_SEED_ENABLED: ${APP_RESOURCE_SEED_ENABLED:-true}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-http://localhost:*,http://127.0.0.1:*}
+      APP_PUBLIC_BASE_URL: ${APP_PUBLIC_BASE_URL:-http://localhost:8080}
+      FRONTEND_PUBLIC_BASE_URL: ${FRONTEND_PUBLIC_BASE_URL:-http://localhost:3000}
       ADMIN_LOGIN_IDS: ${ADMIN_LOGIN_IDS:-admin,careerlens-admin}
       JWT_SECRET: ${JWT_SECRET:-change-this-local-docker-secret-before-sharing}
+      KAKAOPAY_ENABLED: ${KAKAOPAY_ENABLED:-false}
+      KAKAOPAY_SECRET_KEY: ${KAKAOPAY_SECRET_KEY:-}
+      KAKAOPAY_CID: ${KAKAOPAY_CID:-TC0ONETIME}
+      KAKAOPAY_API_BASE_URL: ${KAKAOPAY_API_BASE_URL:-https://open-api.kakaopay.com}
       AI_PROVIDER: ${AI_PROVIDER:-openai}
       AI_PLANNER_ENABLED: ${AI_PLANNER_ENABLED:-false}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
