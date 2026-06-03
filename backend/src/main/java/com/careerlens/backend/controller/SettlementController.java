@@ -53,6 +53,22 @@ public class SettlementController {
         return settlementService.generateGuidanceFromRoadmap(roadmapId, claims);
     }
 
+    @GetMapping("/roadmaps/{roadmapId}/guidance")
+    public SettlementGuidanceDto getRoadmapGuidance(
+            @PathVariable Long roadmapId,
+            @AuthenticationPrincipal JwtClaims claims
+    ) {
+        return settlementService.getGuidanceFromRoadmap(roadmapId, claims);
+    }
+
+    @PostMapping("/roadmaps/{roadmapId}/guidance/refresh")
+    public SettlementGuidanceDto refreshRoadmapGuidance(
+            @PathVariable Long roadmapId,
+            @AuthenticationPrincipal JwtClaims claims
+    ) {
+        return settlementService.refreshGuidanceFromRoadmap(roadmapId, claims);
+    }
+
     @PatchMapping("/checklists/{itemId}/status")
     public SettlementChecklistDto updateStatus(
             @PathVariable Long itemId,

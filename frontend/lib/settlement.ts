@@ -16,6 +16,7 @@ export type SettlementChecklistItem = {
 };
 
 export type SettlementGuidance = {
+  guidance_id?: number | null;
   overall_status: "ON_TRACK" | "NEEDS_ATTENTION" | "EARLY_STAGE" | string;
   completion_rate: number;
   summary: string;
@@ -28,6 +29,9 @@ export type SettlementGuidance = {
   }>;
   generation_mode: string;
   disclaimer: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+  refreshed_at?: string | null;
 };
 
 const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
@@ -86,6 +90,34 @@ export async function generateSettlementGuidanceFromRoadmap(roadmapId: number): 
 
   if (!response.ok) {
     throw new Error(await readApiError(response, "Settlement guidance request failed."));
+  }
+
+  return response.json();
+}
+
+export async function fetchSettlementGuidanceFromRoadmap(roadmapId: number): Promise<SettlementGuidance> {
+  const response = await apiFetch(`${baseUrl}/api/settlement/roadmaps/${roadmapId}/guidance`, {
+    method: "GET",
+    headers: authHeaders(),
+    cache: "no-store"
+  }, "행정 로드맵 조회");
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Settlement guidance request failed."));
+  }
+
+  return response.json();
+}
+
+export async function refreshSettlementGuidanceFromRoadmap(roadmapId: number): Promise<SettlementGuidance> {
+  const response = await apiFetch(`${baseUrl}/api/settlement/roadmaps/${roadmapId}/guidance/refresh`, {
+    method: "POST",
+    headers: authHeaders(),
+    cache: "no-store"
+  }, "행정 로드맵 갱신");
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Settlement guidance refresh failed."));
   }
 
   return response.json();

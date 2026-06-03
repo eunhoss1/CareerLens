@@ -2,12 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Button, Card, EmptyState, LinkButton, MetricCard, PageHeader, PageShell, ScoreBar } from "@/components/ui";
-import { getStoredUser, type AuthUser } from "@/lib/auth";
+import type { AuthUser } from "@/lib/auth";
 import {
   demoProfile,
-  diagnoseRecommendations,
   diagnoseStoredProfile,
   fetchUserProfile,
   type JobRecommendation,
@@ -19,6 +19,7 @@ import { countryLabel, languageLevelLabel } from "@/lib/display-labels";
 
 export default function RecommendationPage() {
   const router = useRouter();
+  const auth = useRequiredAuth();
   const [profile, setProfile] = useState<UserProfileRequest>(demoProfile);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [result, setResult] = useState<RecommendationResponse | null>(null);
@@ -26,6 +27,7 @@ export default function RecommendationPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [creatingPlannerId, setCreatingPlannerId] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [profileMissing, setProfileMissing] = useState(false);
 
   const selectedRecommendation = useMemo(() => {
     if (!result?.recommendations.length) return null;
@@ -33,30 +35,56 @@ export default function RecommendationPage() {
   }, [result, selectedJobId]);
 
   useEffect(() => {
-    const storedUser = getStoredUser();
-    if (!storedUser) return;
-    setUser(storedUser);
-    fetchUserProfile(storedUser.user_id)
+    if (auth.isChecking || !auth.user) return;
+    const activeUser = auth.user;
+    setUser(activeUser);
+    fetchUserProfile(activeUser.user_id)
       .then((storedProfile) => {
+        setProfileMissing(false);
         setProfile({
           ...demoProfile,
           ...storedProfile,
           display_name: storedProfile.display_name,
-          email: storedUser.email
+          email: activeUser.email
         });
       })
-      .catch(() => undefined);
-  }, []);
+      .catch((error) => {
+        if (isProfileMissingError(error)) {
+          setProfileMissing(true);
+        } else {
+          setErrorMessage(error instanceof Error ? error.message : "프로필 정보를 불러오지 못했습니다.");
+        }
+      });
+  }, [auth.isChecking, auth.user]);
+
+  if (auth.isChecking) {
+    return <AuthCheckingScreen title="적합도 진단 접근 권한을 확인하는 중입니다." />;
+  }
+
+  if (!auth.user) {
+    return <AuthRequiredScreen title="적합도 진단은 로그인 후 이용할 수 있습니다." />;
+  }
 
   async function runDiagnosis() {
+    const activeUser = user ?? auth.user;
+    if (!activeUser) return;
+    if (profileMissing) {
+      setErrorMessage(null);
+      return;
+    }
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const response = user ? await diagnoseStoredProfile(user.user_id) : await diagnoseRecommendations(profile);
+      const response = await diagnoseStoredProfile(activeUser.user_id);
       setResult(response);
       setSelectedJobId(response.recommendations[0]?.job_id ?? null);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "적합도 진단 중 오류가 발생했습니다.");
+      if (isProfileMissingError(error)) {
+        setProfileMissing(true);
+        setResult(null);
+      } else {
+        setErrorMessage(error instanceof Error ? error.message : "적합도 진단 중 오류가 발생했습니다.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -95,10 +123,10 @@ export default function RecommendationPage() {
         </aside>
 
         <div className="space-y-6">
-          <SummaryBanner result={result} isLoading={isLoading} errorMessage={errorMessage} onRun={runDiagnosis} />
+          <SummaryBanner result={result} isLoading={isLoading} errorMessage={errorMessage} profileMissing={profileMissing} onRun={runDiagnosis} />
 
           {isLoading && <LoadingState />}
-          {!isLoading && !result && (
+          {!isLoading && !result && !profileMissing && (
             <EmptyState
               title="아직 생성된 진단 결과가 없습니다."
               action={<Button type="button" onClick={runDiagnosis}>적합도 진단 실행</Button>}
@@ -164,13 +192,25 @@ function SummaryBanner({
   result,
   isLoading,
   errorMessage,
+  profileMissing,
   onRun
 }: {
   result: RecommendationResponse | null;
   isLoading: boolean;
   errorMessage: string | null;
+  profileMissing: boolean;
   onRun: () => void;
 }) {
+  if (profileMissing) {
+    return (
+      <EmptyState
+        title="해외취업 프로필 저장이 필요합니다."
+        description="마이페이지에서 희망 국가, 직무, 경력, 언어와 기술 스택을 저장한 뒤 적합도 진단을 실행할 수 있습니다."
+        action={<LinkButton href="/mypage">프로필 저장하러 가기</LinkButton>}
+      />
+    );
+  }
+
   if (errorMessage) {
     return <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">{errorMessage}</div>;
   }
@@ -375,4 +415,9 @@ function readinessTone(status: string) {
 
 function clamp(value: number) {
   return Math.max(0, Math.min(100, value));
+}
+
+function isProfileMissingError(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return message.includes("user profile not found") || message.includes("profile not found") || message.includes("404");
 }

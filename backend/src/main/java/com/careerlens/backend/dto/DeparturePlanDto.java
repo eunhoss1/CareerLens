@@ -2,9 +2,12 @@ package com.careerlens.backend.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public record DeparturePlanDto(
+        @JsonProperty("plan_id")
+        Long planId,
         @JsonProperty("target_country")
         String targetCountry,
         @JsonProperty("destination_city")
@@ -37,6 +40,57 @@ public record DeparturePlanDto(
         List<FlightApiProviderDto> flightApiProviders,
         @JsonProperty("generation_mode")
         String generationMode,
-        String disclaimer
+        String disclaimer,
+        @JsonProperty("created_at")
+        LocalDateTime createdAt,
+        @JsonProperty("updated_at")
+        LocalDateTime updatedAt,
+        @JsonProperty("refreshed_at")
+        LocalDateTime refreshedAt
 ) {
+    public DeparturePlanDto(
+            String targetCountry,
+            String destinationCity,
+            String originAirport,
+            String destinationAirport,
+            LocalDate startDate,
+            LocalDate recommendedArrivalDate,
+            LocalDate departureWindowStart,
+            LocalDate departureWindowEnd,
+            Long daysUntilDepartureWindow,
+            String urgencyStatus,
+            String summary,
+            String flightSearchNote,
+            String flightDataStatus,
+            List<FlightOfferDto> flightOffers,
+            List<DepartureMilestoneDto> milestones,
+            List<FlightApiProviderDto> flightApiProviders,
+            String generationMode,
+            String disclaimer
+    ) {
+        this(
+                null,
+                targetCountry,
+                destinationCity,
+                originAirport,
+                destinationAirport,
+                startDate,
+                recommendedArrivalDate,
+                departureWindowStart,
+                departureWindowEnd,
+                daysUntilDepartureWindow,
+                urgencyStatus,
+                summary,
+                flightSearchNote,
+                flightDataStatus,
+                flightOffers,
+                milestones,
+                flightApiProviders,
+                generationMode,
+                disclaimer,
+                null,
+                null,
+                null
+        );
+    }
 }

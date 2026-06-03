@@ -11,6 +11,8 @@ import com.careerlens.backend.entity.VerificationRequest;
 import com.careerlens.backend.repository.PlannerTaskRepository;
 import com.careerlens.backend.repository.VerificationBadgeRepository;
 import com.careerlens.backend.repository.VerificationRequestRepository;
+import com.careerlens.backend.security.AccessGuard;
+import com.careerlens.backend.security.JwtClaims;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -154,15 +156,17 @@ public class VerificationService {
     }
 
     @Transactional
-    public VerificationRequestDto verifyTaskText(Long taskId, DocumentVerificationRequestDto request) {
+    public VerificationRequestDto verifyTaskText(Long taskId, DocumentVerificationRequestDto request, JwtClaims claims) {
         PlannerTask task = findTask(taskId);
+        verifyTaskOwner(task, claims);
         String requestType = blank(request.documentType()) ? REQUEST_TYPE_TEXT_DOCUMENT : request.documentType();
         return verifySubmittedText(task, REQUEST_TYPE_TEXT_DOCUMENT, requestType, request.submittedText());
     }
 
     @Transactional
-    public VerificationRequestDto verifyTaskGithub(Long taskId, GithubVerificationRequestDto request) {
+    public VerificationRequestDto verifyTaskGithub(Long taskId, GithubVerificationRequestDto request, JwtClaims claims) {
         PlannerTask task = findTask(taskId);
+        verifyTaskOwner(task, claims);
         GithubRepo repo = parseGithubRepo(request.githubUrl());
         GithubRepoContext context = fetchGithubContext(repo);
         String submittedText = buildGithubSubmittedText(repo, context, request.note());
@@ -170,8 +174,9 @@ public class VerificationService {
     }
 
     @Transactional
-    public VerificationRequestDto verifyTaskFile(Long taskId, String documentType, MultipartFile file) {
+    public VerificationRequestDto verifyTaskFile(Long taskId, String documentType, MultipartFile file, JwtClaims claims) {
         PlannerTask task = findTask(taskId);
+        verifyTaskOwner(task, claims);
         String extractedText = extractText(file);
         if (extractedText.isBlank()) {
             throw new IllegalArgumentException("PDF/DOCX file has no readable text.");
@@ -224,17 +229,27 @@ public class VerificationService {
     }
 
     @Transactional(readOnly = true)
-    public List<VerificationRequestDto> getTaskVerifications(Long taskId) {
+    public List<VerificationRequestDto> getTaskVerifications(Long taskId, JwtClaims claims) {
+        PlannerTask task = findTask(taskId);
+        verifyTaskOwner(task, claims);
         return verificationRequestRepository.findByPlannerTaskIdOrderByRequestedAtDesc(taskId).stream()
                 .map(this::toDto)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public List<VerificationBadgeDto> getUserBadges(Long userId) {
+    public List<VerificationBadgeDto> getUserBadges(Long userId, JwtClaims claims) {
+        AccessGuard.requireUserOrAdmin(claims, userId);
         return verificationBadgeRepository.findByUserIdOrderByIssuedAtDesc(userId).stream()
                 .map(this::toBadgeDto)
                 .toList();
+    }
+
+    private void verifyTaskOwner(PlannerTask task, JwtClaims claims) {
+        Long ownerUserId = task.getRoadmap() == null || task.getRoadmap().getUser() == null
+                ? null
+                : task.getRoadmap().getUser().getId();
+        AccessGuard.requireUserOrAdmin(claims, ownerUserId);
     }
 
     private PlannerTask findTask(Long taskId) {

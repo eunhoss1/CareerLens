@@ -31,6 +31,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/settlement/**").authenticated()
                         .requestMatchers("/api/departure/**").authenticated()
                         .requestMatchers("/api/recommendations/**").authenticated()
+                        .requestMatchers("/api/verifications/**").authenticated()
                         .requestMatchers("/api/users/*/profile").authenticated()
                         .anyRequest().permitAll()
                 )

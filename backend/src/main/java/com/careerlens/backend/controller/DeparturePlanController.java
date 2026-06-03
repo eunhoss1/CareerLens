@@ -5,6 +5,7 @@ import com.careerlens.backend.dto.DeparturePlanRequestDto;
 import com.careerlens.backend.security.JwtClaims;
 import com.careerlens.backend.service.DeparturePlanService;
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,5 +37,21 @@ public class DeparturePlanController {
             @AuthenticationPrincipal JwtClaims claims
     ) {
         return departurePlanService.generatePlanFromRoadmap(roadmapId, claims);
+    }
+
+    @GetMapping("/roadmaps/{roadmapId}/plan")
+    public DeparturePlanDto getPlanFromRoadmap(
+            @PathVariable Long roadmapId,
+            @AuthenticationPrincipal JwtClaims claims
+    ) {
+        return departurePlanService.getPlanFromRoadmap(roadmapId, claims);
+    }
+
+    @PostMapping("/roadmaps/{roadmapId}/plan/refresh")
+    public DeparturePlanDto refreshPlanFromRoadmap(
+            @PathVariable Long roadmapId,
+            @AuthenticationPrincipal JwtClaims claims
+    ) {
+        return departurePlanService.refreshPlanFromRoadmap(roadmapId, claims);
     }
 }

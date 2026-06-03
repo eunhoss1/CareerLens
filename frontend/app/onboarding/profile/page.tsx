@@ -3,9 +3,10 @@
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Button, Card, MetricCard, PageHeader, PageShell, SelectInput, TextInput } from "@/components/ui";
-import { getStoredUser, storeUser, type AuthUser } from "@/lib/auth";
+import { storeUser, type AuthUser } from "@/lib/auth";
 import { countryLabel, languageLevelLabel, preferenceLabel, startDateLabel, workTypeLabel } from "@/lib/display-labels";
 import { domainSuggestionsFor, jobFamilies, projectSuggestionsFor, skillSuggestionsFor } from "@/lib/job-families";
 import { demoProfile, fetchUserProfile, saveUserProfile, type UserProfileRequest } from "@/lib/recommendation";
@@ -54,6 +55,7 @@ const preferenceSuggestions = ["Visa support", "Hybrid", "Remote", "Relocation s
 
 export default function ProfileOnboardingPage() {
   const router = useRouter();
+  const auth = useRequiredAuth();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<UserProfileRequest>(demoProfile);
   const [isLoading, setIsLoading] = useState(false);
@@ -61,12 +63,14 @@ export default function ProfileOnboardingPage() {
 
   useEffect(() => {
     let cancelled = false;
-    const storedUser = getStoredUser();
-    if (!storedUser) {
-      router.push("/signup");
+    if (auth.isChecking) {
+      return;
+    }
+    if (!auth.user) {
       return;
     }
 
+    const storedUser = auth.user;
     setUser(storedUser);
     const baseProfile = {
       ...demoProfile,
@@ -93,7 +97,7 @@ export default function ProfileOnboardingPage() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [auth.isChecking, auth.user]);
 
   async function submit() {
     if (!user) return;
@@ -130,6 +134,14 @@ export default function ProfileOnboardingPage() {
       target_country: value,
       target_city: nextCities.includes(current.target_city ?? "") ? current.target_city : nextCities[0]
     }));
+  }
+
+  if (auth.isChecking) {
+    return <AuthCheckingScreen title="프로필 설정 접근 권한을 확인하는 중입니다." />;
+  }
+
+  if (!auth.user) {
+    return <AuthRequiredScreen title="해외 취업 프로필은 로그인 후 설정할 수 있습니다." />;
   }
 
   return (

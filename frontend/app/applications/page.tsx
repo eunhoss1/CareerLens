@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
 import { SiteHeader } from "@/components/site-header";
 import {
   Badge,
@@ -14,7 +15,6 @@ import {
   ScoreBar,
   SectionHeader
 } from "@/components/ui";
-import { getStoredUser, type AuthUser } from "@/lib/auth";
 import { fetchUserApplications, type ApplicationRecord, type ApplicationStatus } from "@/lib/applications";
 import { countryLabel, workTypeLabel } from "@/lib/display-labels";
 
@@ -30,7 +30,7 @@ const stageFilters: Array<{ key: StageFilter; label: string }> = [
 ];
 
 export default function ApplicationsPage() {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const auth = useRequiredAuth();
   const [records, setRecords] = useState<ApplicationRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -39,21 +39,22 @@ export default function ApplicationsPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   useEffect(() => {
-    const storedUser = getStoredUser();
-    setUser(storedUser);
-    if (!storedUser) {
+    if (auth.isChecking) {
+      return;
+    }
+    if (!auth.user) {
       setIsLoading(false);
       return;
     }
 
-    fetchUserApplications(storedUser.user_id)
+    fetchUserApplications(auth.user.user_id)
       .then((items) => {
         setRecords(items);
         setSelectedId(items[0]?.application_id ?? null);
       })
       .catch((error) => setErrorMessage(error instanceof Error ? error.message : "지원 기록을 불러오지 못했습니다."))
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [auth.isChecking, auth.user]);
 
   const orderedRecords = useMemo(() => sortByPriority(records), [records]);
 
@@ -96,6 +97,14 @@ export default function ApplicationsPage() {
     : Math.round(records.reduce((sum, record) => sum + record.readiness_score, 0) / records.length);
   const documentReadyCount = records.filter((record) => record.document_checklist.some((item) => item.status === "DONE" || item.status === "VERIFIED")).length;
 
+  if (auth.isChecking) {
+    return <AuthCheckingScreen title="기업지원 관리 접근 권한을 확인하는 중입니다." />;
+  }
+
+  if (!auth.user) {
+    return <AuthRequiredScreen title="기업지원 관리는 로그인 후 이용할 수 있습니다." />;
+  }
+
   return (
     <PageShell>
       <SiteHeader />
@@ -124,23 +133,13 @@ export default function ApplicationsPage() {
           </div>
         )}
 
-        {!isLoading && !user && (
-          <div className="mt-6">
-            <EmptyState
-              title="로그인이 필요합니다."
-              description="회원가입과 로그인을 완료하면 추천 진단, 커리어 플래너, 지원관리 기록을 사용자별로 저장할 수 있습니다."
-              action={<LinkButton href="/login">로그인으로 이동</LinkButton>}
-            />
-          </div>
-        )}
-
         {errorMessage && (
           <div className="mt-6">
             <EmptyState title="지원관리 데이터를 처리하지 못했습니다." description={errorMessage} />
           </div>
         )}
 
-        {!isLoading && user && records.length === 0 && (
+        {!isLoading && records.length === 0 && (
           <div className="mt-6">
             <Card className="rounded-2xl border-slate-200 p-8 text-center shadow-sm">
               <p className="text-lg font-bold text-night">아직 지원 후보가 없습니다.</p>
