@@ -1,7 +1,12 @@
 package com.careerlens.backend.service;
 
 import com.careerlens.backend.dto.AuthResponseDto;
+import com.careerlens.backend.dto.DuplicateCheckResponseDto;
+import com.careerlens.backend.dto.FindLoginIdRequestDto;
+import com.careerlens.backend.dto.FindLoginIdResponseDto;
 import com.careerlens.backend.dto.LoginRequestDto;
+import com.careerlens.backend.dto.PasswordResetGuideRequestDto;
+import com.careerlens.backend.dto.PasswordResetGuideResponseDto;
 import com.careerlens.backend.dto.SignupRequestDto;
 import com.careerlens.backend.entity.User;
 import com.careerlens.backend.repository.UserProfileRepository;
@@ -115,6 +120,57 @@ public class AuthService {
     }
 
     @Transactional(readOnly = true)
+    public FindLoginIdResponseDto findLoginId(FindLoginIdRequestDto request) {
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
+        String displayName = request.displayName().trim();
+        User user = userRepository.findByEmailIgnoreCaseAndDisplayNameIgnoreCase(email, displayName)
+                .orElseThrow(() -> new IllegalArgumentException("입력한 이름과 이메일로 가입된 계정을 찾을 수 없습니다."));
+
+        return new FindLoginIdResponseDto(
+                maskLoginId(user.getLoginId()),
+                "가입된 아이디를 확인했습니다."
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public PasswordResetGuideResponseDto passwordResetGuide(PasswordResetGuideRequestDto request) {
+        String identifier = request.loginIdOrEmail().trim().toLowerCase(Locale.ROOT);
+        userRepository.findByLoginIdIgnoreCaseOrEmailIgnoreCase(identifier, identifier)
+                .orElseThrow(() -> new IllegalArgumentException("입력한 정보와 일치하는 계정을 찾을 수 없습니다."));
+
+        // TODO: 이메일 발송 서비스가 준비되면 재설정 토큰을 생성하고 링크를 발송한다.
+        return new PasswordResetGuideResponseDto(
+                "보안을 위해 기존 비밀번호는 표시할 수 없습니다. 가입한 이메일을 확인한 뒤 비밀번호 재설정 링크 발송 기능을 연결해주세요."
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public DuplicateCheckResponseDto checkLoginId(String loginId) {
+        String normalizedLoginId = loginId == null ? "" : loginId.trim().toLowerCase(Locale.ROOT);
+        if (!normalizedLoginId.matches("^[a-zA-Z0-9._-]{4,30}$")) {
+            return new DuplicateCheckResponseDto(false, "4~30자의 영문, 숫자, 점, 밑줄, 하이픈만 사용할 수 있습니다.");
+        }
+        boolean available = !userRepository.existsByLoginIdIgnoreCase(normalizedLoginId);
+        return new DuplicateCheckResponseDto(
+                available,
+                available ? "사용 가능한 아이디입니다." : "이미 사용 중인 아이디입니다."
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public DuplicateCheckResponseDto checkEmail(String email) {
+        String normalizedEmail = email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
+        if (!normalizedEmail.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) {
+            return new DuplicateCheckResponseDto(false, "올바른 이메일 형식으로 입력해주세요.");
+        }
+        boolean available = !userRepository.existsByEmailIgnoreCase(normalizedEmail);
+        return new DuplicateCheckResponseDto(
+                available,
+                available ? "사용 가능한 이메일입니다." : "이미 사용 중인 이메일입니다."
+        );
+    }
+
+    @Transactional(readOnly = true)
     public AuthResponseDto currentUser(JwtClaims claims) {
         User user = userRepository.findById(claims.userId())
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
@@ -179,6 +235,21 @@ public class AuthService {
             return roleFor(user.getLoginId());
         }
         return user.getRole().trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String maskLoginId(String loginId) {
+        if (loginId == null || loginId.isBlank()) {
+            return "";
+        }
+        if (loginId.length() <= 2) {
+            return loginId.charAt(0) + "*";
+        }
+        int visiblePrefix = Math.min(3, loginId.length() - 1);
+        int visibleSuffix = loginId.length() > 6 ? 2 : 1;
+        int maskLength = Math.max(1, loginId.length() - visiblePrefix - visibleSuffix);
+        return loginId.substring(0, visiblePrefix)
+                + "*".repeat(maskLength)
+                + loginId.substring(loginId.length() - visibleSuffix);
     }
 
     private void validatePasswordPolicy(String password) {

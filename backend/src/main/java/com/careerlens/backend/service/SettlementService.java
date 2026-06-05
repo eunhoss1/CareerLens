@@ -41,14 +41,14 @@ public class SettlementService {
     private static final int AI_MAX_OUTPUT_TOKENS = 1400;
     private static final double AI_TEMPERATURE = 0.2;
     private static final List<DefaultChecklistTemplate> DEFAULT_CHECKLISTS = List.of(
-            new DefaultChecklistTemplate("미국", "비자/행정", "비자 스폰서십 조건 확인", "공고의 visa requirement와 본인의 체류 가능 조건을 비교하고 필요한 증빙을 정리합니다. 최신 비자 판단은 공식기관 자료와 전문가 확인이 필요합니다.", 1),
-            new DefaultChecklistTemplate("미국", "비자/행정", "학력/경력 증빙 영문본 정리", "졸업증명, 성적증명, 경력증명, 추천인 정보를 영문 제출 가능 형태로 정리합니다.", 2),
-            new DefaultChecklistTemplate("미국", "출국 전 준비", "오퍼 이후 출국 일정 초안 작성", "입사 예정일, 비자 처리 예상 기간, 항공권/숙소 예약 시점을 역산해 4~8주 일정으로 정리합니다.", 3),
-            new DefaultChecklistTemplate("미국", "초기 정착", "도착 후 생활 기반 체크", "임시 숙소, 은행 계좌, 휴대폰, 의료보험 등 초기 정착 항목을 확인합니다.", 4),
-            new DefaultChecklistTemplate("일본", "비자/행정", "재류자격 및 회사 제출 서류 확인", "내정 후 필요한 재류자격, 학력/경력 증빙, 회사 제출 서류를 점검합니다. 최신 절차는 공식기관 기준으로 재확인합니다.", 5),
-            new DefaultChecklistTemplate("일본", "출국 전 준비", "일본어 증빙과 생활 서류 정리", "JLPT/비즈니스 일본어 증빙, 계약 관련 서류, 입사 전 제출 서류 준비 계획을 세웁니다.", 6),
-            new DefaultChecklistTemplate("일본", "초기 정착", "거주지와 행정 등록 준비", "주소 등록, 은행, 통신, 건강보험 등 입국 후 행정 절차를 체크합니다.", 7),
-            new DefaultChecklistTemplate("일본", "초기 정착", "초기 생활 비용과 이동 동선 정리", "초기 월세, 보증금, 교통, 통신, 생활비를 예산표로 정리하고 첫 2주 이동 동선을 기록합니다.", 8)
+            new DefaultChecklistTemplate("미국", "오퍼/고용계약 확인", "오퍼레터와 고용조건 확정", "법인명, 직무명, 근무지, 입사 예정일, 급여, 고용 형태, 이민 담당자 연락 채널을 오퍼레터와 고용계약 기준으로 확인합니다.", 1),
+            new DefaultChecklistTemplate("미국", "비자/재류자격 준비", "미국 취업 비자 경로와 증빙 정리", "고용주와 H-1B, O-1, L-1 등 후보 비자 경로를 구분하고 petition, DS-160, 인터뷰, 학력/경력 증빙의 준비 책임과 제출 순서를 정리합니다.", 2),
+            new DefaultChecklistTemplate("미국", "출국 전 행정 패키지", "입국 심사용 이동 서류 패키지 구성", "여권, 비자 스탬프 또는 승인서, 오퍼레터, 항공권, 임시 숙소 주소, 보험 개시일, 긴급 연락처를 출국 당일 바로 확인할 수 있게 묶습니다.", 3),
+            new DefaultChecklistTemplate("미국", "입국 후 초기 행정", "I-94와 생활 계정 초기 등록", "입국 후 I-94 기록을 확인하고 SSN, 은행 계좌, 휴대폰, 거주지 정보, 급여 계좌, 세금 양식, 의료보험 선택 상태를 순서대로 처리합니다.", 4),
+            new DefaultChecklistTemplate("일본", "오퍼/고용계약 확인", "내정 조건과 재류자격 설명 자료 분리", "직무명, 업무 범위, 급여, 근무지, 입사 예정일, 회사 담당 부서와 서류 발급 일정을 고용계약 기준으로 정리합니다.", 5),
+            new DefaultChecklistTemplate("일본", "비자/재류자격 준비", "재류자격과 COE 신청 증빙 정리", "기술·인문지식·국제업무 등 후보 재류자격, COE 신청, 비자 신청, 졸업증명, 성적증명, 경력증명, 번역본 제출 여부를 절차별로 정리합니다.", 6),
+            new DefaultChecklistTemplate("일본", "출국 전 행정 패키지", "입국 심사와 첫 출근 자료 패키지 구성", "여권, 비자, COE 사본, 고용계약서, 숙소 주소, 공항 이동, 첫 출근 교통편, 초기 현금과 통신 개통 후보를 이동용으로 묶습니다.", 7),
+            new DefaultChecklistTemplate("일본", "입국 후 초기 행정", "주소 등록과 생활 기반 초기 처리", "재류카드 정보 확인, 시구정촌 주소 등록, 마이넘버, 건강보험/연금, 은행 계좌, 휴대폰 개통, 급여 계좌 정보를 순서대로 처리합니다.", 8)
     );
 
     private final SettlementChecklistRepository settlementChecklistRepository;
@@ -125,7 +125,9 @@ public class SettlementService {
     private void ensureDefaultChecklists(Long userId) {
         if (!settlementChecklistRepository.existsByUserId(userId)) {
             initializeDefaultChecklists(userId);
+            return;
         }
+        syncDefaultChecklists(userId);
     }
 
     private List<SettlementChecklist> loadUserChecklists(Long userId) {
@@ -139,6 +141,40 @@ public class SettlementService {
                 .map(template -> template.toEntity(user))
                 .collect(Collectors.toCollection(ArrayList::new));
         settlementChecklistRepository.saveAll(defaults);
+    }
+
+    private void syncDefaultChecklists(Long userId) {
+        List<SettlementChecklist> current = loadUserChecklists(userId);
+        Map<String, SettlementChecklist> byCountryAndOrder = current.stream()
+                .filter(item -> item.getCountry() != null && item.getSortOrder() != null)
+                .collect(Collectors.toMap(
+                        item -> defaultKey(item.getCountry(), item.getSortOrder()),
+                        item -> item,
+                        (left, right) -> left,
+                        LinkedHashMap::new
+        ));
+
+        List<SettlementChecklist> changed = new ArrayList<>();
+        User user = null;
+        for (DefaultChecklistTemplate template : DEFAULT_CHECKLISTS) {
+            SettlementChecklist existing = byCountryAndOrder.get(defaultKey(template.country(), template.sortOrder()));
+            if (existing == null) {
+                if (user == null) {
+                    user = userRepository.findById(userId)
+                            .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+                }
+                changed.add(template.toEntity(user));
+            } else if (template.applyTo(existing)) {
+                changed.add(existing);
+            }
+        }
+        if (!changed.isEmpty()) {
+            settlementChecklistRepository.saveAll(changed);
+        }
+    }
+
+    private String defaultKey(String country, int sortOrder) {
+        return country + "#" + sortOrder;
     }
 
     private String normalizeStatus(String status) {
@@ -576,6 +612,26 @@ public class SettlementService {
             checklist.setCreatedAt(now);
             checklist.setUpdatedAt(now);
             return checklist;
+        }
+
+        boolean applyTo(SettlementChecklist checklist) {
+            boolean changed = false;
+            if (!Objects.equals(checklist.getCategory(), category)) {
+                checklist.setCategory(category);
+                changed = true;
+            }
+            if (!Objects.equals(checklist.getChecklistTitle(), title)) {
+                checklist.setChecklistTitle(title);
+                changed = true;
+            }
+            if (!Objects.equals(checklist.getDescription(), description)) {
+                checklist.setDescription(description);
+                changed = true;
+            }
+            if (changed) {
+                checklist.setUpdatedAt(LocalDateTime.now());
+            }
+            return changed;
         }
     }
 }

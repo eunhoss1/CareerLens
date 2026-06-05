@@ -59,11 +59,32 @@ export async function signup(input: {
   security_notice_accepted: boolean;
   marketing_opt_in: boolean;
 }): Promise<AuthUser> {
-  return authRequest("/api/auth/signup", input);
+  return authRequest<AuthUser>("/api/auth/signup", input);
 }
 
 export async function login(input: { login_id: string; password: string }): Promise<AuthUser> {
-  return authRequest("/api/auth/login", input);
+  return authRequest<AuthUser>("/api/auth/login", input);
+}
+
+export async function findLoginId(input: { display_name: string; email: string }): Promise<{
+  masked_login_id: string;
+  message: string;
+}> {
+  return authRequest<{ masked_login_id: string; message: string }>("/api/auth/find-login-id", input);
+}
+
+export async function requestPasswordResetGuide(input: { login_id_or_email: string }): Promise<{
+  message: string;
+}> {
+  return authRequest<{ message: string }>("/api/auth/password-reset-guide", input);
+}
+
+export async function checkLoginId(loginId: string): Promise<{ available: boolean; message: string }> {
+  return authGetRequest(`/api/auth/check-login-id?login_id=${encodeURIComponent(loginId)}`);
+}
+
+export async function checkEmail(email: string): Promise<{ available: boolean; message: string }> {
+  return authGetRequest(`/api/auth/check-email?email=${encodeURIComponent(email)}`);
 }
 
 export async function fetchCurrentUser(): Promise<AuthUser> {
@@ -80,7 +101,7 @@ export async function fetchCurrentUser(): Promise<AuthUser> {
   return response.json();
 }
 
-async function authRequest(path: string, input: object): Promise<AuthUser> {
+async function authRequest<T>(path: string, input: object): Promise<T> {
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
   const response = await fetch(`${baseUrl}${path}`, {
     method: "POST",
@@ -88,6 +109,20 @@ async function authRequest(path: string, input: object): Promise<AuthUser> {
       "Content-Type": "application/json"
     },
     body: JSON.stringify(input),
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Authentication request failed."));
+  }
+
+  return response.json();
+}
+
+async function authGetRequest<T>(path: string): Promise<T> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: "GET",
     cache: "no-store"
   });
 
