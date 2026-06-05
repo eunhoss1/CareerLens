@@ -79,6 +79,16 @@ export async function requestPasswordResetGuide(input: { login_id_or_email: stri
   return authRequest<{ message: string }>("/api/auth/password-reset-guide", input);
 }
 
+export async function resetPassword(input: {
+  login_id_or_email: string;
+  display_name: string;
+  email: string;
+  new_password: string;
+  new_password_confirm: string;
+}): Promise<{ message: string }> {
+  return authRequest<{ message: string }>("/api/auth/reset-password", input);
+}
+
 export async function checkLoginId(loginId: string): Promise<{ available: boolean; message: string }> {
   return authGetRequest(`/api/auth/check-login-id?login_id=${encodeURIComponent(loginId)}`);
 }

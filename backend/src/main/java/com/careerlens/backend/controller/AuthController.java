@@ -7,6 +7,8 @@ import com.careerlens.backend.dto.FindLoginIdResponseDto;
 import com.careerlens.backend.dto.LoginRequestDto;
 import com.careerlens.backend.dto.PasswordResetGuideRequestDto;
 import com.careerlens.backend.dto.PasswordResetGuideResponseDto;
+import com.careerlens.backend.dto.PasswordResetRequestDto;
+import com.careerlens.backend.dto.PasswordResetResponseDto;
 import com.careerlens.backend.dto.SignupRequestDto;
 import com.careerlens.backend.security.JwtClaims;
 import com.careerlens.backend.service.AuthService;
@@ -47,6 +49,11 @@ public class AuthController {
     @PostMapping("/password-reset-guide")
     public PasswordResetGuideResponseDto passwordResetGuide(@Valid @RequestBody PasswordResetGuideRequestDto request) {
         return authService.passwordResetGuide(request);
+    }
+
+    @PostMapping("/reset-password")
+    public PasswordResetResponseDto resetPassword(@Valid @RequestBody PasswordResetRequestDto request) {
+        return authService.resetPassword(request);
     }
 
     @GetMapping("/check-login-id")

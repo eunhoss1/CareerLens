@@ -28,6 +28,7 @@ public class SecurityConfig {
                                 "/api/auth/login",
                                 "/api/auth/find-login-id",
                                 "/api/auth/password-reset-guide",
+                                "/api/auth/reset-password",
                                 "/api/auth/check-login-id",
                                 "/api/auth/check-email"
                         ).permitAll()

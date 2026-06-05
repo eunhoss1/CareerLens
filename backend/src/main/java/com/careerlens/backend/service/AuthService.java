@@ -7,6 +7,8 @@ import com.careerlens.backend.dto.FindLoginIdResponseDto;
 import com.careerlens.backend.dto.LoginRequestDto;
 import com.careerlens.backend.dto.PasswordResetGuideRequestDto;
 import com.careerlens.backend.dto.PasswordResetGuideResponseDto;
+import com.careerlens.backend.dto.PasswordResetRequestDto;
+import com.careerlens.backend.dto.PasswordResetResponseDto;
 import com.careerlens.backend.dto.SignupRequestDto;
 import com.careerlens.backend.entity.User;
 import com.careerlens.backend.repository.UserProfileRepository;
@@ -142,6 +144,32 @@ public class AuthService {
         return new PasswordResetGuideResponseDto(
                 "보안을 위해 기존 비밀번호는 표시할 수 없습니다. 가입한 이메일을 확인한 뒤 비밀번호 재설정 링크 발송 기능을 연결해주세요."
         );
+    }
+
+    @Transactional
+    public PasswordResetResponseDto resetPassword(PasswordResetRequestDto request) {
+        String identifier = request.loginIdOrEmail().trim().toLowerCase(Locale.ROOT);
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
+        String displayName = request.displayName().trim();
+
+        if (!request.newPassword().equals(request.newPasswordConfirm())) {
+            throw new IllegalArgumentException("새 비밀번호 확인이 일치하지 않습니다.");
+        }
+        validatePasswordPolicy(request.newPassword());
+
+        User user = userRepository.findByLoginIdIgnoreCaseOrEmailIgnoreCase(identifier, identifier)
+                .filter(foundUser -> email.equalsIgnoreCase(foundUser.getEmail()))
+                .filter(foundUser -> displayName.equalsIgnoreCase(foundUser.getDisplayName()))
+                .orElseThrow(() -> new IllegalArgumentException("입력한 계정 정보가 일치하지 않습니다."));
+
+        LocalDateTime now = LocalDateTime.now();
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        user.setFailedLoginAttempts(0);
+        user.setLockedUntil(null);
+        user.setPasswordChangedAt(now);
+        user.setUpdatedAt(now);
+
+        return new PasswordResetResponseDto("비밀번호가 재설정되었습니다. 새 비밀번호로 로그인해주세요.");
     }
 
     @Transactional(readOnly = true)
