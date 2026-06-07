@@ -1,25 +1,38 @@
-import { countryLabel } from "./job-format";
+import { workTypeLabel } from "@/lib/display-labels";
+import { countryLabel, deadlineLabel } from "./job-format";
 
 export type JobFilterState = {
   country: string;
+  workType: string;
+  experienceLevel: string;
   jobFamily: string;
+  deadlineStatus: string;
   query: string;
 };
 
 export function JobFilterBar({
   filters,
   countries,
+  workTypes,
   jobFamilies,
   onChange,
   onReset
 }: {
   filters: JobFilterState;
   countries: string[];
+  workTypes: string[];
   jobFamilies: string[];
   onChange: (filters: JobFilterState) => void;
   onReset: () => void;
 }) {
-  const activeFilterCount = [filters.country !== "ALL", filters.jobFamily !== "ALL"].filter(Boolean).length;
+  const activeFilterCount = [
+    filters.country !== "ALL",
+    filters.workType !== "ALL",
+    filters.experienceLevel !== "ALL",
+    filters.jobFamily !== "ALL",
+    filters.deadlineStatus !== "ALL",
+    Boolean(filters.query)
+  ].filter(Boolean).length;
 
   return (
     <div className="space-y-3">
@@ -57,8 +70,33 @@ export function JobFilterBar({
           ]}
         />
 
-        <StaticPill icon="▤" label="근무 형태" />
-        <StaticPill icon="↗" label="경력 수준" />
+        <SelectPill
+          icon="▤"
+          label={`근무 형태${filters.workType !== "ALL" ? " (1)" : ""}`}
+          value={filters.workType}
+          onChange={(value) => onChange({ ...filters, workType: value })}
+          onClear={() => onChange({ ...filters, workType: "ALL" })}
+          active={filters.workType !== "ALL"}
+          options={[
+            { label: "전체 근무 형태", value: "ALL" },
+            ...workTypes.map((workType) => ({ label: workTypeLabel(workType), value: workType }))
+          ]}
+        />
+
+        <SelectPill
+          icon="↗"
+          label={`경력 수준${filters.experienceLevel !== "ALL" ? " (1)" : ""}`}
+          value={filters.experienceLevel}
+          onChange={(value) => onChange({ ...filters, experienceLevel: value })}
+          onClear={() => onChange({ ...filters, experienceLevel: "ALL" })}
+          active={filters.experienceLevel !== "ALL"}
+          options={[
+            { label: "전체 경력", value: "ALL" },
+            { label: "신입/주니어 (0-2년)", value: "JUNIOR" },
+            { label: "미드레벨 (3-5년)", value: "MID" },
+            { label: "시니어 (6년 이상)", value: "SENIOR" }
+          ]}
+        />
 
         <SelectPill
           icon="⌘"
@@ -73,16 +111,26 @@ export function JobFilterBar({
           ]}
         />
 
-        <button
-          type="button"
-          className="inline-flex h-12 items-center gap-2 rounded-full border border-brand/15 bg-[#e8f2f1] px-4 text-sm font-black text-brand transition hover:bg-[#dcebe9]"
-        >
-          상세 필터 ({activeFilterCount + (filters.query ? 1 : 0)})
-          <span className="text-lg">⌄</span>
-        </button>
+        <SelectPill
+          icon="!"
+          label={`마감 상태${filters.deadlineStatus !== "ALL" ? " (1)" : ""}`}
+          value={filters.deadlineStatus}
+          onChange={(value) => onChange({ ...filters, deadlineStatus: value })}
+          onClear={() => onChange({ ...filters, deadlineStatus: "ALL" })}
+          active={filters.deadlineStatus !== "ALL"}
+          options={[
+            { label: "전체 마감 상태", value: "ALL" },
+            { label: deadlineLabel.OPEN, value: "OPEN" },
+            { label: deadlineLabel.CLOSING_SOON, value: "CLOSING_SOON" },
+            { label: deadlineLabel.URGENT, value: "URGENT" },
+            { label: deadlineLabel.ROLLING, value: "ROLLING" },
+            { label: deadlineLabel.CLOSED, value: "CLOSED" }
+          ]}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-4 pl-1 text-sm font-black text-brand">
+        <span className="text-slate-500">적용 필터 {activeFilterCount}개</span>
         <button type="button" className="transition hover:text-night" onClick={onReset}>
           필터 초기화
         </button>
@@ -123,8 +171,8 @@ function SelectPill({
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
+        {options.map((option, index) => (
+          <option key={`${option.value}-${index}`} value={option.value}>
             {option.label}
           </option>
         ))}
@@ -140,18 +188,5 @@ function SelectPill({
         </button>
       )}
     </div>
-  );
-}
-
-function StaticPill({ icon, label }: { icon: string; label: string }) {
-  return (
-    <button
-      type="button"
-      className="inline-flex h-12 items-center gap-2.5 rounded-full border border-line bg-white px-4 text-sm font-black text-night transition hover:border-brand/30"
-    >
-      <span className="text-lg text-brand">{icon}</span>
-      {label}
-      <span className="text-lg">⌄</span>
-    </button>
   );
 }

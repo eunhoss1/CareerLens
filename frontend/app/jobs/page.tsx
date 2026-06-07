@@ -18,7 +18,14 @@ const JOBS_PER_PAGE = 8;
 export default function JobsPage() {
   const router = useRouter();
   const [jobs, setJobs] = useState<JobPosting[]>([]);
-  const [filters, setFilters] = useState<JobFilterState>({ country: "ALL", jobFamily: "ALL", query: "" });
+  const [filters, setFilters] = useState<JobFilterState>({
+    country: "ALL",
+    workType: "ALL",
+    experienceLevel: "ALL",
+    jobFamily: "ALL",
+    deadlineStatus: "ALL",
+    query: ""
+  });
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [creatingJobId, setCreatingJobId] = useState<number | null>(null);
@@ -34,20 +41,26 @@ export default function JobsPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filters.country, filters.jobFamily, filters.query]);
+  }, [filters.country, filters.workType, filters.experienceLevel, filters.jobFamily, filters.deadlineStatus, filters.query]);
 
   const countries = useMemo(() => uniqueValues(jobs.map((job) => job.country)), [jobs]);
+  const workTypes = useMemo(() => uniqueValues(jobs.map((job) => job.work_type)), [jobs]);
   const jobFamilies = useMemo(() => uniqueValues(jobs.map((job) => job.job_family)), [jobs]);
 
   const filteredJobs = useMemo(() => {
     const query = filters.query.trim().toLowerCase();
     return jobs.filter((job) => {
       const matchesCountry = filters.country === "ALL" || job.country === filters.country;
+      const matchesWorkType = filters.workType === "ALL" || job.work_type === filters.workType;
+      const matchesExperience = matchesExperienceLevel(job.min_experience_years, filters.experienceLevel);
       const matchesFamily = filters.jobFamily === "ALL" || job.job_family === filters.jobFamily;
+      const matchesDeadline = filters.deadlineStatus === "ALL" || job.deadline_status === filters.deadlineStatus;
       const matchesQuery =
         !query ||
-        `${job.company_name} ${job.job_title} ${job.required_skills.join(" ")}`.toLowerCase().includes(query);
-      return matchesCountry && matchesFamily && matchesQuery;
+        `${job.company_name} ${job.job_title} ${job.required_skills.join(" ")} ${job.preferred_skills.join(" ")}`
+          .toLowerCase()
+          .includes(query);
+      return matchesCountry && matchesWorkType && matchesExperience && matchesFamily && matchesDeadline && matchesQuery;
     });
   }, [filters, jobs]);
 
@@ -69,7 +82,14 @@ export default function JobsPage() {
   }, [loading, selectedJobId, visibleJobs]);
 
   function resetFilters() {
-    setFilters({ country: "ALL", jobFamily: "ALL", query: "" });
+    setFilters({
+      country: "ALL",
+      workType: "ALL",
+      experienceLevel: "ALL",
+      jobFamily: "ALL",
+      deadlineStatus: "ALL",
+      query: ""
+    });
   }
 
   async function handleCreateRoadmap(job: JobPosting) {
@@ -117,6 +137,7 @@ export default function JobsPage() {
           <JobFilterBar
             filters={filters}
             countries={countries}
+            workTypes={workTypes}
             jobFamilies={jobFamilies}
             onChange={setFilters}
             onReset={resetFilters}
@@ -191,6 +212,14 @@ export default function JobsPage() {
 
 function uniqueValues(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort();
+}
+
+function matchesExperienceLevel(years: number | null, level: string) {
+  const value = years ?? 0;
+  if (level === "JUNIOR") return value <= 2;
+  if (level === "MID") return value >= 3 && value <= 5;
+  if (level === "SENIOR") return value >= 6;
+  return true;
 }
 
 function JobsPagination({
