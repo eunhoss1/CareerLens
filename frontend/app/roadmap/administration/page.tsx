@@ -14,7 +14,14 @@ import {
   SectionHeader,
   TimelineCard
 } from "@/components/ui";
+import { RoadmapCard } from "@/components/roadmap/RoadmapCard";
 import { getStoredUser, type AuthUser } from "@/lib/auth";
+import { getStoredDepartureRoadmapData } from "@/lib/departure-roadmap-storage";
+import {
+  createRoadmapCardsFromDepartureData,
+  createRoadmapCardsFromSettlementItems,
+  type DepartureRoadmapData
+} from "@/lib/roadmap-checklists";
 import {
   fetchSettlementChecklists,
   generateSettlementGuidance,
@@ -63,11 +70,14 @@ const officialSourceCards = [
 export default function AdministrationRoadmapPage() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [items, setItems] = useState<SettlementChecklistItem[]>([]);
+  const [departureData, setDepartureData] = useState<DepartureRoadmapData | null>(null);
   const [guidance, setGuidance] = useState<SettlementGuidance | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    setDepartureData(getStoredDepartureRoadmapData());
+
     const storedUser = getStoredUser();
     setUser(storedUser);
     if (!storedUser) {
@@ -101,6 +111,16 @@ export default function AdministrationRoadmapPage() {
   const doneCount = adminItems.filter((item) => item.status === "DONE").length;
   const inProgressCount = adminItems.filter((item) => item.status === "IN_PROGRESS").length;
   const completionRate = adminItems.length === 0 ? 0 : Math.round((doneCount / adminItems.length) * 100);
+  const departureAdminCards = useMemo(() => {
+    if (!departureData) {
+      return [];
+    }
+    return createRoadmapCardsFromDepartureData(
+      departureData,
+      `administration-${departureData.country}-${departureData.startDate ?? "latest"}`
+    );
+  }, [departureData]);
+  const officialCards = useMemo(() => officialSourceCardsFor(departureData?.country), [departureData?.country]);
   // const groupedByCountry = adminItems.reduce<Record<string, SettlementChecklistItem[]>>((acc, item) => {
   //   acc[item.country] = [...(acc[item.country] ?? []), item];
   //   return acc;
@@ -139,7 +159,11 @@ export default function AdministrationRoadmapPage() {
               <MetricCard label="행정 체크 항목" value={adminItems.length} helper="비자/행정/보험 중심" />
               <MetricCard label="진행 중" value={inProgressCount} helper="확인 또는 처리 중" />
               <MetricCard label="완료" value={doneCount} helper="사용자별 저장 상태" />
-              <MetricCard label="생성 방식" value={guidance?.generation_mode.includes("AI") ? "AI 보조" : "규칙 기반"} helper="정착 안내 요약 기준" />
+              <MetricCard
+                label="출국로드맵 국가"
+                value={departureData?.country ?? "미설정"}
+                helper={departureData ? "출국로드맵 저장값 기준" : "정착 체크리스트 기준"}
+              />
             </div>
 
             <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
@@ -166,10 +190,10 @@ export default function AdministrationRoadmapPage() {
                 <SectionHeader
                   kicker="OFFICIAL SOURCE POLICY"
                   title="공식 자료 확인 원칙"
-                  description="AI는 체크리스트 요약과 우선순위 정리에만 사용하고, 비자/체류자격의 최신 판단은 공식기관 자료로 최종 확인합니다."
+                  description="출국로드맵에 저장된 국가를 우선 기준으로 사용하고, 비자/체류자격의 최신 판단은 공식기관 자료로 최종 확인합니다."
                 />
                 <div className="mt-5 grid gap-3 md:grid-cols-2">
-                  {officialSourceCards.map((card) => (
+                  {officialCards.map((card) => (
                     <div key={card.country} className="rounded-xl border border-line bg-panel p-4">
                       <Badge tone="brand">{card.country}</Badge>
                       <h3 className="mt-3 text-base font-semibold text-night">{card.title}</h3>
@@ -189,18 +213,8 @@ export default function AdministrationRoadmapPage() {
                   <TimelineCard key={stage.phase} label={stage.phase} title={stage.title}>
                     <p className="text-sm leading-6 text-slate-600">{stage.description}</p>
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      {matchingItems(stage.phase, adminItems).map((item) => (
-                        <div key={item.item_id} className="rounded-xl border border-line bg-panel p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold text-night">{item.country} · {item.checklist_title}</p>
-                              <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
-                            </div>
-                            <Badge tone={statusTone(item.status)} className={item.status === "NOT_STARTED" ? "min-w-[55px] justify-center" : ""}>
-                              {statusLabel(item.status)}
-                            </Badge>
-                          </div>
-                        </div>
+                      {cardsForStage(stage.phase, departureAdminCards, adminItems).map((card) => (
+                        <RoadmapCard key={card.id} card={card} />
                       ))}
                     </div>
                   </TimelineCard>
@@ -260,14 +274,30 @@ function matchingItems(phase: string, items: SettlementChecklistItem[]) {
   return items.filter((item) => item.description.includes("주소") || item.description.includes("은행") || item.description.includes("보험")).slice(0, 3);
 }
 
-function statusLabel(status: string) {
-  if (status === "DONE") return "완료";
-  if (status === "IN_PROGRESS") return "진행 중";
-  return "준비 전";
+function cardsForStage(phase: string, departureCards: ReturnType<typeof createRoadmapCardsFromDepartureData>, adminItems: SettlementChecklistItem[]) {
+  const cards = departureCards.filter((card) => card.phase === phase);
+  if (cards.length > 0) {
+    return cards;
+  }
+  return createRoadmapCardsFromSettlementItems(phase, matchingItems(phase, adminItems));
 }
 
-function statusTone(status: string) {
-  if (status === "DONE") return "success";
-  if (status === "IN_PROGRESS") return "warning";
-  return "muted";
+function officialSourceCardsFor(country?: string) {
+  if (!country) {
+    return officialSourceCards;
+  }
+  if (country.includes("미국") || country.toLowerCase().includes("united states")) {
+    return officialSourceCards.filter((card) => card.country === "미국");
+  }
+  if (country.includes("일본") || country.toLowerCase().includes("japan")) {
+    return officialSourceCards.filter((card) => card.country === "일본");
+  }
+  return [
+    {
+      country,
+      title: "비자/입국 행정 공식 확인",
+      description: `${country} 정부, 재외공관, 고용주 안내 자료를 기준으로 최신 절차를 확인합니다.`,
+      tags: ["Government", "Embassy", "Employer"]
+    }
+  ];
 }

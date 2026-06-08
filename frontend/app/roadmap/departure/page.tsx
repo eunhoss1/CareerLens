@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
+import { RoadmapCard } from "@/components/roadmap/RoadmapCard";
 import { Badge, Button, Card, EmptyState, LinkButton, MetricCard, PageHeader, PageShell, SelectInput, TextInput, TimelineCard } from "@/components/ui";
 import { generateDeparturePlan, type DeparturePlan, type DeparturePlanRequest } from "@/lib/departure";
+import { storeDepartureRoadmapData } from "@/lib/departure-roadmap-storage";
+import { createRoadmapCardsFromDeparturePlan, departureRoadmapDataFromPlan, departureRoadmapSections } from "@/lib/roadmap-checklists";
 
 const defaultRequest: DeparturePlanRequest = {
   target_country: "일본",
@@ -21,6 +24,26 @@ export default function DepartureRoadmapPage() {
   const [plan, setPlan] = useState<DeparturePlan | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const roadmapCards = useMemo(() => (
+    plan
+      ? createRoadmapCardsFromDeparturePlan(plan, {
+          visaStatus: form.visa_status,
+          housingStatus: form.housing_status
+        })
+      : []
+  ), [form.housing_status, form.visa_status, plan]);
+
+  useEffect(() => {
+    storeDepartureRoadmapData({
+      country: form.target_country,
+      startDate: form.start_date,
+      departureAirport: form.origin_airport,
+      arrivalAirport: form.destination_airport,
+      visaStatus: form.visa_status,
+      housingStatus: form.housing_status,
+      destinationCity: form.destination_city
+    });
+  }, [form]);
 
   async function submitPlan() {
     setIsLoading(true);
@@ -28,6 +51,10 @@ export default function DepartureRoadmapPage() {
     try {
       const result = await generateDeparturePlan(form);
       setPlan(result);
+      storeDepartureRoadmapData(departureRoadmapDataFromPlan(result, {
+        visaStatus: form.visa_status,
+        housingStatus: form.housing_status
+      }));
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "출국 로드맵을 생성하지 못했습니다.");
     } finally {
@@ -178,14 +205,13 @@ export default function DepartureRoadmapPage() {
 
               <section className="border-l border-night pl-4">
                 <div className="space-y-4">
-                  {plan.milestones.map((milestone) => (
-                    <TimelineCard key={`${milestone.phase}-${milestone.title}`} label={milestone.phase} title={milestone.title}>
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div>
-                          <p className="text-sm leading-6 text-slate-600">{milestone.description}</p>
-                          <p className="mt-2 text-xs text-slate-500">기한: {milestone.due_date}</p>
-                        </div>
-                        <Badge tone={milestoneTone(milestone.status)}>{milestoneLabel(milestone.status)}</Badge>
+                  {departureRoadmapSections.map((section) => (
+                    <TimelineCard key={section.phase} label={section.phase} title={section.title}>
+                      <p className="text-sm leading-6 text-slate-600">{section.description}</p>
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        {roadmapCards.filter((card) => card.phase === section.phase).map((card) => (
+                          <RoadmapCard key={card.id} card={card} />
+                        ))}
                       </div>
                     </TimelineCard>
                   ))}
@@ -224,18 +250,6 @@ function urgencyTone(status: string) {
   if (status === "ON_TRACK") return "success";
   if (status === "SOON") return "warning";
   return "risk";
-}
-
-function milestoneLabel(status: string) {
-  if (status === "DONE") return "기한 지남";
-  if (status === "URGENT") return "긴급";
-  return "예정";
-}
-
-function milestoneTone(status: string) {
-  if (status === "DONE") return "muted";
-  if (status === "URGENT") return "risk";
-  return "brand";
 }
 
 function flightDataLabel(status: string) {
