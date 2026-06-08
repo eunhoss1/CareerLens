@@ -194,8 +194,8 @@ export default function AdministrationRoadmapPage() {
                 <div className="mt-5 rounded-xl border border-line bg-panel p-4">
                   <p className="text-xs font-bold text-slate-500">우선 확인 항목</p>
                   <ul className="mt-3 space-y-2">
-                    {(guidance?.priority_actions ?? adminItems.slice(0, 4).map((item) => `${item.country} - ${item.checklist_title}`)).slice(0, 4).map((action) => (
-                      <li key={action} className="text-sm leading-6 text-slate-700">- {action}</li>
+                    {(guidance?.priority_actions ?? adminItems.slice(0, 4).map((item) => `${item.country} - ${item.checklist_title}`)).slice(0, 4).map((action, index) => (
+                      <li key={`${action}-${index}`} className="text-sm leading-6 text-slate-700">- {action}</li>
                     ))}
                   </ul>
                 </div>
