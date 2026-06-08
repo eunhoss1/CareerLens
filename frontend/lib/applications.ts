@@ -1,3 +1,5 @@
+import { apiFetch, authHeaders, readApiError } from "@/lib/auth";
+
 export type ApplicationStatus = "INTERESTED" | "PREPARING_DOCUMENTS" | "APPLIED" | "INTERVIEW" | "CLOSED";
 
 export type ApplicationRecord = {
@@ -42,72 +44,72 @@ export type ApplicationRecord = {
 const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
 export async function fetchUserApplications(userId: number): Promise<ApplicationRecord[]> {
-  const response = await fetch(`${baseUrl}/api/applications/users/${userId}`, {
+  const response = await apiFetch(`${baseUrl}/api/applications/users/${userId}`, {
+    headers: authHeaders(),
     cache: "no-store"
-  });
+  }, "지원 관리 목록 조회");
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Application records request failed.");
+    throw new Error(await readApiError(response, "Application records request failed."));
   }
 
   return response.json();
 }
 
 export async function createApplicationFromRoadmap(roadmapId: number): Promise<ApplicationRecord> {
-  const response = await fetch(`${baseUrl}/api/applications/from-roadmap/${roadmapId}`, {
+  const response = await apiFetch(`${baseUrl}/api/applications/from-roadmap/${roadmapId}`, {
     method: "POST",
+    headers: authHeaders(),
     cache: "no-store"
-  });
+  }, "지원 워크스페이스 생성");
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Application record creation failed.");
+    throw new Error(await readApiError(response, "Application record creation failed."));
   }
 
   return response.json();
 }
 
 export async function createApplicationFromJob(userId: number, jobId: number): Promise<ApplicationRecord> {
-  const response = await fetch(`${baseUrl}/api/applications/users/${userId}/jobs/${jobId}`, {
+  const response = await apiFetch(`${baseUrl}/api/applications/users/${userId}/jobs/${jobId}`, {
     method: "POST",
+    headers: authHeaders(),
     cache: "no-store"
-  });
+  }, "지원 워크스페이스 생성");
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Application workspace creation failed.");
+    throw new Error(await readApiError(response, "Application workspace creation failed."));
   }
 
   return response.json();
 }
 
 export async function fetchApplication(applicationId: number): Promise<ApplicationRecord> {
-  const response = await fetch(`${baseUrl}/api/applications/${applicationId}`, {
+  const response = await apiFetch(`${baseUrl}/api/applications/${applicationId}`, {
+    headers: authHeaders(),
     cache: "no-store"
-  });
+  }, "지원 워크스페이스 조회");
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Application workspace request failed.");
+    throw new Error(await readApiError(response, "Application workspace request failed."));
   }
 
   return response.json();
 }
 
 export async function updateApplicationStatus(applicationId: number, status: ApplicationStatus): Promise<ApplicationRecord> {
-  const response = await fetch(`${baseUrl}/api/applications/${applicationId}/status`, {
+  const response = await apiFetch(`${baseUrl}/api/applications/${applicationId}/status`, {
     method: "PATCH",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      ...authHeaders()
     },
     body: JSON.stringify({ status }),
     cache: "no-store"
-  });
+  }, "지원 상태 변경");
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Application status update failed.");
+    throw new Error(await readApiError(response, "Application status update failed."));
   }
 
   return response.json();
@@ -117,18 +119,18 @@ export async function updateApplicationWorkspace(
   applicationId: number,
   input: { candidate_notes?: string; next_action?: string }
 ): Promise<ApplicationRecord> {
-  const response = await fetch(`${baseUrl}/api/applications/${applicationId}/workspace`, {
+  const response = await apiFetch(`${baseUrl}/api/applications/${applicationId}/workspace`, {
     method: "PATCH",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      ...authHeaders()
     },
     body: JSON.stringify(input),
     cache: "no-store"
-  });
+  }, "지원 워크스페이스 저장");
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Application workspace update failed.");
+    throw new Error(await readApiError(response, "Application workspace update failed."));
   }
 
   return response.json();

@@ -110,8 +110,8 @@ function CountryRiskCard({
       <p className="lens-kicker">COUNTRY RISK</p>
       <h2 className="mt-3 text-2xl font-semibold text-night">국가별 준비 상태</h2>
       <div className="mt-5 space-y-3">
-        {(guidance?.country_summaries ?? countryFallbackSummaries(groupedByCountry)).map((country) => (
-          <div key={country.country} className="rounded-xl border border-line bg-panel p-4">
+        {(guidance?.country_summaries ?? countryFallbackSummaries(groupedByCountry)).map((country, countryIndex) => (
+          <div key={`${country.country}-${countryIndex}`} className="rounded-xl border border-line bg-panel p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-base font-semibold text-night">{country.country}</p>
@@ -120,8 +120,8 @@ function CountryRiskCard({
               <Badge tone={riskTone(country.risk_level)}>{riskLabel(country.risk_level)}</Badge>
             </div>
             <ul className="mt-3 space-y-1">
-              {country.next_actions.slice(0, 3).map((action) => (
-                <li key={action} className="text-sm leading-6 text-slate-600">- {action}</li>
+              {country.next_actions.slice(0, 3).map((action, actionIndex) => (
+                <li key={`${country.country}-${action}-${actionIndex}`} className="text-sm leading-6 text-slate-600">- {action}</li>
               ))}
             </ul>
           </div>

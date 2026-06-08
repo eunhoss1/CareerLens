@@ -15,15 +15,6 @@ import {
   TimelineCard
 } from "@/components/ui";
 import { getStoredUser, type AuthUser } from "@/lib/auth";
-import { countryLabel } from "@/lib/display-labels";
-import { fetchUserProfile, type UserProfileSummary } from "@/lib/recommendation";
-import {
-  countryMatches,
-  isAdministrationChecklistItem,
-  roadmapContentFor,
-  stageMatchesChecklist,
-  type AdminStage
-} from "@/lib/administration-roadmap";
 import {
   fetchSettlementChecklists,
   generateSettlementGuidance,
@@ -31,9 +22,46 @@ import {
   type SettlementGuidance
 } from "@/lib/settlement";
 
+const adminStages = [
+  {
+    phase: "OFFER",
+    title: "오퍼/고용계약 확인",
+    description: "입사 예정일, 고용주 정보, 비자 스폰서십 여부, 제출 서류를 확정합니다."
+  },
+  {
+    phase: "VISA",
+    title: "비자/재류자격 준비",
+    description: "국가별 공식기관 기준으로 체류자격, 제출 서류, 처리 기간을 확인합니다."
+  },
+  {
+    phase: "PRE-DEPARTURE",
+    title: "출국 전 행정 패키지",
+    description: "영문/일문 증빙, 보험, 숙소, 긴급 연락처, 회사 제출 서류를 하나로 묶습니다."
+  },
+  {
+    phase: "ARRIVAL",
+    title: "입국 후 초기 행정",
+    description: "주소 등록, 은행, 통신, 보험, 회사 온보딩 서류를 순서대로 처리합니다."
+  }
+];
+
+const officialSourceCards = [
+  {
+    country: "미국",
+    title: "비자/고용 관련 공식 확인",
+    description: "USCIS, Department of State, 고용주 안내 자료를 기준으로 최신 절차를 확인합니다.",
+    tags: ["USCIS", "State Dept.", "Employer"]
+  },
+  {
+    country: "일본",
+    title: "재류자격/입국 행정 공식 확인",
+    description: "출입국재류관리청, 대사관, 고용주 제출 서류 안내를 기준으로 확인합니다.",
+    tags: ["Immigration Services Agency", "Embassy", "Employer"]
+  }
+];
+
 export default function AdministrationRoadmapPage() {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [profile, setProfile] = useState<UserProfileSummary | null>(null);
   const [items, setItems] = useState<SettlementChecklistItem[]>([]);
   const [guidance, setGuidance] = useState<SettlementGuidance | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,12 +76,10 @@ export default function AdministrationRoadmapPage() {
     }
 
     Promise.all([
-      fetchUserProfile(storedUser.user_id),
       fetchSettlementChecklists(storedUser.user_id),
       generateSettlementGuidance(storedUser.user_id)
     ])
-      .then(([loadedProfile, loadedItems, generatedGuidance]) => {
-        setProfile(loadedProfile);
+      .then(([loadedItems, generatedGuidance]) => {
         setItems(loadedItems);
         setGuidance(generatedGuidance);
       })
@@ -61,20 +87,16 @@ export default function AdministrationRoadmapPage() {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const targetCountry = countryLabel(profile?.target_country);
-  const roadmapContent = useMemo(() => roadmapContentFor(targetCountry), [targetCountry]);
-
   const adminItems = useMemo(() => {
     return items.filter((item) =>
-      countryMatches(item.country, targetCountry)
-      && isAdministrationChecklistItem(item)
+      item.category.includes("비자")
+      || item.category.includes("행정")
+      || item.description.includes("비자")
+      || item.description.includes("재류")
+      || item.description.includes("주소 등록")
+      || item.description.includes("보험")
     );
-  }, [items, targetCountry]);
-
-  const countryGuidance = guidance?.country_summaries.find((summary) => countryMatches(summary.country, targetCountry));
-  const priorityActions = countryGuidance?.next_actions.length
-    ? countryGuidance.next_actions
-    : adminItems.slice(0, 4).map((item) => `${item.country} - ${item.checklist_title}`);
+  }, [items]);
 
   const doneCount = adminItems.filter((item) => item.status === "DONE").length;
   const inProgressCount = adminItems.filter((item) => item.status === "IN_PROGRESS").length;
@@ -114,10 +136,10 @@ export default function AdministrationRoadmapPage() {
         {!isLoading && user && (
           <div className="space-y-6">
             <div className="grid gap-3 md:grid-cols-4">
-              <MetricCard label="희망 국가" value={targetCountry} helper="해외 취업 프로필 기준" />
-              <MetricCard label="행정 체크 항목" value={adminItems.length} helper={`${targetCountry} 비자/행정 중심`} />
+              <MetricCard label="행정 체크 항목" value={adminItems.length} helper="비자/행정/보험 중심" />
               <MetricCard label="진행 중" value={inProgressCount} helper="확인 또는 처리 중" />
               <MetricCard label="완료" value={doneCount} helper="사용자별 저장 상태" />
+              <MetricCard label="생성 방식" value={guidance?.generation_mode.includes("AI") ? "AI 보조" : "규칙 기반"} helper="정착 안내 요약 기준" />
             </div>
 
             <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
@@ -128,19 +150,14 @@ export default function AdministrationRoadmapPage() {
                   <ScoreBar label="비자/행정 준비율" value={completionRate} tone={completionRate >= 70 ? "success" : "warning"} />
                 </div>
                 <p className="mt-4 text-sm leading-6 text-slate-600">
-                  {targetCountry === "미기재"
-                    ? "해외 취업 프로필 설정에서 희망국가를 먼저 저장하면 해당 국가 기준 행정로드맵을 생성합니다."
-                    : `${targetCountry} 희망국가를 기준으로 공식자료 확인 원칙, 오퍼/고용계약, 비자/체류자격, 출국 전 서류, 입국 후 초기 행정을 정리합니다.`}
+                  {guidance?.summary ?? "정착 체크리스트를 기준으로 비자, 출국 전 준비, 초기 행정 항목을 정리합니다."}
                 </p>
                 <div className="mt-5 rounded-xl border border-line bg-panel p-4">
                   <p className="text-xs font-bold text-slate-500">우선 확인 항목</p>
                   <ul className="mt-3 space-y-2">
-                    {priorityActions.slice(0, 4).map((action) => (
+                    {(guidance?.priority_actions ?? adminItems.slice(0, 4).map((item) => `${item.country} - ${item.checklist_title}`)).slice(0, 4).map((action) => (
                       <li key={action} className="text-sm leading-6 text-slate-700">- {action}</li>
                     ))}
-                    {priorityActions.length === 0 && (
-                      <li className="text-sm leading-6 text-slate-700">- 해외 취업 프로필의 희망국가와 희망도시를 저장한 뒤 공식기관 자료를 확인하세요.</li>
-                    )}
                   </ul>
                 </div>
               </Card>
@@ -149,34 +166,28 @@ export default function AdministrationRoadmapPage() {
                 <SectionHeader
                   kicker="OFFICIAL SOURCE POLICY"
                   title="공식 자료 확인 원칙"
-                  description={`${roadmapContent.country} 행정 절차는 공식기관과 고용주 안내를 기준으로 최종 확인합니다.`}
+                  description="AI는 체크리스트 요약과 우선순위 정리에만 사용하고, 비자/체류자격의 최신 판단은 공식기관 자료로 최종 확인합니다."
                 />
-                <div className="mt-5 rounded-xl border border-line bg-panel p-4">
-                  <Badge tone="brand">{roadmapContent.country}</Badge>
-                  <h3 className="mt-3 text-base font-semibold text-night">{roadmapContent.officialTitle}</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{roadmapContent.officialDescription}</p>
-                  <ul className="mt-3 space-y-2">
-                    {roadmapContent.officialPrinciples.map((principle) => (
-                      <li key={principle} className="text-sm leading-6 text-slate-700">- {principle}</li>
-                    ))}
-                  </ul>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {roadmapContent.officialTags.map((tag) => <Badge key={tag} tone="muted">{tag}</Badge>)}
-                  </div>
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  {officialSourceCards.map((card) => (
+                    <div key={card.country} className="rounded-xl border border-line bg-panel p-4">
+                      <Badge tone="brand">{card.country}</Badge>
+                      <h3 className="mt-3 text-base font-semibold text-night">{card.title}</h3>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{card.description}</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {card.tags.map((tag) => <Badge key={tag} tone="muted">{tag}</Badge>)}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </Card>
             </section>
 
             <section className="border-l border-night pl-4">
               <div className="space-y-4">
-                {roadmapContent.stages.map((stage) => (
-                  <TimelineCard key={stage.phase} label={stage.label} title={stage.title}>
+                {adminStages.map((stage) => (
+                  <TimelineCard key={stage.phase} label={stage.phase} title={stage.title}>
                     <p className="text-sm leading-6 text-slate-600">{stage.description}</p>
-                    <ul className="mt-3 space-y-2">
-                      {stage.actions.map((action) => (
-                        <li key={action} className="text-sm leading-6 text-slate-700">- {action}</li>
-                      ))}
-                    </ul>
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
                       {matchingItems(stage.phase, adminItems).map((item) => (
                         <div key={item.item_id} className="rounded-xl border border-line bg-panel p-4">
@@ -191,11 +202,6 @@ export default function AdministrationRoadmapPage() {
                           </div>
                         </div>
                       ))}
-                      {matchingItems(stage.phase, adminItems).length === 0 && (
-                        <div className="rounded-xl border border-dashed border-line bg-panel p-4">
-                          <p className="text-sm leading-6 text-slate-600">프로필 희망국가에 연결된 저장 체크리스트가 아직 없습니다. 위 생성 항목을 기준으로 공식자료와 고용주 안내를 확인하세요.</p>
-                        </div>
-                      )}
                     </div>
                   </TimelineCard>
                 ))}
@@ -241,8 +247,17 @@ export default function AdministrationRoadmapPage() {
   );
 }
 
-function matchingItems(phase: AdminStage["phase"], items: SettlementChecklistItem[]) {
-  return items.filter((item) => stageMatchesChecklist(phase, item)).slice(0, 3);
+function matchingItems(phase: string, items: SettlementChecklistItem[]) {
+  if (phase === "OFFER") {
+    return items.filter((item) => item.description.includes("회사") || item.description.includes("고용") || item.description.includes("제출")).slice(0, 2);
+  }
+  if (phase === "VISA") {
+    return items.filter((item) => item.description.includes("비자") || item.description.includes("재류")).slice(0, 3);
+  }
+  if (phase === "PRE-DEPARTURE") {
+    return items.filter((item) => item.category.includes("출국") || item.description.includes("증빙") || item.description.includes("서류")).slice(0, 3);
+  }
+  return items.filter((item) => item.description.includes("주소") || item.description.includes("은행") || item.description.includes("보험")).slice(0, 3);
 }
 
 function statusLabel(status: string) {

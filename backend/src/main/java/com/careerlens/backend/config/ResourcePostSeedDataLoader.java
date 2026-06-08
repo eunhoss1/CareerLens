@@ -7,10 +7,12 @@ import java.util.ArrayList;
 import java.util.List;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
+@ConditionalOnProperty(name = "app.resource-seed.enabled", havingValue = "true")
 public class ResourcePostSeedDataLoader implements ApplicationRunner {
 
     private final ResourcePostRepository resourcePostRepository;

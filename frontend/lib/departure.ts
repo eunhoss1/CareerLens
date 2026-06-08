@@ -1,3 +1,5 @@
+import { apiFetch, authHeaders, readApiError } from "@/lib/auth";
+
 export type DeparturePlanRequest = {
   target_country: string;
   destination_city: string;
@@ -10,6 +12,7 @@ export type DeparturePlanRequest = {
 };
 
 export type DeparturePlan = {
+  plan_id?: number | null;
   target_country: string;
   destination_city: string;
   origin_airport: string;
@@ -52,23 +55,68 @@ export type DeparturePlan = {
   }>;
   generation_mode: string;
   disclaimer: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+  refreshed_at?: string | null;
 };
 
 const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
 export async function generateDeparturePlan(request: DeparturePlanRequest): Promise<DeparturePlan> {
-  const response = await fetch(`${baseUrl}/api/departure/plan`, {
+  const response = await apiFetch(`${baseUrl}/api/departure/plan`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      ...authHeaders()
     },
     body: JSON.stringify(request),
     cache: "no-store"
-  });
+  }, "출국 로드맵 생성");
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Departure plan request failed.");
+    throw new Error(await readApiError(response, "Departure plan request failed."));
+  }
+
+  return response.json();
+}
+
+export async function generateDeparturePlanFromRoadmap(roadmapId: number): Promise<DeparturePlan> {
+  const response = await apiFetch(`${baseUrl}/api/departure/roadmaps/${roadmapId}/plan`, {
+    method: "POST",
+    headers: authHeaders(),
+    cache: "no-store"
+  }, "출국 로드맵 생성");
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Departure plan request failed."));
+  }
+
+  return response.json();
+}
+
+export async function fetchDeparturePlanFromRoadmap(roadmapId: number): Promise<DeparturePlan> {
+  const response = await apiFetch(`${baseUrl}/api/departure/roadmaps/${roadmapId}/plan`, {
+    method: "GET",
+    headers: authHeaders(),
+    cache: "no-store"
+  }, "출국 로드맵 조회");
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Departure plan request failed."));
+  }
+
+  return response.json();
+}
+
+export async function refreshDeparturePlanFromRoadmap(roadmapId: number): Promise<DeparturePlan> {
+  const response = await apiFetch(`${baseUrl}/api/departure/roadmaps/${roadmapId}/plan/refresh`, {
+    method: "POST",
+    headers: authHeaders(),
+    cache: "no-store"
+  }, "출국 로드맵 갱신");
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Departure plan refresh failed."));
   }
 
   return response.json();

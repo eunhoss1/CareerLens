@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
 import { SiteHeader } from "@/components/site-header";
 import {
   Badge,
@@ -49,6 +50,7 @@ const statusOptions: Array<{ value: ApplicationStatus; label: string; descriptio
 
 export default function ApplicationWorkspacePage() {
   const params = useParams<{ applicationId: string }>();
+  const auth = useRequiredAuth();
   const applicationId = Number(params.applicationId);
   const [record, setRecord] = useState<ApplicationRecord | null>(null);
   const [notes, setNotes] = useState("");
@@ -58,7 +60,7 @@ export default function ApplicationWorkspacePage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!applicationId) return;
+    if (auth.isChecking || !auth.user || !applicationId) return;
     setIsLoading(true);
     setErrorMessage(null);
     fetchApplication(applicationId)
@@ -69,7 +71,7 @@ export default function ApplicationWorkspacePage() {
       })
       .catch((error) => setErrorMessage(error instanceof Error ? error.message : "지원 워크스페이스를 불러오지 못했습니다."))
       .finally(() => setIsLoading(false));
-  }, [applicationId]);
+  }, [applicationId, auth.isChecking, auth.user]);
 
   const completedDocuments = useMemo(() => {
     return record?.document_checklist.filter((item) => item.status === "DONE" || item.status === "VERIFIED").length ?? 0;
@@ -122,6 +124,14 @@ export default function ApplicationWorkspacePage() {
     } finally {
       setIsSaving(false);
     }
+  }
+
+  if (auth.isChecking) {
+    return <AuthCheckingScreen title="지원 워크스페이스 접근 권한을 확인하는 중입니다." />;
+  }
+
+  if (!auth.user) {
+    return <AuthRequiredScreen title="지원 워크스페이스는 로그인 후 이용할 수 있습니다." />;
   }
 
   return (

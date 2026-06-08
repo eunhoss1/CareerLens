@@ -2,9 +2,12 @@ package com.careerlens.backend.controller;
 
 import com.careerlens.backend.dto.PlannerRoadmapDto;
 import com.careerlens.backend.dto.PlannerTaskStatusUpdateRequestDto;
+import com.careerlens.backend.security.AccessGuard;
+import com.careerlens.backend.security.JwtClaims;
 import com.careerlens.backend.service.PlannerService;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,25 +27,36 @@ public class PlannerController {
     }
 
     @PostMapping("/roadmaps/from-diagnosis/{diagnosisId}")
-    public PlannerRoadmapDto createFromDiagnosis(@PathVariable Long diagnosisId) {
-        return plannerService.createFromDiagnosis(diagnosisId);
+    public PlannerRoadmapDto createFromDiagnosis(
+            @PathVariable Long diagnosisId,
+            @AuthenticationPrincipal JwtClaims claims
+    ) {
+        return plannerService.createFromDiagnosis(diagnosisId, claims);
     }
 
     @GetMapping("/roadmaps/{roadmapId}")
-    public PlannerRoadmapDto getRoadmap(@PathVariable Long roadmapId) {
-        return plannerService.getRoadmap(roadmapId);
+    public PlannerRoadmapDto getRoadmap(
+            @PathVariable Long roadmapId,
+            @AuthenticationPrincipal JwtClaims claims
+    ) {
+        return plannerService.getRoadmap(roadmapId, claims);
     }
 
     @GetMapping("/users/{userId}/roadmaps")
-    public List<PlannerRoadmapDto> getUserRoadmaps(@PathVariable Long userId) {
+    public List<PlannerRoadmapDto> getUserRoadmaps(
+            @PathVariable Long userId,
+            @AuthenticationPrincipal JwtClaims claims
+    ) {
+        AccessGuard.requireUserOrAdmin(claims, userId);
         return plannerService.getUserRoadmaps(userId);
     }
 
     @PatchMapping("/tasks/{taskId}/status")
     public PlannerRoadmapDto updateTaskStatus(
             @PathVariable Long taskId,
-            @Valid @RequestBody PlannerTaskStatusUpdateRequestDto request
+            @Valid @RequestBody PlannerTaskStatusUpdateRequestDto request,
+            @AuthenticationPrincipal JwtClaims claims
     ) {
-        return plannerService.updateTaskStatus(taskId, request.status());
+        return plannerService.updateTaskStatus(taskId, request.status(), claims);
     }
 }

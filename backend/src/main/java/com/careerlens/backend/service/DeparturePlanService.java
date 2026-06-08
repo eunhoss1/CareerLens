@@ -1,6 +1,17 @@
 package com.careerlens.backend.service;
 
 import com.careerlens.backend.dto.*;
+import com.careerlens.backend.entity.DepartureFlightOffer;
+import com.careerlens.backend.entity.DepartureMilestone;
+import com.careerlens.backend.entity.DepartureRoadmap;
+import com.careerlens.backend.entity.JobPosting;
+import com.careerlens.backend.entity.PlannerRoadmap;
+import com.careerlens.backend.repository.DepartureFlightOfferRepository;
+import com.careerlens.backend.repository.DepartureMilestoneRepository;
+import com.careerlens.backend.repository.DepartureRoadmapRepository;
+import com.careerlens.backend.repository.PlannerRoadmapRepository;
+import com.careerlens.backend.security.AccessGuard;
+import com.careerlens.backend.security.JwtClaims;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -17,15 +28,20 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.function.Supplier;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class DeparturePlanService {
 
+    private static final int MAX_FLIGHT_OFFERS = 5;
     private static final int DEFAULT_ARRIVAL_BUFFER_DAYS = 14;
     private static final int MIN_ARRIVAL_BUFFER_DAYS = 3;
     private static final int MAX_ARRIVAL_BUFFER_DAYS = 45;
@@ -39,6 +55,10 @@ public class DeparturePlanService {
     private static final Duration AMADEUS_REQUEST_TIMEOUT = Duration.ofSeconds(20);
 
     private final ObjectMapper objectMapper;
+    private final PlannerRoadmapRepository plannerRoadmapRepository;
+    private final DepartureRoadmapRepository departureRoadmapRepository;
+    private final DepartureFlightOfferRepository departureFlightOfferRepository;
+    private final DepartureMilestoneRepository departureMilestoneRepository;
     private final HttpClient httpClient;
     private final boolean aiEnabled;
     private final String provider;
@@ -61,6 +81,10 @@ public class DeparturePlanService {
 
     public DeparturePlanService(
             ObjectMapper objectMapper,
+            PlannerRoadmapRepository plannerRoadmapRepository,
+            DepartureRoadmapRepository departureRoadmapRepository,
+            DepartureFlightOfferRepository departureFlightOfferRepository,
+            DepartureMilestoneRepository departureMilestoneRepository,
             @Value("${app.ai.openai.enabled:false}") boolean aiEnabled,
             @Value("${app.ai.provider:openai}") String provider,
             @Value("${app.ai.openai.api-key:}") String openAiApiKey,
@@ -82,6 +106,10 @@ public class DeparturePlanService {
             @Value("${app.travel.amadeus.currency-code:KRW}") String amadeusCurrencyCode
     ) {
         this.objectMapper = objectMapper;
+        this.plannerRoadmapRepository = plannerRoadmapRepository;
+        this.departureRoadmapRepository = departureRoadmapRepository;
+        this.departureFlightOfferRepository = departureFlightOfferRepository;
+        this.departureMilestoneRepository = departureMilestoneRepository;
         this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
         this.aiEnabled = aiEnabled;
         this.provider = provider == null ? "openai" : provider.trim().toLowerCase(Locale.ROOT);
@@ -113,6 +141,12 @@ public class DeparturePlanService {
     }
 
     public DeparturePlanDto generatePlan(DeparturePlanRequestDto request) {
+        return generatePlan(request, null);
+    }
+
+    public DeparturePlanDto generatePlan(DeparturePlanRequestDto request, JwtClaims claims) {
+        AccessGuard.requireUserId(claims);
+        validateBusinessInput(request);
         DeparturePlanDto fallback = buildRuleBasedPlan(request, "RULE_BASED");
         if (!isAiConfigured()) {
             return fallback;
@@ -123,6 +157,259 @@ public class DeparturePlanService {
             return hasUsableAiPlan(aiPlan) ? aiPlan : fallback;
         } catch (RuntimeException exception) {
             return fallback;
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public DeparturePlanDto getPlanFromRoadmap(Long roadmapId, JwtClaims claims) {
+        PlannerRoadmap roadmap = loadRoadmapForPlan(roadmapId, claims);
+        return departureRoadmapRepository.findByPlannerRoadmapId(roadmap.getId())
+                .map(this::toDto)
+                .orElseThrow(() -> new IllegalArgumentException("Departure roadmap not found: " + roadmapId));
+    }
+
+    @Transactional
+    public DeparturePlanDto generatePlanFromRoadmap(Long roadmapId, JwtClaims claims) {
+        PlannerRoadmap roadmap = loadRoadmapForPlan(roadmapId, claims);
+        return departureRoadmapRepository.findByPlannerRoadmapId(roadmap.getId())
+                .map(this::toDto)
+                .orElseGet(() -> generateAndSavePlan(roadmap, claims, false));
+    }
+
+    @Transactional
+    public DeparturePlanDto refreshPlanFromRoadmap(Long roadmapId, JwtClaims claims) {
+        PlannerRoadmap roadmap = loadRoadmapForPlan(roadmapId, claims);
+        return generateAndSavePlan(roadmap, claims, true);
+    }
+
+    private PlannerRoadmap loadRoadmapForPlan(Long roadmapId, JwtClaims claims) {
+        PlannerRoadmap roadmap = plannerRoadmapRepository.findWithDetailsById(roadmapId)
+                .orElseThrow(() -> new IllegalArgumentException("Planner roadmap not found: " + roadmapId));
+        Long ownerUserId = roadmap.getUser() == null ? null : roadmap.getUser().getId();
+        AccessGuard.requireUserOrAdmin(claims, ownerUserId);
+        return roadmap;
+    }
+
+    private DeparturePlanDto generateAndSavePlan(PlannerRoadmap roadmap, JwtClaims claims, boolean refresh) {
+        JobPosting job = roadmap.getDiagnosisResult() == null ? null : roadmap.getDiagnosisResult().getJobPosting();
+        DeparturePlanRequestDto request = requestFromRoadmap(roadmap, job);
+        DeparturePlanDto generated = generatePlan(request, claims);
+        DepartureRoadmap saved = savePlanSnapshot(roadmap, generated, refresh);
+        return toDto(saved);
+    }
+
+    private DepartureRoadmap savePlanSnapshot(PlannerRoadmap roadmap, DeparturePlanDto plan, boolean refresh) {
+        LocalDateTime now = LocalDateTime.now();
+        DepartureRoadmap entity = departureRoadmapRepository.findByPlannerRoadmapId(roadmap.getId())
+                .orElseGet(DepartureRoadmap::new);
+        if (entity.getId() == null) {
+            entity.setCreatedAt(now);
+        }
+        entity.setUser(roadmap.getUser());
+        entity.setPlannerRoadmap(roadmap);
+        entity.setTargetCountry(plan.targetCountry());
+        entity.setDestinationCity(plan.destinationCity());
+        entity.setOriginAirport(plan.originAirport());
+        entity.setDestinationAirport(plan.destinationAirport());
+        entity.setStartDate(plan.startDate());
+        entity.setRecommendedArrivalDate(plan.recommendedArrivalDate());
+        entity.setDepartureWindowStart(plan.departureWindowStart());
+        entity.setDepartureWindowEnd(plan.departureWindowEnd());
+        entity.setDaysUntilDepartureWindow(plan.daysUntilDepartureWindow());
+        entity.setUrgencyStatus(plan.urgencyStatus());
+        entity.setSummary(plan.summary());
+        entity.setFlightSearchNote(plan.flightSearchNote());
+        entity.setFlightDataStatus(plan.flightDataStatus());
+        entity.setGenerationMode(plan.generationMode());
+        entity.setDisclaimer(plan.disclaimer());
+        entity.setUpdatedAt(now);
+        if (refresh) {
+            entity.setRefreshedAt(now);
+        }
+
+        DepartureRoadmap saved = departureRoadmapRepository.save(entity);
+        replaceFlightOffers(saved, plan.flightOffers());
+        replaceMilestones(saved, plan.milestones());
+        return saved;
+    }
+
+    private void replaceFlightOffers(DepartureRoadmap roadmap, List<FlightOfferDto> offers) {
+        departureFlightOfferRepository.deleteByDepartureRoadmapId(roadmap.getId());
+        List<DepartureFlightOffer> entities = new ArrayList<>();
+        int sortOrder = 1;
+        for (FlightOfferDto offer : topFlightOffers(offers)) {
+            DepartureFlightOffer entity = new DepartureFlightOffer();
+            entity.setDepartureRoadmap(roadmap);
+            entity.setProvider(offer.provider());
+            entity.setOriginCode(offer.originCode());
+            entity.setDestinationCode(offer.destinationCode());
+            entity.setDepartureAt(offer.departureAt());
+            entity.setArrivalAt(offer.arrivalAt());
+            entity.setCarrierName(offer.carrierName());
+            entity.setCarrierCode(offer.carrierCode());
+            entity.setFlightNumber(offer.flightNumber());
+            entity.setDuration(offer.duration());
+            entity.setCurrency(offer.currency());
+            entity.setTotalPrice(offer.totalPrice());
+            entity.setBookableSeats(offer.bookableSeats());
+            entity.setSortOrder(sortOrder++);
+            entities.add(entity);
+        }
+        departureFlightOfferRepository.saveAll(entities);
+    }
+
+    private void replaceMilestones(DepartureRoadmap roadmap, List<DepartureMilestoneDto> milestones) {
+        departureMilestoneRepository.deleteByDepartureRoadmapId(roadmap.getId());
+        List<DepartureMilestone> entities = new ArrayList<>();
+        int sortOrder = 1;
+        for (DepartureMilestoneDto milestone : safeMilestones(milestones)) {
+            DepartureMilestone entity = new DepartureMilestone();
+            entity.setDepartureRoadmap(roadmap);
+            entity.setPhase(milestone.phase());
+            entity.setTitle(milestone.title());
+            entity.setDescription(milestone.description());
+            entity.setDueDate(milestone.dueDate());
+            entity.setStatus(milestone.status());
+            entity.setSortOrder(sortOrder++);
+            entities.add(entity);
+        }
+        departureMilestoneRepository.saveAll(entities);
+    }
+
+    private DeparturePlanDto toDto(DepartureRoadmap roadmap) {
+        List<FlightOfferDto> offers = departureFlightOfferRepository
+                .findByDepartureRoadmapIdOrderBySortOrderAsc(roadmap.getId())
+                .stream()
+                .map(this::toFlightOfferDto)
+                .toList();
+        List<DepartureMilestoneDto> milestones = departureMilestoneRepository
+                .findByDepartureRoadmapIdOrderBySortOrderAsc(roadmap.getId())
+                .stream()
+                .map(this::toMilestoneDto)
+                .toList();
+
+        return new DeparturePlanDto(
+                roadmap.getId(),
+                roadmap.getTargetCountry(),
+                roadmap.getDestinationCity(),
+                roadmap.getOriginAirport(),
+                roadmap.getDestinationAirport(),
+                roadmap.getStartDate(),
+                roadmap.getRecommendedArrivalDate(),
+                roadmap.getDepartureWindowStart(),
+                roadmap.getDepartureWindowEnd(),
+                roadmap.getDaysUntilDepartureWindow(),
+                roadmap.getUrgencyStatus(),
+                roadmap.getSummary(),
+                roadmap.getFlightSearchNote(),
+                roadmap.getFlightDataStatus(),
+                offers,
+                milestones,
+                flightApiProviders(),
+                roadmap.getGenerationMode(),
+                roadmap.getDisclaimer(),
+                roadmap.getCreatedAt(),
+                roadmap.getUpdatedAt(),
+                roadmap.getRefreshedAt()
+        );
+    }
+
+    private FlightOfferDto toFlightOfferDto(DepartureFlightOffer offer) {
+        return new FlightOfferDto(
+                offer.getProvider(),
+                offer.getOriginCode(),
+                offer.getDestinationCode(),
+                offer.getDepartureAt(),
+                offer.getArrivalAt(),
+                offer.getCarrierName(),
+                offer.getCarrierCode(),
+                offer.getFlightNumber(),
+                offer.getDuration(),
+                offer.getCurrency(),
+                offer.getTotalPrice(),
+                offer.getBookableSeats()
+        );
+    }
+
+    private DepartureMilestoneDto toMilestoneDto(DepartureMilestone milestone) {
+        return new DepartureMilestoneDto(
+                milestone.getPhase(),
+                milestone.getTitle(),
+                milestone.getDescription(),
+                milestone.getDueDate(),
+                milestone.getStatus()
+        );
+    }
+
+    private List<DepartureMilestoneDto> safeMilestones(List<DepartureMilestoneDto> milestones) {
+        return milestones == null ? List.of() : milestones;
+    }
+
+    private DeparturePlanRequestDto requestFromRoadmap(PlannerRoadmap roadmap, JobPosting job) {
+        String country = firstNonBlank(job == null ? null : job.getCountry(), "United States");
+        String city = destinationCityFor(country, job == null ? null : job.getWorkType());
+        LocalDate startDate = job != null && job.getApplicationDeadline() != null
+                ? job.getApplicationDeadline().plusWeeks(8)
+                : LocalDate.now().plusWeeks(Math.max(4, roadmap.getDurationWeeks() == null ? 8 : roadmap.getDurationWeeks()));
+
+        return new DeparturePlanRequestDto(
+                country,
+                city,
+                "ICN",
+                airportCodeFor(country, city),
+                startDate,
+                DEFAULT_ARRIVAL_BUFFER_DAYS,
+                firstNonBlank(job == null ? null : job.getVisaRequirement(), "비자 조건 확인 필요"),
+                "임시 숙소 미정"
+        );
+    }
+
+    private String destinationCityFor(String country, String workType) {
+        if (workType != null && workType.toLowerCase(Locale.ROOT).contains("remote")) {
+            return "Remote base";
+        }
+        String normalized = country == null ? "" : country.toLowerCase(Locale.ROOT);
+        if (normalized.contains("japan") || normalized.contains("일본")) {
+            return "Tokyo";
+        }
+        if (normalized.contains("canada")) {
+            return "Toronto";
+        }
+        if (normalized.contains("united kingdom") || normalized.contains("uk")) {
+            return "London";
+        }
+        if (normalized.contains("germany")) {
+            return "Munich";
+        }
+        if (normalized.contains("ireland")) {
+            return "Dublin";
+        }
+        return "Seattle";
+    }
+
+    private String airportCodeFor(String country, String city) {
+        String value = ((country == null ? "" : country) + " " + (city == null ? "" : city)).toLowerCase(Locale.ROOT);
+        if (value.contains("japan") || value.contains("tokyo") || value.contains("일본")) {
+            return "NRT";
+        }
+        if (value.contains("canada") || value.contains("toronto")) {
+            return "YYZ";
+        }
+        if (value.contains("united kingdom") || value.contains("london") || value.contains("uk")) {
+            return "LHR";
+        }
+        if (value.contains("germany") || value.contains("munich")) {
+            return "MUC";
+        }
+        if (value.contains("ireland") || value.contains("dublin")) {
+            return "DUB";
+        }
+        return "SEA";
+    }
+
+    private void validateBusinessInput(DeparturePlanRequestDto request) {
+        if (request.startDate().isBefore(LocalDate.now().minusDays(1))) {
+            throw new IllegalArgumentException("입사 예정일은 과거 날짜로 설정할 수 없습니다.");
         }
     }
 
@@ -369,14 +656,41 @@ public class DeparturePlanService {
         if (!"amadeus".equals(travelProvider) && duffelConfigured()) {
             List<FlightOfferDto> duffelOffers = safeFlightOffers(() -> requestDuffelFlightOffers(request, departureDate));
             if (!duffelOffers.isEmpty()) {
-                return duffelOffers;
+                return topFlightOffers(duffelOffers);
             }
         }
 
         if (amadeusConfigured()) {
-            return safeFlightOffers(() -> requestAmadeusFlightOffers(request, departureDate));
+            return topFlightOffers(safeFlightOffers(() -> requestAmadeusFlightOffers(request, departureDate)));
         }
         return List.of();
+    }
+
+    private List<FlightOfferDto> topFlightOffers(List<FlightOfferDto> offers) {
+        if (offers == null || offers.isEmpty()) {
+            return List.of();
+        }
+        List<FlightOfferDto> results = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (FlightOfferDto offer : offers) {
+            String key = String.join("|",
+                    safeKey(offer.provider()),
+                    safeKey(offer.originCode()),
+                    safeKey(offer.destinationCode()),
+                    safeKey(offer.departureAt()),
+                    safeKey(offer.arrivalAt()),
+                    safeKey(offer.carrierCode()),
+                    safeKey(offer.flightNumber()),
+                    safeKey(offer.totalPrice())
+            );
+            if (seen.add(key)) {
+                results.add(offer);
+            }
+            if (results.size() >= MAX_FLIGHT_OFFERS) {
+                break;
+            }
+        }
+        return results;
     }
 
     private List<FlightOfferDto> safeFlightOffers(Supplier<List<FlightOfferDto>> supplier) {
@@ -669,11 +983,15 @@ public class DeparturePlanService {
     }
 
     private String disclaimer() {
-        return "이 출국 로드맵은 시연용 일정 보조 결과입니다. 실시간 항공편, 가격, 좌석, 비자/입국 요건은 공식 항공사, 승인된 Flight API, 정부/공식기관 자료에서 최종 확인해야 합니다.";
+        return "항공편, 가격, 좌석, 비자/입국 요건은 변동될 수 있으므로 최종 제출/예약 전 공식 채널에서 확인하세요.";
     }
 
     private String safe(String value) {
         return value == null || value.isBlank() ? "미기재" : value;
+    }
+
+    private String safeKey(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private String safeAirportCode(String value) {

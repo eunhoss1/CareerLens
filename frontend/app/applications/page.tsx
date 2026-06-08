@@ -1,24 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
 import { SiteHeader } from "@/components/site-header";
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  LinkButton,
-  MetricCard,
-  PageHeader,
-  PageShell,
-  ScoreBar,
-  SectionHeader
-} from "@/components/ui";
-import { getStoredUser, type AuthUser } from "@/lib/auth";
+import { Button, Card, EmptyState, LinkButton, PageShell } from "@/components/ui";
 import { fetchUserApplications, type ApplicationRecord, type ApplicationStatus } from "@/lib/applications";
 import { countryLabel, workTypeLabel } from "@/lib/display-labels";
 
 type StageFilter = "ALL" | "INTERESTED" | "PREPARING_DOCUMENTS" | "ACTIVE";
+type IconName = "users" | "chart" | "bell" | "check" | "external" | "document" | "arrow";
 
 const PAGE_SIZE = 4;
 
@@ -30,7 +20,7 @@ const stageFilters: Array<{ key: StageFilter; label: string }> = [
 ];
 
 export default function ApplicationsPage() {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const auth = useRequiredAuth();
   const [records, setRecords] = useState<ApplicationRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -39,21 +29,22 @@ export default function ApplicationsPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   useEffect(() => {
-    const storedUser = getStoredUser();
-    setUser(storedUser);
-    if (!storedUser) {
+    if (auth.isChecking) {
+      return;
+    }
+    if (!auth.user) {
       setIsLoading(false);
       return;
     }
 
-    fetchUserApplications(storedUser.user_id)
+    fetchUserApplications(auth.user.user_id)
       .then((items) => {
         setRecords(items);
         setSelectedId(items[0]?.application_id ?? null);
       })
       .catch((error) => setErrorMessage(error instanceof Error ? error.message : "지원 기록을 불러오지 못했습니다."))
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [auth.isChecking, auth.user]);
 
   const orderedRecords = useMemo(() => sortByPriority(records), [records]);
 
@@ -96,121 +87,170 @@ export default function ApplicationsPage() {
     : Math.round(records.reduce((sum, record) => sum + record.readiness_score, 0) / records.length);
   const documentReadyCount = records.filter((record) => record.document_checklist.some((item) => item.status === "DONE" || item.status === "VERIFIED")).length;
 
+  if (auth.isChecking) {
+    return <AuthCheckingScreen title="기업지원 관리 접근 권한을 확인하는 중입니다." />;
+  }
+
+  if (!auth.user) {
+    return <AuthRequiredScreen title="기업지원 관리는 로그인 후 이용할 수 있습니다." />;
+  }
+
   return (
     <PageShell>
       <SiteHeader />
-      <PageHeader
-        kicker="APPLICATION WORKSPACE"
-        title="기업지원 관리"
-        actions={
-          <>
-            <LinkButton href="/jobs" variant="secondary">전체 공고 보기</LinkButton>
-            <LinkButton href="/jobs/recommendation">적합도 진단</LinkButton>
-          </>
-        }
-      />
 
-      <section className="lens-container py-6">
-        <div className="grid gap-3 md:grid-cols-4">
-          <MetricCard label="지원 후보" value={records.length} helper="저장된 목표 공고" />
-          <MetricCard label="평균 준비도" value={`${averageReadiness}점`} helper="로드맵과 검증 상태 반영" />
-          <MetricCard label="마감 주의" value={`${urgentCount}개`} helper="21일 이내 또는 긴급 공고" />
-          <MetricCard label="진행 중" value={`${activeCount}개`} helper="지원 완료/면접/종료 상태" />
-        </div>
-
-        {isLoading && (
-          <div className="mt-6">
-            <EmptyState title="지원 기록을 불러오는 중입니다." description="로그인한 사용자 기준으로 지원 워크스페이스를 확인하고 있습니다." />
-          </div>
-        )}
-
-        {!isLoading && !user && (
-          <div className="mt-6">
-            <EmptyState
-              title="로그인이 필요합니다."
-              description="회원가입과 로그인을 완료하면 추천 진단, 커리어 플래너, 지원관리 기록을 사용자별로 저장할 수 있습니다."
-              action={<LinkButton href="/login">로그인으로 이동</LinkButton>}
-            />
-          </div>
-        )}
-
-        {errorMessage && (
-          <div className="mt-6">
-            <EmptyState title="지원관리 데이터를 처리하지 못했습니다." description={errorMessage} />
-          </div>
-        )}
-
-        {!isLoading && user && records.length === 0 && (
-          <div className="mt-6">
-            <Card className="rounded-2xl border-slate-200 p-8 text-center shadow-sm">
-              <p className="text-lg font-bold text-night">아직 지원 후보가 없습니다.</p>
-              <p className="mx-auto mt-3 max-w-2xl text-base font-semibold leading-7 text-brand">
-                적합도 진단에서 커리어 플래너를 만들거나 전체 공고에서 목표 공고를 선택하면 지원관리로 넘길 수 있습니다.
+      <main className="bg-[#f8faf9] pb-8">
+        <section className="lens-container pt-8">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <span className="inline-flex rounded-md border border-slate-300 bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-900">
+                Application Workspace
+              </span>
+              <h1 className="mt-3 text-[34px] font-black leading-tight tracking-normal text-slate-950 md:text-[42px]">
+                기업 지원 관리
+              </h1>
+              <p className="mt-3 text-sm font-semibold text-slate-600">
+                분석 결과를 기반으로 맞춤 커리어 로드맵과 공고 진행 현황을 한눈에 확인하세요.
               </p>
-              <div className="mt-6 flex justify-center">
-                <LinkButton href="/jobs/recommendation">적합도 진단 시작</LinkButton>
-              </div>
-            </Card>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <LinkButton href="/jobs" variant="secondary" className="gap-2 rounded-md border-slate-300 bg-white px-5 text-sm text-slate-900 shadow-sm">
+                <LensIcon name="external" className="h-4 w-4" />
+                전체 공고 보기
+              </LinkButton>
+              <LinkButton href="/jobs/recommendation" className="rounded-md bg-[#062f2b] px-5 text-sm text-white shadow-sm hover:bg-[#052622]">
+                적합도 진단으로 이동
+              </LinkButton>
+            </div>
           </div>
-        )}
 
-        {records.length > 0 && (
-          <div className="mt-8 grid gap-5 xl:grid-cols-[1fr_360px]">
-            <Card className="rounded-2xl p-5">
-              <div className="flex flex-col gap-4 border-b border-line pb-4 lg:flex-row lg:items-end lg:justify-between">
-                <SectionHeader
-                  kicker="APPLICATION LIST"
-                  title="지원 후보 목록"
-                  description="공고는 한 페이지에 4개씩 표시됩니다. 공고를 선택하면 오른쪽에서 다음 액션과 제출 준비 상태를 바로 확인할 수 있습니다."
-                />
-                <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4 lg:w-auto">
-                  {stageFilters.map((filter) => (
-                    <Button
-                      key={filter.key}
-                      type="button"
-                      variant={stageFilter === filter.key ? "primary" : "secondary"}
-                      className="min-h-9 whitespace-nowrap px-3 text-xs"
-                      onClick={() => setStageFilter(filter.key)}
-                    >
-                      {filter.label} {counts[filter.key]}
-                    </Button>
-                  ))}
-                </div>
-              </div>
+          <div className="mt-7 grid overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm md:grid-cols-4">
+            <PlannerMetric icon="users" tint="green" label="지원 후보" value={records.length} />
+            <PlannerMetric icon="chart" tint="blue" label="로드맵별 평균 준비도" value={`${averageReadiness}점`} />
+            <PlannerMetric icon="bell" tint="orange" label="마감 주의" value={`${urgentCount}개`} />
+            <PlannerMetric icon="check" tint="mint" label="진행 중인 로드맵" value={`${activeCount}개`} />
+          </div>
+        </section>
 
-              {filteredRecords.length === 0 ? (
-                <div className="mt-5">
-                  <EmptyState title="해당 단계의 공고가 없습니다." description="다른 지원 단계를 선택하거나 전체 목록에서 확인하세요." />
+        <section className="lens-container py-5">
+          {isLoading && (
+            <div className="mt-2">
+              <EmptyState title="지원 기록을 불러오는 중입니다." description="로그인한 사용자 기준으로 지원 워크스페이스를 확인하고 있습니다." />
+            </div>
+          )}
+
+          {errorMessage && (
+            <div className="mt-2">
+              <EmptyState title="지원관리 데이터를 처리하지 못했습니다." description={errorMessage} />
+            </div>
+          )}
+
+          {!isLoading && records.length === 0 && (
+            <div className="mt-2">
+              <Card className="rounded-xl border-slate-200 p-8 text-center shadow-sm">
+                <p className="text-lg font-black text-slate-950">아직 지원 후보가 없습니다.</p>
+                <p className="mx-auto mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-600">
+                  적합도 진단에서 커리어 플래너를 만들거나 전체 공고에서 목표 공고를 선택하면 지원관리로 넘길 수 있습니다.
+                </p>
+                <div className="mt-6 flex justify-center">
+                  <LinkButton href="/jobs/recommendation" className="rounded-md bg-[#062f2b]">적합도 진단 시작</LinkButton>
                 </div>
-              ) : (
-                <>
-                  <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                    {pagedRecords.map((record) => (
-                      <ApplicationListCard
-                        key={record.application_id}
-                        record={record}
-                        isSelected={selectedRecord?.application_id === record.application_id}
-                        onSelect={() => setSelectedId(record.application_id)}
-                      />
-                    ))}
+              </Card>
+            </div>
+          )}
+
+          {records.length > 0 && (
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_370px]">
+              <Card className="rounded-xl border-slate-200 p-4 shadow-sm md:p-5">
+                <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#147062]">Roadmap List</p>
+                    <h2 className="mt-2 text-2xl font-black tracking-normal text-slate-950">지원 후보 로드맵</h2>
                   </div>
+                  <div className="grid w-full grid-cols-2 rounded-md shadow-sm sm:grid-cols-4 lg:w-auto">
+                    {stageFilters.map((filter) => {
+                      const isActive = stageFilter === filter.key;
+                      return (
+                        <button
+                          key={filter.key}
+                          type="button"
+                          className={`min-h-10 rounded-none border border-slate-200 px-4 text-xs shadow-none first:rounded-l-md last:rounded-r-md ${
+                            isActive
+                              ? "bg-[#062f2b] text-white hover:bg-[#062f2b] hover:text-white"
+                              : "bg-white text-slate-900 hover:bg-slate-50"
+                          }`}
+                          style={isActive ? { backgroundColor: "#062f2b", borderColor: "#062f2b", color: "#ffffff" } : undefined}
+                          aria-pressed={isActive}
+                          onClick={() => setStageFilter(filter.key)}
+                        >
+                          {filter.label} {counts[filter.key]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-                  <Pagination
-                    currentPage={safePage}
-                    pageCount={pageCount}
-                    onPageChange={setCurrentPage}
-                  />
-                </>
-              )}
-            </Card>
+                {filteredRecords.length === 0 ? (
+                  <div className="mt-5">
+                    <EmptyState title="해당 단계의 공고가 없습니다." description="다른 지원 단계를 선택하거나 전체 목록에서 확인하세요." />
+                  </div>
+                ) : (
+                  <>
+                    <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                      {pagedRecords.map((record) => (
+                        <ApplicationListCard
+                          key={record.application_id}
+                          record={record}
+                          isSelected={selectedRecord?.application_id === record.application_id}
+                          onSelect={() => setSelectedId(record.application_id)}
+                        />
+                      ))}
+                    </div>
 
-            <aside className="xl:sticky xl:top-24 xl:self-start">
-              <ApplicationActionPanel record={selectedRecord} documentReadyCount={documentReadyCount} />
-            </aside>
-          </div>
-        )}
-      </section>
+                    <Pagination currentPage={safePage} pageCount={pageCount} onPageChange={setCurrentPage} />
+                  </>
+                )}
+              </Card>
+
+              <aside className="xl:sticky xl:top-24 xl:self-start">
+                <ApplicationActionPanel record={selectedRecord} documentReadyCount={documentReadyCount} />
+              </aside>
+            </div>
+          )}
+        </section>
+      </main>
     </PageShell>
+  );
+}
+
+function PlannerMetric({
+  icon,
+  tint,
+  label,
+  value
+}: {
+  icon: IconName;
+  tint: "green" | "blue" | "orange" | "mint";
+  label: string;
+  value: string | number;
+}) {
+  const tintClass = {
+    green: "bg-emerald-50 text-emerald-600",
+    blue: "bg-blue-50 text-blue-600",
+    orange: "bg-orange-50 text-orange-500",
+    mint: "bg-teal-50 text-emerald-600"
+  }[tint];
+
+  return (
+    <div className="flex min-h-[108px] items-center gap-5 border-b border-slate-200 px-5 py-5 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0">
+      <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-full ${tintClass}`}>
+        <LensIcon name={icon} className="h-6 w-6" />
+      </span>
+      <div>
+        <p className="text-sm font-bold text-slate-500">{label}</p>
+        <p className="mt-1 text-2xl font-black leading-none text-slate-950">{value}</p>
+      </div>
+    </div>
   );
 }
 
@@ -224,38 +264,32 @@ function ApplicationListCard({
   onSelect: () => void;
 }) {
   return (
-    <article className={`rounded-2xl border bg-white p-4 transition ${isSelected ? "border-brand shadow-sm" : "border-line hover:border-slate-400"}`}>
+    <article className={`rounded-lg border bg-white p-4 transition ${isSelected ? "border-slate-300 shadow-sm ring-1 ring-[#0b3a35]/10" : "border-slate-200 hover:border-slate-300"}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap gap-2">
-            <Badge tone={deadlineTone(record.deadline_status)}>{deadlineLabel(record)}</Badge>
-            <Badge tone={statusTone(record.status)}>{statusLabel(record.status)}</Badge>
+            <StatusBadge tone={deadlineTone(record.deadline_status)}>{deadlineLabel(record)}</StatusBadge>
+            <StatusBadge tone={statusTone(record.status)}>{statusLabel(record.status)}</StatusBadge>
           </div>
-          <p className="mt-3 text-sm font-semibold text-brand">{record.company_name}</p>
-          <h3 className="mt-1 line-clamp-2 text-base font-semibold leading-6 text-night">{record.job_title}</h3>
-          <p className="mt-1 text-xs text-slate-500">{countryLabel(record.country)} · {workTypeLabel(record.work_type)} · {record.salary_range || "연봉 미기재"}</p>
+          <p className="mt-3 text-sm font-black text-[#147062]">{record.company_name}</p>
+          <h3 className="mt-1 line-clamp-2 text-base font-black leading-6 text-slate-950">{record.job_title}</h3>
+          <p className="mt-2 text-xs font-semibold text-slate-600">
+            {countryLabel(record.country)} · {workTypeLabel(record.work_type)} · {record.salary_range || "연봉 미기재"}
+          </p>
         </div>
-        <div className="min-w-16 rounded-xl border border-line bg-panel px-2 py-2 text-center">
-          <p className="text-[10px] font-bold text-slate-500">준비도</p>
-          <p className="text-xl font-semibold text-night">{record.readiness_score}</p>
-        </div>
+        <ReadinessGaugeCard value={record.readiness_score} />
       </div>
 
-      <div className="mt-4 grid gap-3">
-        <ScoreBar label="서류 준비도" value={record.readiness_score} tone={scoreTone(record.readiness_score)} />
-        <ScoreBar label="로드맵 완료율" value={record.roadmap_completion_rate} tone="brand" />
-      </div>
-
-      <div className="mt-4 border-t border-line pt-4">
-        <p className="text-xs font-bold text-slate-500">다음 액션</p>
-        <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-700">{record.next_action}</p>
+      <div className="mt-6 grid gap-3">
+        <ProgressLine label="서류 준비도" value={record.readiness_score} tone={scoreTone(record.readiness_score)} />
+        <ProgressLine label="로드맵 완료율" value={record.roadmap_completion_rate} tone="teal" />
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button type="button" variant={isSelected ? "primary" : "secondary"} className="min-h-9 px-3 text-xs" onClick={onSelect}>
-          {isSelected ? "선택됨" : "요약 보기"}
+        <Button type="button" className="min-h-9 gap-1 rounded-md bg-[#062f2b] px-4 text-xs text-white hover:bg-[#052622]" onClick={onSelect}>
+          상세보기 <LensIcon name="arrow" className="h-3.5 w-3.5" />
         </Button>
-        <LinkButton href={`/applications/${record.application_id}`} variant="subtle" className="min-h-9 px-3 text-xs">
+        <LinkButton href={`/applications/${record.application_id}`} variant="secondary" className="min-h-9 rounded-md border-slate-300 bg-white px-4 text-xs text-slate-900">
           워크스페이스
         </LinkButton>
       </div>
@@ -266,7 +300,7 @@ function ApplicationListCard({
 function ApplicationActionPanel({ record, documentReadyCount }: { record: ApplicationRecord | null; documentReadyCount: number }) {
   if (!record) {
     return (
-      <Card className="p-5">
+      <Card className="rounded-xl p-5 shadow-sm">
         <EmptyState title="선택한 공고가 없습니다." description="지원 후보 목록에서 공고를 선택하면 준비 상태를 확인할 수 있습니다." />
       </Card>
     );
@@ -275,62 +309,190 @@ function ApplicationActionPanel({ record, documentReadyCount }: { record: Applic
   const verifiedCount = record.document_checklist.filter((item) => item.status === "DONE" || item.status === "VERIFIED").length;
 
   return (
-    <Card className="rounded-2xl p-5">
-      <p className="lens-kicker">SELECTED APPLICATION</p>
-      <h2 className="mt-3 text-xl font-semibold leading-7 text-night">{record.company_name}</h2>
-      <p className="mt-1 text-sm font-semibold text-slate-700">{record.job_title}</p>
-      <p className="mt-2 text-xs text-slate-500">{countryLabel(record.country)} · {workTypeLabel(record.work_type)} · {record.salary_range || "연봉 미기재"}</p>
+    <Card className="rounded-xl border-slate-200 p-5 shadow-sm">
+      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-800">Selected Roadmap</p>
+      <h2 className="mt-3 text-xl font-black leading-7 text-slate-950">{record.company_name}</h2>
+      <p className="mt-1 text-sm font-black text-slate-800">{record.job_title}</p>
+      <p className="mt-2 text-xs font-semibold text-slate-500">
+        {countryLabel(record.country)} · {workTypeLabel(record.work_type)} · {record.salary_range || "연봉 미기재"}
+      </p>
 
       <div className="mt-5 grid grid-cols-2 gap-3">
-        <MetricCard label="준비도" value={`${record.readiness_score}점`} helper={statusLabel(record.status)} />
-        <MetricCard label="서류 확인" value={`${verifiedCount}/${record.document_checklist.length}`} helper={`전체 ${documentReadyCount}개 후보`} />
+        <ReadinessDetailMetric value={record.readiness_score} helper={statusLabel(record.status)} />
+        <DetailMetric label="서류 확인" value={`${verifiedCount}/${record.document_checklist.length}`} helper={`전체 ${documentReadyCount}개 후보`} />
       </div>
 
-      <div className="mt-5 space-y-3">
-        <ScoreBar label="서류 준비도" value={record.readiness_score} tone={scoreTone(record.readiness_score)} />
-        <ScoreBar label="로드맵 완료율" value={record.roadmap_completion_rate} tone="brand" />
+      <div className="mt-5 space-y-4">
+        <ProgressLine label="서류 준비도" value={record.readiness_score} tone={scoreTone(record.readiness_score)} showTotal />
+        <ProgressLine label="로드맵 완료율" value={record.roadmap_completion_rate} tone="teal" showTotal />
       </div>
 
-      <div className="mt-5 rounded-xl border border-line bg-panel p-4">
-        <p className="text-xs font-bold text-slate-500">다음 액션</p>
-        <p className="mt-2 text-sm leading-6 text-slate-700">{record.next_action}</p>
+      <div className="mt-5 flex items-center justify-between gap-4 rounded-lg border border-slate-200 bg-[#f8faf9] p-4">
+        <div>
+          <p className="text-xs font-black text-slate-700">다음 액션</p>
+          <p className="mt-1 line-clamp-3 text-xs font-semibold leading-5 text-slate-600">{record.next_action}</p>
+        </div>
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-teal-50 text-[#147062]">
+          <LensIcon name="document" className="h-4 w-4" />
+        </span>
       </div>
 
       <div className="mt-5">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Checklist</p>
+        <p className="text-xs font-black uppercase tracking-[0.14em] text-[#147062]">Checklist</p>
         <div className="mt-3 space-y-2">
           {record.document_checklist.slice(0, 4).map((item) => (
-            <div key={item.key} className="flex items-start justify-between gap-3 rounded-xl border border-line bg-white px-3 py-2">
-              <div>
-                <p className="text-sm font-semibold text-night">{item.label}</p>
-                <p className="mt-1 text-xs text-slate-500">{item.helper_text}</p>
+            <div key={item.key} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-teal-50 text-[#147062]">
+                  <LensIcon name="document" className="h-4 w-4" />
+                </span>
+                <p className="min-w-0 truncate text-sm font-black text-slate-950">{item.label}</p>
               </div>
-              <Badge tone={documentTone(item.status)} className="shrink-0">{documentLabel(item.status)}</Badge>
+              <DocumentStatusBadge status={item.status} />
             </div>
           ))}
         </div>
       </div>
 
       <div className="mt-5 grid gap-2">
-        <LinkButton href={`/applications/${record.application_id}`} className="w-full">
+        <LinkButton href={`/applications/${record.application_id}`} className="w-full gap-2 rounded-md bg-[#062f2b] text-white hover:bg-[#052622]">
           지원 워크스페이스 열기
+          <LensIcon name="external" className="h-4 w-4" />
         </LinkButton>
         <div className="grid grid-cols-2 gap-2">
-          <LinkButton href="/roadmap/employment/documents" variant="secondary" className="w-full">
+          <LinkButton href="/roadmap/employment/documents" variant="secondary" className="w-full rounded-md border-slate-300 bg-white text-slate-900">
             문서 점검
           </LinkButton>
           {record.application_url ? (
-            <LinkButton href={record.application_url} target="_blank" rel="noreferrer" variant="subtle" className="w-full">
-              원문 Apply
+            <LinkButton href={record.application_url} target="_blank" rel="noreferrer" variant="secondary" className="w-full gap-2 rounded-md border-slate-300 bg-white text-slate-900">
+              <LensIcon name="external" className="h-4 w-4" />
+              공고 보기
             </LinkButton>
           ) : (
-            <LinkButton href="/jobs" variant="subtle" className="w-full">
+            <LinkButton href="/jobs" variant="secondary" className="w-full gap-2 rounded-md border-slate-300 bg-white text-slate-900">
+              <LensIcon name="external" className="h-4 w-4" />
               공고 보기
             </LinkButton>
           )}
         </div>
       </div>
     </Card>
+  );
+}
+
+function ReadinessGaugeCard({ value }: { value: number }) {
+  return (
+    <div className="min-w-[86px] rounded-md border border-slate-200 bg-white px-3 py-2 text-center">
+      <p className="text-[10px] font-black leading-none text-slate-600">준비도</p>
+      <div className="mt-2 flex items-center justify-center gap-2">
+        <CircularProgress value={value} size={28} />
+        <p className="whitespace-nowrap leading-none">
+          <span className="text-lg font-black text-slate-950">{value}</span>
+          <span className="ml-0.5 text-[10px] font-black text-slate-500">점</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ReadinessDetailMetric({ value, helper }: { value: number; helper: string }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-[#fbfcfd] p-3">
+      <p className="text-xs font-black text-slate-700">준비도</p>
+      <div className="mt-2 flex items-center gap-2">
+        <CircularProgress value={value} size={30} />
+        <p className="whitespace-nowrap leading-none">
+          <span className="text-xl font-black text-slate-950">{value}</span>
+          <span className="ml-0.5 text-xs font-black text-slate-500">점</span>
+        </p>
+      </div>
+      <p className="mt-2 text-xs font-semibold text-slate-500">{helper}</p>
+    </div>
+  );
+}
+
+function CircularProgress({ value, size }: { value: number; size: number }) {
+  const clamped = Math.max(0, Math.min(100, value));
+
+  return (
+    <span
+      className="relative inline-grid shrink-0 place-items-center rounded-full"
+      style={{
+        width: size,
+        height: size,
+        background: `conic-gradient(#11885f ${clamped * 3.6}deg, #e8edf0 0deg)`
+      }}
+      aria-hidden="true"
+    >
+      <span className="block rounded-full bg-white" style={{ width: size - 10, height: size - 10 }} />
+    </span>
+  );
+}
+
+function DetailMetric({ label, value, helper }: { label: string; value: string; helper: string }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-[#fbfcfd] p-3">
+      <p className="text-xs font-black text-slate-700">{label}</p>
+      <div className="mt-2 flex h-[30px] items-center">
+        <p className="text-[28px] font-black leading-none text-slate-950">{value}</p>
+      </div>
+      <p className="mt-2 text-xs font-semibold text-slate-500">{helper}</p>
+    </div>
+  );
+}
+
+function ProgressLine({
+  label,
+  value,
+  tone,
+  showTotal = false
+}: {
+  label: string;
+  value: number;
+  tone: "orange" | "teal" | "green" | "red";
+  showTotal?: boolean;
+}) {
+  const barClass = {
+    orange: "bg-[#d97706]",
+    teal: "bg-[#147062]",
+    green: "bg-emerald-600",
+    red: "bg-red-500"
+  }[tone];
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <span className="font-black text-slate-700">{label}</span>
+        <span className="font-black text-slate-950">{showTotal ? `${value} / 100` : value}</span>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+        <div className={`h-full rounded-full ${barClass}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ children, tone }: { children: React.ReactNode; tone: "red" | "orange" | "blue" | "green" | "muted" }) {
+  const toneClass = {
+    red: "border-red-200 bg-red-50 text-red-600",
+    orange: "border-orange-200 bg-orange-50 text-orange-600",
+    blue: "border-blue-100 bg-blue-50 text-blue-600",
+    green: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    muted: "border-slate-200 bg-slate-50 text-slate-600"
+  }[tone];
+
+  return (
+    <span className={`inline-flex min-h-6 items-center rounded-md border px-2 text-xs font-black ${toneClass}`}>
+      {children}
+    </span>
+  );
+}
+
+function DocumentStatusBadge({ status }: { status: string }) {
+  return (
+    <span className={`inline-flex min-h-8 shrink-0 items-center justify-center rounded-md border px-3 py-1 text-xs font-black ${documentToneClass(status)}`}>
+      {documentLabel(status)}
+    </span>
   );
 }
 
@@ -350,7 +512,7 @@ function Pagination({
       <Button
         type="button"
         variant="secondary"
-        className="min-h-9 px-3"
+        className="min-h-9 rounded-md border-slate-300 bg-white px-3 text-xs"
         disabled={currentPage === 1}
         onClick={() => onPageChange(currentPage - 1)}
       >
@@ -362,8 +524,10 @@ function Pagination({
           <Button
             key={page}
             type="button"
-            variant={currentPage === page ? "primary" : "secondary"}
-            className="min-h-9 min-w-9 px-3"
+            variant="secondary"
+            className={`min-h-9 min-w-9 rounded-md px-3 text-xs ${
+              currentPage === page ? "border-[#062f2b] bg-[#062f2b] text-white" : "border-slate-300 bg-white text-slate-900"
+            }`}
             onClick={() => onPageChange(page)}
           >
             {page}
@@ -373,13 +537,75 @@ function Pagination({
       <Button
         type="button"
         variant="secondary"
-        className="min-h-9 px-3"
+        className="min-h-9 rounded-md border-slate-300 bg-white px-3 text-xs"
         disabled={currentPage === pageCount}
         onClick={() => onPageChange(currentPage + 1)}
       >
         다음
       </Button>
     </div>
+  );
+}
+
+function LensIcon({ name, className = "" }: { name: IconName; className?: string }) {
+  if (name === "users") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+        <circle cx="9.5" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    );
+  }
+  if (name === "chart") {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+        <rect x="4" y="12" width="4" height="8" rx="1" />
+        <rect x="10" y="8" width="4" height="12" rx="1" />
+        <rect x="16" y="4" width="4" height="16" rx="1" />
+      </svg>
+    );
+  }
+  if (name === "bell") {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+        <path d="M18 10a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+        <path d="M9.5 21a2.8 2.8 0 0 0 5 0" />
+      </svg>
+    );
+  }
+  if (name === "check") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+        <path d="M20 6 9 17l-5-5" />
+        <circle cx="12" cy="12" r="9" />
+      </svg>
+    );
+  }
+  if (name === "external") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+        <path d="M15 3h6v6" />
+        <path d="m10 14 11-11" />
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      </svg>
+    );
+  }
+  if (name === "document") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+        <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7Z" />
+        <path d="M14 2v5h5" />
+        <path d="M9 13h6" />
+        <path d="M9 17h4" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M9 18 15 12 9 6" />
+    </svg>
   );
 }
 
@@ -407,7 +633,7 @@ function isActiveStatus(status: ApplicationStatus) {
 
 function statusLabel(status: ApplicationStatus) {
   if (status === "INTERESTED") return "관심";
-  if (status === "PREPARING_DOCUMENTS") return "서류 준비";
+  if (status === "PREPARING_DOCUMENTS") return "지원 준비";
   if (status === "APPLIED") return "지원 완료";
   if (status === "INTERVIEW") return "면접";
   if (status === "CLOSED") return "종료";
@@ -415,30 +641,31 @@ function statusLabel(status: ApplicationStatus) {
 }
 
 function statusTone(status: ApplicationStatus) {
-  if (status === "APPLIED" || status === "INTERVIEW") return "brand";
+  if (status === "APPLIED" || status === "INTERVIEW") return "green";
   if (status === "CLOSED") return "muted";
-  if (status === "PREPARING_DOCUMENTS") return "warning";
-  return "default";
+  if (status === "PREPARING_DOCUMENTS") return "blue";
+  return "muted";
 }
 
 function deadlineLabel(record: ApplicationRecord) {
   if (record.deadline_status === "ONGOING") return "상시/미기재";
   if (record.deadline_status === "EXPIRED") return "마감";
   if (record.days_until_deadline === 0) return "오늘 마감";
+  if (record.days_until_deadline == null) return "D-?";
   return `D-${record.days_until_deadline}`;
 }
 
 function deadlineTone(status: ApplicationRecord["deadline_status"]) {
-  if (status === "URGENT" || status === "EXPIRED") return "risk";
-  if (status === "SOON") return "warning";
+  if (status === "URGENT" || status === "EXPIRED") return "red";
+  if (status === "SOON") return "orange";
   return "muted";
 }
 
-function scoreTone(score: number) {
-  if (score >= 80) return "success";
-  if (score >= 65) return "brand";
-  if (score >= 50) return "warning";
-  return "risk";
+function scoreTone(score: number): "orange" | "teal" | "green" | "red" {
+  if (score >= 80) return "green";
+  if (score >= 65) return "teal";
+  if (score >= 50) return "orange";
+  return "red";
 }
 
 function documentLabel(status: string) {
@@ -447,8 +674,8 @@ function documentLabel(status: string) {
   return "대기";
 }
 
-function documentTone(status: string) {
-  if (status === "VERIFIED") return "success";
-  if (status === "DONE") return "brand";
-  return "muted";
+function documentToneClass(status: string) {
+  if (status === "VERIFIED") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "DONE") return "border-teal-200 bg-teal-50 text-[#147062]";
+  return "border-slate-200 bg-white text-slate-700";
 }

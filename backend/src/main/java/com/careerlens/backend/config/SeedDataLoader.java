@@ -37,6 +37,7 @@ import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.io.ClassPathResource;
@@ -45,6 +46,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
+@ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true")
 public class SeedDataLoader implements ApplicationRunner {
 
     private static final Pattern INTEGER_PATTERN = Pattern.compile("\\d+");
@@ -64,6 +66,7 @@ public class SeedDataLoader implements ApplicationRunner {
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final String seedPath;
     private final String processedSeedPath;
+    private final boolean seedResetEnabled;
 
     public SeedDataLoader(
             ObjectMapper objectMapper,
@@ -79,7 +82,8 @@ public class SeedDataLoader implements ApplicationRunner {
             VerificationRequestRepository verificationRequestRepository,
             VerificationBadgeRepository verificationBadgeRepository,
             @Value("${careerlens.seed.path}") String seedPath,
-            @Value("${careerlens.seed.processed-path:../seed-data/processed}") String processedSeedPath
+            @Value("${careerlens.seed.processed-path:../seed-data/processed}") String processedSeedPath,
+            @Value("${app.seed.reset-enabled:false}") boolean seedResetEnabled
     ) {
         this.objectMapper = objectMapper;
         this.jobPostingRepository = jobPostingRepository;
@@ -95,6 +99,7 @@ public class SeedDataLoader implements ApplicationRunner {
         this.verificationBadgeRepository = verificationBadgeRepository;
         this.seedPath = seedPath;
         this.processedSeedPath = processedSeedPath;
+        this.seedResetEnabled = seedResetEnabled;
     }
 
     @Override
@@ -126,7 +131,9 @@ public class SeedDataLoader implements ApplicationRunner {
 
     private void loadProcessedCsvSeed() throws IOException {
         Path basePath = Path.of(processedSeedPath);
-        resetRecommendationSeedData();
+        if (seedResetEnabled) {
+            resetRecommendationSeedData();
+        }
         Map<String, JobPosting> jobsByRef = saveJobs(readJobCsv(basePath.resolve("job-postings.csv")));
         Map<String, EmployeeProfileSample> samplesByRef = saveSamples(readEmployeeCsv(basePath.resolve("employee-samples.csv")));
 

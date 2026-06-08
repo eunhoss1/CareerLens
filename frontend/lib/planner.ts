@@ -1,3 +1,5 @@
+import { apiFetch, authHeaders, readApiError } from "@/lib/auth";
+
 export type PlannerTask = {
   task_id: number;
   week_number: number;
@@ -38,58 +40,58 @@ export type PlannerRoadmap = {
 const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
 export async function createPlannerRoadmap(diagnosisId: number): Promise<PlannerRoadmap> {
-  const response = await fetch(`${baseUrl}/api/planner/roadmaps/from-diagnosis/${diagnosisId}`, {
+  const response = await apiFetch(`${baseUrl}/api/planner/roadmaps/from-diagnosis/${diagnosisId}`, {
     method: "POST",
+    headers: authHeaders(),
     cache: "no-store"
-  });
+  }, "커리어 플래너 생성");
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Planner roadmap creation failed.");
+    throw new Error(await readApiError(response, "Planner roadmap creation failed."));
   }
 
   return response.json();
 }
 
 export async function fetchPlannerRoadmap(roadmapId: number): Promise<PlannerRoadmap> {
-  const response = await fetch(`${baseUrl}/api/planner/roadmaps/${roadmapId}`, {
+  const response = await apiFetch(`${baseUrl}/api/planner/roadmaps/${roadmapId}`, {
+    headers: authHeaders(),
     cache: "no-store"
-  });
+  }, "커리어 플래너 조회");
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Planner roadmap request failed.");
+    throw new Error(await readApiError(response, "Planner roadmap request failed."));
   }
 
   return response.json();
 }
 
 export async function fetchUserRoadmaps(userId: number): Promise<PlannerRoadmap[]> {
-  const response = await fetch(`${baseUrl}/api/planner/users/${userId}/roadmaps`, {
+  const response = await apiFetch(`${baseUrl}/api/planner/users/${userId}/roadmaps`, {
+    headers: authHeaders(),
     cache: "no-store"
-  });
+  }, "커리어 플래너 목록 조회");
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Planner roadmap list request failed.");
+    throw new Error(await readApiError(response, "Planner roadmap list request failed."));
   }
 
   return response.json();
 }
 
 export async function updatePlannerTaskStatus(taskId: number, status: PlannerTaskStatus): Promise<PlannerRoadmap> {
-  const response = await fetch(`${baseUrl}/api/planner/tasks/${taskId}/status`, {
+  const response = await apiFetch(`${baseUrl}/api/planner/tasks/${taskId}/status`, {
     method: "PATCH",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      ...authHeaders()
     },
     body: JSON.stringify({ status }),
     cache: "no-store"
-  });
+  }, "커리어 플래너 과제 상태 변경");
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Planner task status update failed.");
+    throw new Error(await readApiError(response, "Planner task status update failed."));
   }
 
   return response.json();

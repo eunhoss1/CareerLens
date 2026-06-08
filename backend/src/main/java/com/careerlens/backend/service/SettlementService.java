@@ -3,12 +3,19 @@ package com.careerlens.backend.service;
 import com.careerlens.backend.dto.SettlementChecklistDto;
 import com.careerlens.backend.dto.SettlementCountrySummaryDto;
 import com.careerlens.backend.dto.SettlementGuidanceDto;
+import com.careerlens.backend.entity.AdministrationRoadmap;
+import com.careerlens.backend.entity.PlannerRoadmap;
 import com.careerlens.backend.entity.SettlementChecklist;
 import com.careerlens.backend.entity.User;
 import com.careerlens.backend.entity.UserProfile;
+import com.careerlens.backend.repository.AdministrationRoadmapRepository;
+import com.careerlens.backend.repository.PlannerRoadmapRepository;
 import com.careerlens.backend.repository.SettlementChecklistRepository;
 import com.careerlens.backend.repository.UserProfileRepository;
 import com.careerlens.backend.repository.UserRepository;
+import com.careerlens.backend.security.AccessGuard;
+import com.careerlens.backend.security.JwtClaims;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -52,6 +59,8 @@ public class SettlementService {
     );
 
     private final SettlementChecklistRepository settlementChecklistRepository;
+    private final PlannerRoadmapRepository plannerRoadmapRepository;
+    private final AdministrationRoadmapRepository administrationRoadmapRepository;
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
     private final ObjectMapper objectMapper;
@@ -60,6 +69,8 @@ public class SettlementService {
 
     public SettlementService(
             SettlementChecklistRepository settlementChecklistRepository,
+            PlannerRoadmapRepository plannerRoadmapRepository,
+            AdministrationRoadmapRepository administrationRoadmapRepository,
             UserRepository userRepository,
             UserProfileRepository userProfileRepository,
             ObjectMapper objectMapper,
@@ -73,6 +84,8 @@ public class SettlementService {
             @Value("${app.ai.groq.responses-url:https://api.groq.com/openai/v1/responses}") String groqResponsesUrl
     ) {
         this.settlementChecklistRepository = settlementChecklistRepository;
+        this.plannerRoadmapRepository = plannerRoadmapRepository;
+        this.administrationRoadmapRepository = administrationRoadmapRepository;
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.objectMapper = objectMapper;
@@ -97,8 +110,14 @@ public class SettlementService {
 
     @Transactional
     public SettlementChecklistDto updateStatus(Long itemId, String status) {
+        return updateStatus(itemId, status, null);
+    }
+
+    @Transactional
+    public SettlementChecklistDto updateStatus(Long itemId, String status, JwtClaims claims) {
         SettlementChecklist checklist = settlementChecklistRepository.findById(itemId)
                 .orElseThrow(() -> new IllegalArgumentException("Settlement checklist not found: " + itemId));
+        verifyChecklistOwner(checklist, claims);
         checklist.setStatus(normalizeStatus(status));
         checklist.setUpdatedAt(LocalDateTime.now());
         return toDto(settlementChecklistRepository.save(checklist));
@@ -120,6 +139,123 @@ public class SettlementService {
         } catch (RuntimeException exception) {
             return fallback;
         }
+    }
+
+    @Transactional
+    public SettlementGuidanceDto generateGuidanceFromRoadmap(Long roadmapId, JwtClaims claims) {
+        PlannerRoadmap roadmap = loadRoadmapForGuidance(roadmapId, claims);
+        return administrationRoadmapRepository.findByPlannerRoadmapId(roadmap.getId())
+                .map(this::toGuidanceDto)
+                .orElseGet(() -> generateAndSaveGuidance(roadmap, false));
+    }
+
+    @Transactional(readOnly = true)
+    public SettlementGuidanceDto getGuidanceFromRoadmap(Long roadmapId, JwtClaims claims) {
+        PlannerRoadmap roadmap = loadRoadmapForGuidance(roadmapId, claims);
+        return administrationRoadmapRepository.findByPlannerRoadmapId(roadmap.getId())
+                .map(this::toGuidanceDto)
+                .orElseThrow(() -> new IllegalArgumentException("Administration roadmap not found: " + roadmapId));
+    }
+
+    @Transactional
+    public SettlementGuidanceDto refreshGuidanceFromRoadmap(Long roadmapId, JwtClaims claims) {
+        PlannerRoadmap roadmap = loadRoadmapForGuidance(roadmapId, claims);
+        return generateAndSaveGuidance(roadmap, true);
+    }
+
+    private PlannerRoadmap loadRoadmapForGuidance(Long roadmapId, JwtClaims claims) {
+        PlannerRoadmap roadmap = plannerRoadmapRepository.findWithDetailsById(roadmapId)
+                .orElseThrow(() -> new IllegalArgumentException("Planner roadmap not found: " + roadmapId));
+        Long ownerUserId = roadmap.getUser() == null ? null : roadmap.getUser().getId();
+        AccessGuard.requireUserOrAdmin(claims, ownerUserId);
+        return roadmap;
+    }
+
+    private SettlementGuidanceDto generateAndSaveGuidance(PlannerRoadmap roadmap, boolean refresh) {
+        Long ownerUserId = roadmap.getUser() == null ? null : roadmap.getUser().getId();
+        if (ownerUserId == null) {
+            throw new IllegalArgumentException("Planner roadmap owner not found: " + roadmap.getId());
+        }
+        SettlementGuidanceDto generated = generateGuidance(ownerUserId);
+        AdministrationRoadmap saved = saveGuidanceSnapshot(roadmap, generated, refresh);
+        return toGuidanceDto(saved);
+    }
+
+    private AdministrationRoadmap saveGuidanceSnapshot(PlannerRoadmap roadmap, SettlementGuidanceDto guidance, boolean refresh) {
+        LocalDateTime now = LocalDateTime.now();
+        AdministrationRoadmap entity = administrationRoadmapRepository.findByPlannerRoadmapId(roadmap.getId())
+                .orElseGet(AdministrationRoadmap::new);
+        if (entity.getId() == null) {
+            entity.setCreatedAt(now);
+        }
+        entity.setUser(roadmap.getUser());
+        entity.setPlannerRoadmap(roadmap);
+        entity.setOverallStatus(guidance.overallStatus());
+        entity.setCompletionRate(guidance.completionRate());
+        entity.setSummary(guidance.summary());
+        entity.setPriorityActionsJson(writeJson(guidance.priorityActions()));
+        entity.setCountrySummariesJson(writeJson(guidance.countrySummaries()));
+        entity.setGenerationMode(guidance.generationMode());
+        entity.setDisclaimer(guidance.disclaimer());
+        entity.setUpdatedAt(now);
+        if (refresh) {
+            entity.setRefreshedAt(now);
+        }
+        return administrationRoadmapRepository.save(entity);
+    }
+
+    private SettlementGuidanceDto toGuidanceDto(AdministrationRoadmap entity) {
+        return new SettlementGuidanceDto(
+                entity.getId(),
+                entity.getOverallStatus(),
+                entity.getCompletionRate(),
+                entity.getSummary(),
+                readStringList(entity.getPriorityActionsJson()),
+                readCountrySummaries(entity.getCountrySummariesJson()),
+                entity.getGenerationMode(),
+                entity.getDisclaimer(),
+                entity.getCreatedAt(),
+                entity.getUpdatedAt(),
+                entity.getRefreshedAt()
+        );
+    }
+
+    private String writeJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value == null ? List.of() : value);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Failed to serialize administration roadmap snapshot", exception);
+        }
+    }
+
+    private List<String> readStringList(String json) {
+        if (json == null || json.isBlank()) {
+            return new ArrayList<>();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<String>>() {});
+        } catch (IOException exception) {
+            return new ArrayList<>();
+        }
+    }
+
+    private List<SettlementCountrySummaryDto> readCountrySummaries(String json) {
+        if (json == null || json.isBlank()) {
+            return new ArrayList<>();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<SettlementCountrySummaryDto>>() {});
+        } catch (IOException exception) {
+            return new ArrayList<>();
+        }
+    }
+
+    private void verifyChecklistOwner(SettlementChecklist checklist, JwtClaims claims) {
+        if (claims == null) {
+            return;
+        }
+        Long ownerUserId = checklist.getUser() == null ? null : checklist.getUser().getId();
+        AccessGuard.requireUserOrAdmin(claims, ownerUserId);
     }
 
     private void ensureDefaultChecklists(Long userId) {
@@ -477,7 +613,7 @@ public class SettlementService {
     }
 
     private String disclaimer() {
-        return "이 안내는 CareerLens에 저장된 체크리스트와 사용자 입력을 바탕으로 만든 시연용 요약입니다. 비자, 세금, 체류자격, 행정 절차의 최신 판단은 반드시 공식기관과 전문가를 통해 확인해야 합니다.";
+        return "비자, 세금, 체류자격, 입국 요건과 행정 절차는 변동될 수 있으므로 최종 제출 전 공식기관과 전문가를 통해 확인하세요.";
     }
 
     private static String safe(String value) {
