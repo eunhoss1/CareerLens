@@ -68,9 +68,14 @@ export default function EmploymentDocumentsPage() {
     [selectedTaskId, tasks]
   );
 
+  const selectedRoadmapTaskCount = useMemo(() => {
+    if (!selectedTask) return 0;
+    return tasks.filter((task) => task.roadmapTitle === selectedTask.roadmapTitle).length;
+  }, [selectedTask, tasks]);
+
   async function handleAnalyze() {
     if (!selectedTask) {
-      setErrorMessage("검증할 플래너 과제를 먼저 선택하세요.");
+      setErrorMessage("검증할 로드맵 과제를 먼저 선택하세요.");
       return;
     }
 
@@ -80,13 +85,13 @@ export default function EmploymentDocumentsPage() {
     try {
       if (submitMode === "TEXT") {
         if (submittedText.trim().length < 80) {
-          throw new Error("분석할 문서 내용을 최소 80자 이상 입력하세요.");
+          throw new Error("분석할 문서 내용은 최소 80자 이상 입력하세요.");
         }
         setResult(await verifyTaskText({ taskId: selectedTask.task_id, documentType, submittedText }));
       }
       if (submitMode === "GITHUB") {
         if (!isRepositoryUrl(githubUrl)) {
-          throw new Error("GitHub 프로필 주소가 아니라 https://github.com/owner/repository 형태의 실제 프로젝트 repository URL을 입력하세요.");
+          throw new Error("실제 GitHub 프로젝트 repository URL을 입력하세요. 예: https://github.com/owner/repository");
         }
         setResult(await verifyTaskGithub({ taskId: selectedTask.task_id, githubUrl, note: githubNote }));
       }
@@ -120,184 +125,297 @@ export default function EmploymentDocumentsPage() {
         actions={<LinkButton href="/roadmap/employment">취업로드맵으로</LinkButton>}
       />
 
-      <section className="lens-container py-6">
+      <main className="lens-container py-6">
         {isLoadingTasks ? (
-          <EmptyState title="로드맵 과제를 불러오는 중입니다" description="생성된 커리어 플래너 과제를 기준으로 문서 분석 대상을 구성합니다." />
+          <EmptyState title="로드맵 과제를 불러오는 중입니다." description="생성된 커리어 플래너 과제를 기준으로 문서 분석 대상을 구성하고 있습니다." />
         ) : tasks.length === 0 ? (
           <EmptyState
-            title="분석할 플래너 과제가 없습니다"
-            description="맞춤채용정보 진단 또는 전체 공고에서 로드맵을 먼저 생성하면 문서 점검을 사용할 수 있습니다."
-            action={<LinkButton href="/jobs/recommendation">추천 진단 시작</LinkButton>}
+            title="분석할 로드맵 과제가 없습니다."
+            description="적합도 진단 또는 전체 공고에서 로드맵을 먼저 생성하면 문서 분석을 사용할 수 있습니다."
+            action={<LinkButton href="/jobs/recommendation">적합도 진단 시작</LinkButton>}
           />
         ) : (
-          <div className="grid gap-5 lg:grid-cols-[420px_1fr]">
-            <aside className="space-y-4">
-              <Card className="rounded-2xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
-                <p className="text-xs font-extrabold tracking-[0.14em] text-brand">REVIEW TARGET</p>
-                <h2 className="mt-3 text-xl font-bold text-night">점검 기준 선택</h2>
+          <div className="space-y-5">
+            <DocumentTopPanel
+              selectedTask={selectedTask}
+              totalTaskCount={tasks.length}
+              selectedRoadmapTaskCount={selectedRoadmapTaskCount}
+              result={result}
+            />
 
-                <div className="mt-5 space-y-4">
-                  <SelectInput
-                    label="기준 과제"
-                    value={selectedTaskId ?? ""}
-                    onChange={(event) => setSelectedTaskId(Number(event.target.value))}
-                  >
-                    {tasks.map((task) => (
-                      <option key={task.task_id} value={task.task_id}>
-                        {task.company} · {task.week_number}주차 · {publicTaskTitle(task.title)}
-                      </option>
-                    ))}
-                  </SelectInput>
-                  <SelectInput label="문서 유형" value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
-                    <option value="RESUME">이력서</option>
-                    <option value="COVER_LETTER">자기소개서</option>
-                    <option value="PORTFOLIO">포트폴리오 설명</option>
-                    <option value="GITHUB_README">GitHub README</option>
-                    <option value="TASK_OUTPUT">과제 산출물</option>
-                  </SelectInput>
-                </div>
-              </Card>
+            <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+              <ReviewTargetPanel
+                tasks={tasks}
+                selectedTaskId={selectedTaskId}
+                selectedTask={selectedTask}
+                documentType={documentType}
+                onSelectTask={setSelectedTaskId}
+                onSelectDocumentType={setDocumentType}
+              />
 
-              {selectedTask && (
-                <Card className="rounded-2xl border-slate-200 p-5 shadow-sm">
-                  <p className="text-xs font-extrabold tracking-[0.14em] text-brand">REVIEW BRIEF</p>
-                  <h3 className="mt-3 text-lg font-bold text-night">{selectedTask.company}</h3>
-                  <p className="mt-1 text-sm font-semibold text-slate-600">{selectedTask.jobTitle}</p>
-                  <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3">
-                    <p className="text-xs font-bold text-slate-500">이번 점검 목표</p>
-                    <p className="mt-2 text-sm font-semibold leading-6 text-night">{publicTaskTitle(selectedTask.title)}</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{publicTaskDescription(selectedTask.description)}</p>
-                  </div>
-                  <div className="mt-4 grid gap-3 text-sm">
-                    <ReviewPoint title="공고와의 연결성" description="요구 기술과 경험이 제출물에 드러나는지 확인합니다." />
-                    <ReviewPoint title="증빙의 구체성" description="프로젝트, 수치, 역할, 결과가 충분히 설명되는지 봅니다." />
-                    <ReviewPoint title="수정 우선순위" description="바로 고칠 항목과 보완이 필요한 항목을 나눕니다." />
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Badge tone="muted">{selectedTask.week_number}주차</Badge>
-                    <Badge tone="muted">{selectedTask.estimated_hours ?? 0}시간 예상</Badge>
-                    <Badge tone="warning">{difficultyLabel(selectedTask.difficulty)}</Badge>
-                  </div>
-                </Card>
-              )}
-            </aside>
+              <section className="space-y-4">
+                <SubmissionPanel
+                  submitMode={submitMode}
+                  submittedText={submittedText}
+                  githubUrl={githubUrl}
+                  githubNote={githubNote}
+                  selectedFile={selectedFile}
+                  isAnalyzing={isAnalyzing}
+                  onSubmitModeChange={setSubmitMode}
+                  onTextChange={setSubmittedText}
+                  onGithubUrlChange={setGithubUrl}
+                  onGithubNoteChange={setGithubNote}
+                  onFileChange={setSelectedFile}
+                  onAnalyze={handleAnalyze}
+                />
 
-            <div className="space-y-4">
-              <Card className="rounded-2xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <ModeButton active={submitMode === "TEXT"} onClick={() => setSubmitMode("TEXT")} label="직접 입력" />
-                  <ModeButton active={submitMode === "GITHUB"} onClick={() => setSubmitMode("GITHUB")} label="GitHub 프로젝트" />
-                  <ModeButton active={submitMode === "FILE"} onClick={() => setSubmitMode("FILE")} label="파일 업로드" />
-                </div>
-
-                <div className="mt-5">
-                  {submitMode === "TEXT" && (
-                    <label className="block">
-                      <span className="text-sm font-semibold text-night">검토할 내용</span>
-                      <textarea
-                        className="mt-2 min-h-[360px] w-full rounded-xl border border-slate-200 bg-white p-4 text-sm leading-6 text-ink outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/10"
-                        placeholder="이력서 bullet, 자기소개서 문단, README 주요 내용, 포트폴리오 설명을 붙여넣으세요."
-                        value={submittedText}
-                        onChange={(event) => setSubmittedText(event.target.value)}
-                      />
-                      <span className="mt-2 block text-xs text-slate-500">{submittedText.trim().length}자 입력됨</span>
-                    </label>
-                  )}
-
-                  {submitMode === "GITHUB" && (
-                    <div className="space-y-4">
-                      <label className="block">
-                        <span className="text-sm font-semibold text-night">GitHub 프로젝트 repository URL</span>
-                        <input
-                          className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/10"
-                          placeholder="https://github.com/owner/repository"
-                          value={githubUrl}
-                          onChange={(event) => setGithubUrl(event.target.value)}
-                        />
-                        <span className="mt-2 block text-xs text-slate-500">프로필 주소, 조직 홈, topic 주소는 허용하지 않습니다.</span>
-                      </label>
-                      <label className="block">
-                        <span className="text-sm font-semibold text-night">프로젝트 설명 메모</span>
-                        <textarea
-                          className="mt-2 min-h-[160px] w-full rounded-xl border border-slate-200 bg-white p-4 text-sm leading-6 outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/10"
-                          placeholder="이 repository에서 본인이 구현한 부분, 과제와 연결되는 기능, 실행 가능한 결과물을 적어주세요."
-                          value={githubNote}
-                          onChange={(event) => setGithubNote(event.target.value)}
-                        />
-                      </label>
+                {errorMessage && (
+                  <div role="alert" className="rounded-2xl border border-coral/30 bg-red-50 px-4 py-3 text-sm font-semibold text-coral">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <span>{errorMessage}</span>
+                      {isMembershipLimitMessage(errorMessage) && <LinkButton href="/membership">Pro 멤버십 보기</LinkButton>}
                     </div>
-                  )}
-
-                  {submitMode === "FILE" && (
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-                      <p className="text-sm font-semibold text-night">PDF 또는 DOCX 파일</p>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">
-                        이력서, 자기소개서, 프로젝트 사례서, README를 PDF/DOCX로 올리면 텍스트를 추출해 점검합니다. 최대 5MB까지 지원합니다.
-                      </p>
-                      <input
-                        className="mt-4 block w-full text-sm text-slate-700 file:mr-4 file:rounded-lg file:border file:border-slate-200 file:bg-white file:px-4 file:py-2 file:text-sm file:font-semibold file:text-night"
-                        type="file"
-                        accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
-                      />
-                      {selectedFile && <p className="mt-3 text-xs text-slate-500">선택됨: {selectedFile.name}</p>}
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-4 flex justify-end">
-                  <Button type="button" onClick={handleAnalyze} disabled={isAnalyzing}>
-                    {isAnalyzing ? "분석 중" : "제출물 분석"}
-                  </Button>
-                </div>
-              </Card>
-
-              {errorMessage && (
-                <div role="alert" className="rounded-2xl border border-coral/30 bg-red-50 px-4 py-3 text-sm font-medium text-coral">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <span>{errorMessage}</span>
-                    {isMembershipLimitMessage(errorMessage) && <LinkButton href="/membership">Pro 멤버십 보기</LinkButton>}
                   </div>
-                </div>
-              )}
+                )}
 
-              {result && <AnalysisResult result={result} />}
+                {result ? (
+                  <AnalysisResult result={result} />
+                ) : (
+                  <EmptyPreview />
+                )}
+              </section>
             </div>
           </div>
         )}
-      </section>
+      </main>
     </PageShell>
   );
 }
 
-function AnalysisResult({ result }: { result: VerificationResult }) {
+function DocumentTopPanel({
+  selectedTask,
+  totalTaskCount,
+  selectedRoadmapTaskCount,
+  result
+}: {
+  selectedTask: TaskOption | null;
+  totalTaskCount: number;
+  selectedRoadmapTaskCount: number;
+  result: VerificationResult | null;
+}) {
   return (
-    <Card className="p-5">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+    <Card className="rounded-3xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div>
-          <p className="text-xs font-bold tracking-[0.16em] text-brand">ANALYSIS RESULT</p>
-          <h3 className="mt-2 text-xl font-semibold text-night">문서 검증 결과</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{result.analysis_summary}</p>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-brand">Review Workspace</p>
+          <h2 className="mt-2 text-2xl font-black leading-tight text-night">{selectedTask ? selectedTask.company : "제출물 점검"}</h2>
+          <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+            {selectedTask ? `${selectedTask.jobTitle} · ${selectedTask.week_number}주차 과제 기준` : "로드맵 과제를 선택해 문서 분석을 시작하세요."}
+          </p>
         </div>
-        <div className="min-w-[170px] border border-line bg-panel p-4">
-          <ScoreBar label="검증 점수" value={result.verification_score ?? 0} tone={scoreTone(result.verification_score ?? 0)} />
+        <div className="grid grid-cols-3 gap-3">
+          <MetricBox label="전체 과제" value={`${totalTaskCount}개`} />
+          <MetricBox label="선택 로드맵" value={`${selectedRoadmapTaskCount}개`} />
+          <MetricBox label="최근 점수" value={result ? `${result.verification_score}점` : "-"} />
         </div>
       </div>
+    </Card>
+  );
+}
+
+function ReviewTargetPanel({
+  tasks,
+  selectedTaskId,
+  selectedTask,
+  documentType,
+  onSelectTask,
+  onSelectDocumentType
+}: {
+  tasks: TaskOption[];
+  selectedTaskId: number | null;
+  selectedTask: TaskOption | null;
+  documentType: string;
+  onSelectTask: (taskId: number) => void;
+  onSelectDocumentType: (documentType: string) => void;
+}) {
+  return (
+    <aside className="h-fit space-y-4 xl:sticky xl:top-24">
+      <Card className="rounded-3xl border-slate-200 p-5 shadow-sm">
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-brand">Review Target</p>
+        <h2 className="mt-2 text-xl font-black text-night">점검 기준 선택</h2>
+        <div className="mt-5 space-y-4">
+          <SelectInput label="기준 과제" value={selectedTaskId ?? ""} onChange={(event) => onSelectTask(Number(event.target.value))}>
+            {tasks.map((task) => (
+              <option key={task.task_id} value={task.task_id}>
+                {task.company} · {task.week_number}주차 · {shortTitle(task.title)}
+              </option>
+            ))}
+          </SelectInput>
+          <SelectInput label="문서 유형" value={documentType} onChange={(event) => onSelectDocumentType(event.target.value)}>
+            <option value="RESUME">이력서</option>
+            <option value="COVER_LETTER">자기소개서</option>
+            <option value="PORTFOLIO">포트폴리오 설명</option>
+            <option value="GITHUB_README">GitHub README</option>
+            <option value="TASK_OUTPUT">과제 산출물</option>
+          </SelectInput>
+        </div>
+      </Card>
+
+      {selectedTask && (
+        <Card className="rounded-3xl border-slate-200 p-5 shadow-sm">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-brand">Review Brief</p>
+          <h3 className="mt-3 text-lg font-black leading-7 text-night">{shortTitle(selectedTask.title)}</h3>
+          <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{selectedTask.description}</p>
+          <div className="mt-5 grid gap-3">
+            <ReviewPoint label="확인할 내용" value={selectedTask.expected_outputs} />
+            <ReviewPoint label="검증 기준" value={selectedTask.verification_criteria} />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge tone="muted">{selectedTask.week_number}주차</Badge>
+            <Badge tone="muted">예상 {selectedTask.estimated_hours ?? 0}시간</Badge>
+            <Badge tone="warning">{difficultyLabel(selectedTask.difficulty)}</Badge>
+          </div>
+        </Card>
+      )}
+    </aside>
+  );
+}
+
+function SubmissionPanel({
+  submitMode,
+  submittedText,
+  githubUrl,
+  githubNote,
+  selectedFile,
+  isAnalyzing,
+  onSubmitModeChange,
+  onTextChange,
+  onGithubUrlChange,
+  onGithubNoteChange,
+  onFileChange,
+  onAnalyze
+}: {
+  submitMode: SubmitMode;
+  submittedText: string;
+  githubUrl: string;
+  githubNote: string;
+  selectedFile: File | null;
+  isAnalyzing: boolean;
+  onSubmitModeChange: (mode: SubmitMode) => void;
+  onTextChange: (value: string) => void;
+  onGithubUrlChange: (value: string) => void;
+  onGithubNoteChange: (value: string) => void;
+  onFileChange: (file: File | null) => void;
+  onAnalyze: () => void;
+}) {
+  return (
+    <Card className="rounded-3xl border-slate-200 p-5 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-brand">Submit Evidence</p>
+          <h2 className="mt-2 text-xl font-black text-night">제출물 입력</h2>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[520px]">
+          <ModeButton active={submitMode === "TEXT"} label="직접 입력" onClick={() => onSubmitModeChange("TEXT")} />
+          <ModeButton active={submitMode === "GITHUB"} label="GitHub 프로젝트" onClick={() => onSubmitModeChange("GITHUB")} />
+          <ModeButton active={submitMode === "FILE"} label="파일 업로드" onClick={() => onSubmitModeChange("FILE")} />
+        </div>
+      </div>
+
+      <div className="mt-5">
+        {submitMode === "TEXT" && (
+          <label className="block">
+            <span className="text-sm font-black text-night">검토할 내용</span>
+            <textarea
+              className="mt-2 min-h-[340px] w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold leading-6 text-ink outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/10"
+              placeholder="이력서 bullet, 자기소개서 문단, README 주요 내용, 포트폴리오 설명을 붙여넣으세요."
+              value={submittedText}
+              onChange={(event) => onTextChange(event.target.value)}
+            />
+            <span className="mt-2 block text-xs font-semibold text-slate-500">{submittedText.trim().length}자 입력</span>
+          </label>
+        )}
+
+        {submitMode === "GITHUB" && (
+          <div className="grid gap-4">
+            <label className="block">
+              <span className="text-sm font-black text-night">GitHub repository URL</span>
+              <input
+                className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/10"
+                placeholder="https://github.com/owner/repository"
+                value={githubUrl}
+                onChange={(event) => onGithubUrlChange(event.target.value)}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-black text-night">프로젝트 설명 메모</span>
+              <textarea
+                className="mt-2 min-h-[180px] w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold leading-6 outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/10"
+                placeholder="본인이 구현한 부분, 공고와 연결되는 기능, 실행 가능한 결과물을 적어주세요."
+                value={githubNote}
+                onChange={(event) => onGithubNoteChange(event.target.value)}
+              />
+            </label>
+          </div>
+        )}
+
+        {submitMode === "FILE" && (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-[#f8fbfa] p-6">
+            <p className="text-base font-black text-night">PDF 또는 DOCX 파일</p>
+            <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+              이력서, 자기소개서, 포트폴리오 설명, README를 PDF/DOCX로 올리면 공고 과제 기준으로 분석합니다.
+            </p>
+            <input
+              className="mt-5 block w-full text-sm font-semibold text-slate-700 file:mr-4 file:rounded-xl file:border file:border-slate-200 file:bg-white file:px-4 file:py-2 file:text-sm file:font-black file:text-night"
+              type="file"
+              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+            />
+            {selectedFile && <p className="mt-3 text-xs font-semibold text-slate-500">선택 파일: {selectedFile.name}</p>}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-5 flex justify-end">
+        <Button type="button" className="rounded-2xl px-6" onClick={onAnalyze} disabled={isAnalyzing}>
+          {isAnalyzing ? "분석 중" : "제출물 분석"}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function AnalysisResult({ result }: { result: VerificationResult }) {
+  const score = result.verification_score ?? 0;
+
+  return (
+    <Card className="rounded-3xl border-slate-200 p-5 shadow-sm">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-brand">Analysis Result</p>
+          <h3 className="mt-2 text-2xl font-black text-night">문서 검증 결과</h3>
+          <p className="mt-3 text-sm font-semibold leading-6 text-slate-700">{result.analysis_summary}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-[#f8fbfa] p-4">
+          <ScoreBar label="검증 점수" value={score} tone={scoreTone(score)} />
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge tone="muted">{result.reviewer_mode}</Badge>
+            <Badge tone="success">{result.status}</Badge>
+          </div>
+        </div>
+      </div>
+
       <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <InfoBlock title="좋은 점" value={result.strengths} />
+        <InfoBlock title="강점" value={result.strengths} />
         <InfoBlock title="보완할 점" value={result.improvement_items} />
       </div>
-      <div className="mt-5 flex flex-wrap gap-2">
-        <Badge tone="muted">{result.reviewer_mode}</Badge>
-        <Badge tone="success">{result.status}</Badge>
-        <Badge tone="brand">{result.request_type}</Badge>
-      </div>
+
       {result.issued_badges?.length > 0 && (
-        <div className="mt-5 border border-line bg-panel p-4">
+        <div className="mt-5 rounded-2xl border border-slate-200 bg-[#f8fbfa] p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-semibold text-night">발급된 검증 배지</p>
-            <LinkButton href="/mypage/badges" variant="secondary" className="min-h-8 px-3 py-1 text-xs">
-              배지함 보기
+            <p className="text-sm font-black text-night">발급된 검증 배지</p>
+            <LinkButton href="/mypage/badges" variant="secondary" className="min-h-8 rounded-xl px-3 py-1 text-xs">
+              배지 보기
             </LinkButton>
           </div>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -311,15 +429,25 @@ function AnalysisResult({ result }: { result: VerificationResult }) {
   );
 }
 
+function EmptyPreview() {
+  return (
+    <Card className="rounded-3xl border-slate-200 p-8 text-center shadow-sm">
+      <p className="text-lg font-black text-night">아직 분석 결과가 없습니다.</p>
+      <p className="mx-auto mt-2 max-w-xl text-sm font-semibold leading-6 text-slate-600">
+        과제 기준과 제출물을 선택한 뒤 분석을 실행하면 강점, 보완점, 검증 점수가 이 영역에 표시됩니다.
+      </p>
+    </Card>
+  );
+}
+
 function BadgeCard({ badge }: { badge: VerificationBadge }) {
   return (
-    <div className="border border-line bg-white p-3">
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="font-semibold text-night">{badge.label}</p>
+        <p className="font-black text-night">{badge.label}</p>
         <Badge tone={badgeTone(badge.badge_type)}>{badge.score_at_issue}점</Badge>
       </div>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{badge.description}</p>
-      <p className="mt-2 text-xs text-slate-500">{badge.badge_type}</p>
+      <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{badge.description}</p>
     </div>
   );
 }
@@ -328,30 +456,40 @@ function ModeButton({ active, label, onClick }: { active: boolean; label: string
   return (
     <button
       type="button"
-      className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${
-        active ? "border-night bg-night text-white shadow-sm" : "border-slate-200 bg-white text-slate-700 hover:border-night"
+      className={`min-h-12 rounded-2xl border px-4 py-3 text-sm font-black transition ${
+        active ? "border-night bg-night text-white shadow-sm" : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
       }`}
       onClick={onClick}
+      aria-pressed={active}
     >
       {label}
     </button>
   );
 }
 
-function ReviewPoint({ title, description }: { title: string; description: string }) {
+function ReviewPoint({ label, value }: { label: string; value?: string }) {
   return (
-    <div className="rounded-xl border border-slate-100 bg-white p-3">
-      <p className="text-sm font-bold text-night">{title}</p>
-      <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
+    <div className="rounded-2xl border border-slate-200 bg-[#f8fbfa] p-4">
+      <p className="text-xs font-black text-slate-500">{label}</p>
+      <p className="mt-2 whitespace-pre-line text-sm font-semibold leading-6 text-night">{value || "미기재"}</p>
     </div>
   );
 }
 
 function InfoBlock({ title, value }: { title: string; value?: string }) {
   return (
-    <div className="border border-line bg-panel p-3">
-      <p className="text-xs font-semibold text-slate-500">{title}</p>
-      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{value || "미기재"}</p>
+    <div className="rounded-2xl border border-slate-200 bg-[#f8fbfa] p-4">
+      <p className="text-xs font-black uppercase tracking-[0.14em] text-brand">{title}</p>
+      <p className="mt-2 whitespace-pre-line text-sm font-semibold leading-6 text-slate-700">{value || "미기재"}</p>
+    </div>
+  );
+}
+
+function MetricBox({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-panel px-4 py-3">
+      <p className="text-xs font-bold text-slate-500">{label}</p>
+      <p className="mt-1 text-lg font-black text-night">{value}</p>
     </div>
   );
 }
@@ -374,18 +512,11 @@ function badgeTone(type: string) {
   return "warning";
 }
 
-function publicTaskTitle(title: string) {
+function shortTitle(title: string) {
   return title
     .replaceAll("PatternProfile", "직무 패턴")
-    .replace("공고 요구사항과 직무 패턴 근거 정리", "공고 요구사항 정리")
-    .replace("공고 요구사항과 PatternProfile 근거 정리", "공고 요구사항 정리");
-}
-
-function publicTaskDescription(description: string) {
-  return description
-    .replaceAll("PatternProfile", "직무 패턴")
-    .replaceAll("내 프로필", "내 프로필")
-    .replace(/이 문서는 이후.*$/, "이 내용을 기준으로 제출물을 점검합니다.");
+    .replaceAll("공고 요구사항과 직무 패턴 근거 정리", "공고 요구사항 정리")
+    .replaceAll("공고 요구사항과 PatternProfile 근거 정리", "공고 요구사항 정리");
 }
 
 function isRepositoryUrl(value: string) {
