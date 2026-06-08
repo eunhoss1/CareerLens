@@ -140,11 +140,11 @@ function SummaryHero({
         <div className="flex flex-col gap-5 lg:flex-row lg:items-stretch lg:justify-between">
           <div className="flex min-w-0 flex-1 flex-col">
             <p className="text-[13px] font-black uppercase tracking-[0.28em] text-teal-700">Progress Overview</p>
-            <h2 className="mt-2 text-[52px] font-black leading-none tracking-[-0.06em] text-slate-950 md:text-[60px]">이어갈 로드맵</h2>
+            <h2 className="mt-2 text-[52px] font-black leading-none text-slate-950 md:text-[60px]">이어갈 로드맵</h2>
             {nextRoadmap && (
               <div className="mt-7 flex flex-col gap-3 rounded-2xl border border-white/80 bg-white/75 px-5 py-4 shadow-[0_14px_34px_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:justify-between lg:mt-auto">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-500">다음 추천</p>
+                  <p className="text-sm font-semibold text-slate-500">다음 추천</p>
                   <p className="mt-5 truncate text-lg font-black text-slate-950">{nextRoadmap.roadmap.title}</p>
                 </div>
                 <LinkButton href={`/planner/${nextRoadmap.roadmap.roadmap_id}`} variant="secondary" className="shrink-0 rounded-xl px-6 py-3 text-base font-black">
@@ -155,10 +155,10 @@ function SummaryHero({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:w-[500px]">
-            <SummaryMetric label="로드맵" value={`${roadmapCount}개`} helper="생성된 계획" />
-            <SummaryMetric label="진행 중" value={`${inProgressRoadmaps}개`} helper="완료 전 로드맵" />
-            <SummaryMetric label="전체 완료율" value={`${averageCompletion}%`} helper="전체 과제 기준" />
-            <SummaryMetric label="완료 과제" value={`${completedTasks}/${totalTasks}`} helper="완료/전체" />
+            <SummaryMetric label="생성된 로드맵" value={`${roadmapCount}개`} />
+            <SummaryMetric label="진행 중" value={`${inProgressRoadmaps}개`} />
+            <SummaryMetric label="전체 완료율" value={`${averageCompletion}%`} />
+            <SummaryMetric label="완료 과제" value={`${completedTasks}/${totalTasks}`} inlineHelper="(완료/전체)" />
           </div>
         </div>
       </div>
@@ -302,12 +302,15 @@ function InsightPanel({
   );
 }
 
-function SummaryMetric({ label, value, helper }: { label: string; value: string; helper: string }) {
+function SummaryMetric({ label, value, helper, inlineHelper }: { label: string; value: string; helper?: string; inlineHelper?: string }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
       <p className="text-2xl font-black leading-tight tracking-[-0.03em] text-slate-950">{label}</p>
-      <p className="mt-1 text-lg font-medium tracking-tight text-slate-950">{value}</p>
-      <p className="mt-0.5 text-[11px] font-normal text-slate-500">{helper}</p>
+      <p className="mt-1 flex items-baseline gap-1.5 text-lg font-medium tracking-tight text-slate-950">
+        <span>{value}</span>
+        {inlineHelper && <span className="text-[11px] font-normal text-slate-500">{inlineHelper}</span>}
+      </p>
+      {helper && <p className="mt-0.5 text-[11px] font-normal text-slate-500">{helper}</p>}
     </div>
   );
 }
