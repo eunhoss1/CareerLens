@@ -9,12 +9,9 @@ import {
   Card,
   EmptyState,
   LinkButton,
-  MetricCard,
   PageHeader,
   PageShell,
-  ScoreBar,
-  SectionHeader,
-  TimelineCard
+  ScoreBar
 } from "@/components/ui";
 import {
   fetchSettlementChecklists,
@@ -63,6 +60,8 @@ const officialSourceCards = [
     tags: ["Immigration Services Agency", "Embassy", "Employer"]
   }
 ];
+
+type CountrySummary = SettlementGuidance["country_summaries"][number];
 
 export default function AdministrationRoadmapPage() {
   const auth = useRequiredAuth();
@@ -128,10 +127,14 @@ export default function AdministrationRoadmapPage() {
   const doneCount = adminItems.filter((item) => item.status === "DONE").length;
   const inProgressCount = adminItems.filter((item) => item.status === "IN_PROGRESS").length;
   const completionRate = adminItems.length === 0 ? 0 : Math.round((doneCount / adminItems.length) * 100);
-  // const groupedByCountry = adminItems.reduce<Record<string, SettlementChecklistItem[]>>((acc, item) => {
-  //   acc[item.country] = [...(acc[item.country] ?? []), item];
-  //   return acc;
-  // }, {});
+  const guidanceRate = guidance?.completion_rate ?? completionRate;
+  const remainingCount = Math.max(0, adminItems.length - doneCount);
+  const priorityActions = guidance?.priority_actions?.length
+    ? guidance.priority_actions
+    : adminItems.slice(0, 4).map((item) => `${item.country} - ${item.checklist_title}`);
+  const countrySummaries = guidance?.country_summaries?.length
+    ? guidance.country_summaries
+    : fallbackCountrySummaries(adminItems);
 
   if (auth.isChecking) {
     return <AuthCheckingScreen title="행정로드맵 접근 권한을 확인하는 중입니다." />;
@@ -169,122 +172,54 @@ export default function AdministrationRoadmapPage() {
 
         {!isLoading && (
           <div className="space-y-6">
-            <div className="grid gap-3 md:grid-cols-4">
-              <MetricCard label="행정 체크 항목" value={adminItems.length} helper="비자/행정/보험 중심" />
-              <MetricCard label="진행 중" value={inProgressCount} helper="확인 또는 처리 중" />
-              <MetricCard label="완료" value={doneCount} helper="사용자별 저장 상태" />
-              <MetricCard label="생성 방식" value={guidance?.generation_mode.includes("AI") ? "AI 보조" : "규칙 기반"} helper="정착 안내 요약 기준" />
-            </div>
-
-            <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-              <Card className="p-5">
-                <p className="lens-kicker">ADMIN READINESS</p>
-                <h2 className="mt-3 text-2xl font-semibold text-night">행정 준비율</h2>
-                <div className="mt-5">
-                  <ScoreBar label="비자/행정 준비율" value={completionRate} tone={completionRate >= 70 ? "success" : "warning"} />
-                </div>
-                <p className="mt-4 text-sm leading-6 text-slate-600">
-                  {guidance?.summary ?? "정착 체크리스트를 기준으로 비자, 출국 전 준비, 초기 행정 항목을 정리합니다."}
-                </p>
-                {guidance?.updated_at && (
-                  <p className="mt-2 text-xs font-semibold text-slate-500">
-                    저장일 {formatDateTime(guidance.created_at ?? guidance.updated_at)} · 최근 갱신 {formatDateTime(guidance.refreshed_at ?? guidance.updated_at)}
+            <Card className="overflow-hidden p-0">
+              <div className="grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
+                <div className="border-b border-line p-5 lg:border-b-0 lg:border-r">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={overallStatusTone(guidance?.overall_status)}>{overallStatusLabel(guidance?.overall_status)}</Badge>
+                    <Badge tone={guidance?.generation_mode.includes("AI") ? "brand" : "muted"}>
+                      {guidance?.generation_mode.includes("AI") ? "AI 보조" : "규칙 기반"}
+                    </Badge>
+                    <Badge tone={remainingCount === 0 ? "success" : "warning"}>남은 항목 {remainingCount}개</Badge>
+                  </div>
+                  <h2 className="mt-4 flex items-center gap-2 text-2xl font-semibold leading-8 text-night">
+                    <span aria-hidden="true" className="text-3xl leading-none">🏛️</span>
+                    행정 준비 현황
+                  </h2>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    {guidance?.summary ?? "정착 체크리스트를 기준으로 비자, 출국 전 준비, 초기 행정 항목을 정리합니다."}
                   </p>
-                )}
-                <div className="mt-5 rounded-xl border border-line bg-panel p-4">
-                  <p className="text-xs font-bold text-slate-500">우선 확인 항목</p>
-                  <ul className="mt-3 space-y-2">
-                    {(guidance?.priority_actions ?? adminItems.slice(0, 4).map((item) => `${item.country} - ${item.checklist_title}`)).slice(0, 4).map((action, index) => (
-                      <li key={`${action}-${index}`} className="text-sm leading-6 text-slate-700">- {action}</li>
-                    ))}
-                  </ul>
+                  {guidance?.updated_at && (
+                    <p className="mt-3 text-xs font-semibold text-slate-500">
+                      저장일 {formatDateTime(guidance.created_at ?? guidance.updated_at)} · 최근 갱신 {formatDateTime(guidance.refreshed_at ?? guidance.updated_at)}
+                    </p>
+                  )}
+                  <div className="mt-5">
+                    <ScoreBar label="비자/행정 준비율" value={guidanceRate} tone={guidanceRate >= 70 ? "success" : "warning"} />
+                  </div>
                 </div>
-              </Card>
 
-              <Card className="p-5">
-                <SectionHeader
-                  kicker="OFFICIAL SOURCE POLICY"
-                  title="공식 자료 확인 원칙"
-                  description="AI는 체크리스트 요약과 우선순위 정리에만 사용하고, 비자/체류자격의 최신 판단은 공식기관 자료로 최종 확인합니다."
-                />
-                <div className="mt-5 grid gap-3 md:grid-cols-2">
-                  {officialSourceCards.map((card) => (
-                    <div key={card.country} className="rounded-xl border border-line bg-panel p-4">
-                      <Badge tone="brand">{card.country}</Badge>
-                      <h3 className="mt-3 text-base font-semibold text-night">{card.title}</h3>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">{card.description}</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {card.tags.map((tag) => <Badge key={tag} tone="muted">{tag}</Badge>)}
-                      </div>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-2 gap-px bg-line">
+                  <AdminStat label="체크 항목" value={adminItems.length} helper="비자/행정/보험" />
+                  <AdminStat label="진행 중" value={inProgressCount} helper="확인 또는 처리 중" />
+                  <AdminStat label="완료" value={doneCount} helper="저장된 완료 상태" />
+                  <AdminStat label="준비율" value={`${guidanceRate}%`} helper="전체 진행 기준" />
                 </div>
-              </Card>
-            </section>
-
-            <Card className="p-5">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="lens-kicker">NEXT WORKSPACE</p>
-                  <h2 className="mt-3 text-xl font-semibold text-night">지원 관리로 이어가기</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    행정 준비 항목을 확인한 뒤 목표 공고의 서류 준비도와 제출 상태를 지원 관리에서 이어서 점검합니다.
-                  </p>
-                </div>
-                <LinkButton href="/applications">지원 관리로 이동</LinkButton>
               </div>
             </Card>
 
-            <section className="border-l border-night pl-4">
-              <div className="space-y-4">
-                {adminStages.map((stage) => (
-                  <TimelineCard key={stage.phase} label={stage.phase} title={stage.title}>
-                    <p className="text-sm leading-6 text-slate-600">{stage.description}</p>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      {matchingItems(stage.phase, adminItems).map((item) => (
-                        <div key={item.item_id} className="rounded-xl border border-line bg-panel p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold text-night">{item.country} · {item.checklist_title}</p>
-                              <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
-                            </div>
-                            <Badge tone={statusTone(item.status)} className={item.status === "NOT_STARTED" ? "min-w-[55px] justify-center" : ""}>
-                              {statusLabel(item.status)}
-                            </Badge>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </TimelineCard>
-                ))}
-              </div>
+            <section className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
+              <PriorityPanel actions={priorityActions} />
+              <CountryReadinessPanel summaries={countrySummaries} />
             </section>
 
-            {/* <Card className="p-5">
-              <SectionHeader kicker="COUNTRY DOSSIER" title="국가별 행정 항목" />
-              <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                {Object.entries(groupedByCountry).map(([country, countryItems]) => (
-                  <div key={country} className="rounded-xl border border-line bg-panel p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-lg font-semibold text-night">{country}</h3>
-                      <Badge tone={countryItems.every((item) => item.status === "DONE") ? "success" : "warning"}>
-                        {countryItems.filter((item) => item.status === "DONE").length}/{countryItems.length}
-                      </Badge>
-                    </div>
-                    <ul className="mt-3 space-y-2">
-                      {countryItems.map((item) => (
-                        <li key={item.item_id} className="flex items-start justify-between gap-3 border-b border-line pb-2 text-sm last:border-b-0 last:pb-0">
-                          <span className="leading-6 text-slate-700">{item.checklist_title}</span>
-                          <Badge tone={statusTone(item.status)} className={item.status === "NOT_STARTED" ? "min-w-[55px] justify-center" : ""}>
-                            {statusLabel(item.status)}
-                          </Badge>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+            <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_330px]">
+              <AdminStageJourney items={adminItems} />
+              <div className="space-y-5 xl:sticky xl:top-24 xl:self-start">
+                <OfficialSourcePanel />
+                <NextWorkspacePanel />
               </div>
-            </Card> */}
+            </section>
 
             <Card className="p-5">
               <p className="text-xs leading-5 text-slate-500">
@@ -295,6 +230,187 @@ export default function AdministrationRoadmapPage() {
         )}
       </section>
     </PageShell>
+  );
+}
+
+function AdminStat({ label, value, helper }: { label: string; value: string | number; helper: string }) {
+  return (
+    <div className="bg-white p-4">
+      <p className="text-xs font-bold text-slate-500">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-night">{value}</p>
+      <p className="mt-1 text-xs leading-5 text-slate-500">{helper}</p>
+    </div>
+  );
+}
+
+function PriorityPanel({ actions }: { actions: string[] }) {
+  const visibleActions = actions.slice(0, 5);
+  return (
+    <Card className="p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="lens-kicker">PRIORITY ACTIONS</p>
+          <h2 className="mt-3 text-xl font-semibold text-night">먼저 확인할 행정 항목</h2>
+        </div>
+        <Badge tone={visibleActions.length > 3 ? "warning" : "brand"}>{visibleActions.length}개</Badge>
+      </div>
+      <div className="mt-5 space-y-3">
+        {visibleActions.map((action, index) => (
+          <div key={`${action}-${index}`} className="grid grid-cols-[34px_1fr] items-start gap-3">
+            <div className="grid h-8 w-8 place-items-center rounded-full border border-brand bg-[#e8f2f1] text-xs font-bold text-brand">
+              {index + 1}
+            </div>
+            <p className="border-b border-line pb-3 text-sm font-semibold leading-6 text-night last:border-b-0">{action}</p>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function CountryReadinessPanel({ summaries }: { summaries: CountrySummary[] }) {
+  return (
+    <Card className="p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="lens-kicker">COUNTRY READINESS</p>
+          <h2 className="mt-3 text-xl font-semibold text-night">국가별 행정 리스크</h2>
+        </div>
+        <Badge tone="muted">{summaries.length}개 국가</Badge>
+      </div>
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        {summaries.map((summary) => (
+          <div key={summary.country} className="rounded-md border border-line bg-panel p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold text-night">{summary.country}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">준비율 {summary.completion_rate}%</p>
+              </div>
+              <Badge tone={riskTone(summary.risk_level)}>{riskLabel(summary.risk_level)}</Badge>
+            </div>
+            <div className="mt-4">
+              <ScoreBar label="국가별 완료율" value={summary.completion_rate} tone={summary.completion_rate >= 70 ? "success" : "warning"} />
+            </div>
+            <ul className="mt-4 space-y-2">
+              {summary.next_actions.slice(0, 3).map((action) => (
+                <li key={action} className="text-sm leading-6 text-slate-600">- {action}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function AdminStageJourney({ items }: { items: SettlementChecklistItem[] }) {
+  return (
+    <section>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="lens-kicker">ADMIN JOURNEY</p>
+          <h2 className="mt-3 text-2xl font-semibold text-night">행정 처리 흐름</h2>
+        </div>
+        <Badge tone="muted">오퍼 → 비자 → 출국 전 → 입국 후</Badge>
+      </div>
+      <div className="relative space-y-4 pl-7">
+        <div className="absolute bottom-4 left-[10px] top-4 w-px bg-night" />
+        {adminStages.map((stage, index) => (
+          <AdminStageCard key={stage.phase} stage={stage} items={matchingItems(stage.phase, items)} index={index} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function AdminStageCard({
+  stage,
+  items,
+  index
+}: {
+  stage: (typeof adminStages)[number];
+  items: SettlementChecklistItem[];
+  index: number;
+}) {
+  const doneCount = items.filter((item) => item.status === "DONE").length;
+  const rate = items.length === 0 ? 0 : Math.round((doneCount / items.length) * 100);
+
+  return (
+    <section className="relative rounded-md border border-line bg-white p-5 shadow-sm">
+      <div className={`absolute left-[-28px] top-5 grid h-6 w-6 place-items-center rounded-full border text-[11px] font-bold ${stageMarkerClass(rate)}`}>
+        {index + 1}
+      </div>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-bold text-brand">{stage.phase}</p>
+          <h3 className="mt-1 text-xl font-semibold text-night">{stage.title}</h3>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{stage.description}</p>
+        </div>
+        <div className="min-w-[150px] rounded-md border border-line bg-panel p-3">
+          <ScoreBar label="단계 완료율" value={rate} tone={rate >= 70 ? "success" : "warning"} />
+        </div>
+      </div>
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        {items.length === 0 ? (
+          <div className="rounded-md border border-dashed border-line bg-panel p-4 text-sm font-semibold leading-6 text-slate-500">
+            현재 연결된 체크 항목이 없습니다.
+          </div>
+        ) : (
+          items.map((item) => (
+            <div key={item.item_id} className="rounded-md border border-line bg-panel p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-night">{item.country} · {item.checklist_title}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
+                </div>
+                <Badge tone={statusTone(item.status)} className={item.status === "NOT_STARTED" ? "min-w-[55px] justify-center" : ""}>
+                  {statusLabel(item.status)}
+                </Badge>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+function OfficialSourcePanel() {
+  return (
+    <Card className="p-5">
+      <p className="lens-kicker">OFFICIAL SOURCES</p>
+      <h2 className="mt-3 text-xl font-semibold text-night">공식 자료 확인 원칙</h2>
+      <p className="mt-3 text-sm leading-6 text-slate-600">
+        AI는 체크리스트 요약과 우선순위 정리에만 사용하고, 비자/체류자격의 최신 판단은 공식기관 자료로 최종 확인합니다.
+      </p>
+      <div className="mt-5 space-y-3">
+        {officialSourceCards.map((card) => (
+          <div key={card.country} className="rounded-md border border-line bg-panel p-4">
+            <Badge tone="brand">{card.country}</Badge>
+            <h3 className="mt-3 text-base font-semibold text-night">{card.title}</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{card.description}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {card.tags.map((tag) => <Badge key={tag} tone="muted">{tag}</Badge>)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function NextWorkspacePanel() {
+  return (
+    <Card className="p-5">
+      <p className="lens-kicker">NEXT WORKSPACE</p>
+      <h2 className="mt-3 text-xl font-semibold text-night">지원 관리로 이어가기</h2>
+      <p className="mt-3 text-sm leading-6 text-slate-600">
+        행정 준비 항목을 확인한 뒤 목표 공고의 서류 준비도와 제출 상태를 지원 관리에서 이어서 점검합니다.
+      </p>
+      <div className="mt-5">
+        <LinkButton href="/applications">지원 관리로 이동</LinkButton>
+      </div>
+    </Card>
   );
 }
 
@@ -321,6 +437,58 @@ function statusTone(status: string) {
   if (status === "DONE") return "success";
   if (status === "IN_PROGRESS") return "warning";
   return "muted";
+}
+
+function overallStatusLabel(status?: string) {
+  if (status === "ON_TRACK") return "일정 양호";
+  if (status === "NEEDS_ATTENTION") return "확인 필요";
+  if (status === "EARLY_STAGE") return "초기 단계";
+  return "상태 확인";
+}
+
+function overallStatusTone(status?: string) {
+  if (status === "ON_TRACK") return "success";
+  if (status === "NEEDS_ATTENTION") return "warning";
+  return "brand";
+}
+
+function riskLabel(riskLevel: string) {
+  if (riskLevel === "LOW") return "낮음";
+  if (riskLevel === "HIGH") return "높음";
+  return "보통";
+}
+
+function riskTone(riskLevel: string) {
+  if (riskLevel === "LOW") return "success";
+  if (riskLevel === "HIGH") return "warning";
+  return "brand";
+}
+
+function stageMarkerClass(rate: number) {
+  if (rate >= 100) return "border-mint bg-mint text-white";
+  if (rate > 0) return "border-brand bg-[#e8f2f1] text-brand";
+  return "border-night bg-paper text-night";
+}
+
+function fallbackCountrySummaries(items: SettlementChecklistItem[]): CountrySummary[] {
+  const grouped = items.reduce<Record<string, SettlementChecklistItem[]>>((acc, item) => {
+    acc[item.country] = [...(acc[item.country] ?? []), item];
+    return acc;
+  }, {});
+
+  return Object.entries(grouped).map(([country, countryItems]) => {
+    const doneCount = countryItems.filter((item) => item.status === "DONE").length;
+    const completionRate = countryItems.length === 0 ? 0 : Math.round((doneCount / countryItems.length) * 100);
+    return {
+      country,
+      completion_rate: completionRate,
+      risk_level: completionRate >= 70 ? "LOW" : completionRate >= 40 ? "MEDIUM" : "HIGH",
+      next_actions: countryItems
+        .filter((item) => item.status !== "DONE")
+        .slice(0, 3)
+        .map((item) => item.checklist_title)
+    };
+  });
 }
 
 function isMissingSavedGuidance(error: unknown) {
