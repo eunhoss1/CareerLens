@@ -179,6 +179,27 @@ webflow
 - AI API가 활성화되어 있으면 AI가 주차별 과제 초안을 생성
 - AI API가 없거나 실패하면 rule-based fallback 사용
 
+### 6. Pro 멤버십/결제
+
+- 1차 결제는 카카오페이 샌드박스 단건결제 기반 30일 Pro 패스입니다.
+- 가격 표시는 `4,900원 / 30일`입니다.
+- Free 한도: 커리어 플래너 생성 월 2회, AI 문서 분석 월 5회
+- Pro 한도: 커리어 플래너 생성 월 30회, AI 문서 분석 월 100회
+- 기존 로드맵 조회, 과제 상태 변경, 기존 검증 결과 조회는 사용량을 차감하지 않습니다.
+
+결제 환경변수:
+
+```txt
+KAKAOPAY_ENABLED=false
+KAKAOPAY_SECRET_KEY=
+KAKAOPAY_CID=TC0ONETIME
+KAKAOPAY_API_BASE_URL=https://open-api.kakaopay.com
+APP_PUBLIC_BASE_URL=http://localhost:8080
+FRONTEND_PUBLIC_BASE_URL=http://localhost:3000
+```
+
+운영에서는 `APP_PUBLIC_BASE_URL`을 백엔드 공개 주소로, `FRONTEND_PUBLIC_BASE_URL`을 프론트 공개 주소로 설정해야 카카오페이 승인 후 결과 페이지로 정상 이동합니다.
+
 ### 6. AI 문서 분석/검증
 
 - 텍스트 입력 분석

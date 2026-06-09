@@ -115,6 +115,7 @@ public class VerificationService {
     private final PlannerTaskRepository plannerTaskRepository;
     private final VerificationRequestRepository verificationRequestRepository;
     private final VerificationBadgeRepository verificationBadgeRepository;
+    private final MembershipService membershipService;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final boolean aiEnabled;
@@ -127,6 +128,7 @@ public class VerificationService {
             PlannerTaskRepository plannerTaskRepository,
             VerificationRequestRepository verificationRequestRepository,
             VerificationBadgeRepository verificationBadgeRepository,
+            MembershipService membershipService,
             ObjectMapper objectMapper,
             @Value("${app.ai.openai.enabled:false}") boolean aiEnabled,
             @Value("${app.ai.provider:openai}") String provider,
@@ -140,6 +142,7 @@ public class VerificationService {
         this.plannerTaskRepository = plannerTaskRepository;
         this.verificationRequestRepository = verificationRequestRepository;
         this.verificationBadgeRepository = verificationBadgeRepository;
+        this.membershipService = membershipService;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(HTTP_CONNECT_TIMEOUT_SECONDS)).build();
         this.aiEnabled = aiEnabled;
@@ -159,30 +162,42 @@ public class VerificationService {
     public VerificationRequestDto verifyTaskText(Long taskId, DocumentVerificationRequestDto request, JwtClaims claims) {
         PlannerTask task = findTask(taskId);
         verifyTaskOwner(task, claims);
+        Long ownerUserId = requireTaskOwnerId(task);
+        membershipService.assertCanAnalyzeDocument(ownerUserId);
         String requestType = blank(request.documentType()) ? REQUEST_TYPE_TEXT_DOCUMENT : request.documentType();
-        return verifySubmittedText(task, REQUEST_TYPE_TEXT_DOCUMENT, requestType, request.submittedText());
+        VerificationRequestDto result = verifySubmittedText(task, REQUEST_TYPE_TEXT_DOCUMENT, requestType, request.submittedText());
+        membershipService.recordDocumentAnalysis(ownerUserId);
+        return result;
     }
 
     @Transactional
     public VerificationRequestDto verifyTaskGithub(Long taskId, GithubVerificationRequestDto request, JwtClaims claims) {
         PlannerTask task = findTask(taskId);
         verifyTaskOwner(task, claims);
+        Long ownerUserId = requireTaskOwnerId(task);
+        membershipService.assertCanAnalyzeDocument(ownerUserId);
         GithubRepo repo = parseGithubRepo(request.githubUrl());
         GithubRepoContext context = fetchGithubContext(repo);
         String submittedText = buildGithubSubmittedText(repo, context, request.note());
-        return verifySubmittedText(task, REQUEST_TYPE_GITHUB_REPOSITORY, REQUEST_TYPE_GITHUB_REPOSITORY, submittedText);
+        VerificationRequestDto result = verifySubmittedText(task, REQUEST_TYPE_GITHUB_REPOSITORY, REQUEST_TYPE_GITHUB_REPOSITORY, submittedText);
+        membershipService.recordDocumentAnalysis(ownerUserId);
+        return result;
     }
 
     @Transactional
     public VerificationRequestDto verifyTaskFile(Long taskId, String documentType, MultipartFile file, JwtClaims claims) {
         PlannerTask task = findTask(taskId);
         verifyTaskOwner(task, claims);
+        Long ownerUserId = requireTaskOwnerId(task);
+        membershipService.assertCanAnalyzeDocument(ownerUserId);
         String extractedText = extractText(file);
         if (extractedText.isBlank()) {
             throw new IllegalArgumentException("PDF/DOCX file has no readable text.");
         }
         String requestType = blank(documentType) ? documentTypeFromFilename(file.getOriginalFilename()) : documentType;
-        return verifySubmittedText(task, requestType, requestType, extractedText);
+        VerificationRequestDto result = verifySubmittedText(task, requestType, requestType, extractedText);
+        membershipService.recordDocumentAnalysis(ownerUserId);
+        return result;
     }
 
     private VerificationRequestDto verifySubmittedText(
@@ -250,6 +265,16 @@ public class VerificationService {
                 ? null
                 : task.getRoadmap().getUser().getId();
         AccessGuard.requireUserOrAdmin(claims, ownerUserId);
+    }
+
+    private Long requireTaskOwnerId(PlannerTask task) {
+        Long ownerUserId = task.getRoadmap() == null || task.getRoadmap().getUser() == null
+                ? null
+                : task.getRoadmap().getUser().getId();
+        if (ownerUserId == null) {
+            throw new IllegalArgumentException("과제의 사용자 정보를 찾을 수 없습니다.");
+        }
+        return ownerUserId;
     }
 
     private PlannerTask findTask(Long taskId) {

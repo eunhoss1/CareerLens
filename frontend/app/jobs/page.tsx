@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { JobCard } from "@/components/jobs/JobCard";
+import { JobDetailPanel } from "@/components/jobs/JobDetailPanel";
 import { JobFilterBar, type JobFilterState } from "@/components/jobs/JobFilterBar";
-import { JobStats } from "@/components/jobs/JobStats";
 import { SiteHeader } from "@/components/site-header";
-import { Button, Card, EmptyState, LinkButton, PageHeader, PageShell } from "@/components/ui";
+import { Button, Card, EmptyState, LinkButton } from "@/components/ui";
 import { getStoredUser } from "@/lib/auth";
 import { fetchJobs, type JobPosting } from "@/lib/jobs";
+import { isMembershipLimitMessage } from "@/lib/membership";
 import { createPlannerRoadmap } from "@/lib/planner";
 import { diagnoseStoredProfileForJob } from "@/lib/recommendation";
 
@@ -17,11 +18,19 @@ const JOBS_PER_PAGE = 8;
 export default function JobsPage() {
   const router = useRouter();
   const [jobs, setJobs] = useState<JobPosting[]>([]);
-  const [filters, setFilters] = useState<JobFilterState>({ country: "ALL", jobFamily: "ALL", query: "" });
+  const [filters, setFilters] = useState<JobFilterState>({
+    country: "ALL",
+    workType: "ALL",
+    experienceLevel: "ALL",
+    jobFamily: "ALL",
+    deadlineStatus: "ALL",
+    query: ""
+  });
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [creatingJobId, setCreatingJobId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchJobs()
@@ -32,20 +41,26 @@ export default function JobsPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filters.country, filters.jobFamily, filters.query]);
+  }, [filters.country, filters.workType, filters.experienceLevel, filters.jobFamily, filters.deadlineStatus, filters.query]);
 
   const countries = useMemo(() => uniqueValues(jobs.map((job) => job.country)), [jobs]);
+  const workTypes = useMemo(() => uniqueValues(jobs.map((job) => job.work_type)), [jobs]);
   const jobFamilies = useMemo(() => uniqueValues(jobs.map((job) => job.job_family)), [jobs]);
 
   const filteredJobs = useMemo(() => {
     const query = filters.query.trim().toLowerCase();
     return jobs.filter((job) => {
       const matchesCountry = filters.country === "ALL" || job.country === filters.country;
+      const matchesWorkType = filters.workType === "ALL" || job.work_type === filters.workType;
+      const matchesExperience = matchesExperienceLevel(job.min_experience_years, filters.experienceLevel);
       const matchesFamily = filters.jobFamily === "ALL" || job.job_family === filters.jobFamily;
+      const matchesDeadline = filters.deadlineStatus === "ALL" || job.deadline_status === filters.deadlineStatus;
       const matchesQuery =
         !query ||
-        `${job.company_name} ${job.job_title} ${job.required_skills.join(" ")}`.toLowerCase().includes(query);
-      return matchesCountry && matchesFamily && matchesQuery;
+        `${job.company_name} ${job.job_title} ${job.required_skills.join(" ")} ${job.preferred_skills.join(" ")}`
+          .toLowerCase()
+          .includes(query);
+      return matchesCountry && matchesWorkType && matchesExperience && matchesFamily && matchesDeadline && matchesQuery;
     });
   }, [filters, jobs]);
 
@@ -53,6 +68,29 @@ export default function JobsPage() {
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStartIndex = (safeCurrentPage - 1) * JOBS_PER_PAGE;
   const visibleJobs = filteredJobs.slice(pageStartIndex, pageStartIndex + JOBS_PER_PAGE);
+  const selectedJob = selectedJobId ? filteredJobs.find((job) => job.job_id === selectedJobId) ?? null : null;
+
+  useEffect(() => {
+    if (loading) return;
+    if (visibleJobs.length === 0) {
+      setSelectedJobId(null);
+      return;
+    }
+    if (!selectedJobId || !visibleJobs.some((job) => job.job_id === selectedJobId)) {
+      setSelectedJobId(visibleJobs[0].job_id);
+    }
+  }, [loading, selectedJobId, visibleJobs]);
+
+  function resetFilters() {
+    setFilters({
+      country: "ALL",
+      workType: "ALL",
+      experienceLevel: "ALL",
+      jobFamily: "ALL",
+      deadlineStatus: "ALL",
+      query: ""
+    });
+  }
 
   async function handleCreateRoadmap(job: JobPosting) {
     const user = getStoredUser();
@@ -79,68 +117,109 @@ export default function JobsPage() {
   }
 
   return (
-    <PageShell>
+    <main className="flex h-screen flex-col overflow-hidden bg-[#f3f6f1] text-ink">
       <SiteHeader />
-      <PageHeader
-        kicker="JOB POSTINGS"
-        title="전체 공고 조회"
-        actions={
-          <>
+      <section className="shrink-0 border-b border-line bg-paper">
+        <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-3 px-5 py-3 lg:flex-row lg:items-center lg:justify-between 2xl:px-8">
+          <div className="flex items-center gap-3">
+            <span className="lens-kicker">JOB POSTINGS</span>
+            <h1 className="text-2xl font-black leading-tight text-night">전체 공고 조회</h1>
+          </div>
+          <div className="flex flex-wrap gap-2">
             <LinkButton href="/jobs/recommendation" variant="secondary">맞춤추천 진단</LinkButton>
             <LinkButton href="/onboarding/profile">프로필 보강</LinkButton>
-          </>
-        }
-      />
+          </div>
+        </div>
+      </section>
 
-      <div className="lens-container py-8">
-        <Card className="rounded-2xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
-          <JobFilterBar filters={filters} countries={countries} jobFamilies={jobFamilies} onChange={setFilters} />
-          <JobStats jobs={jobs} filteredCount={filteredJobs.length} />
-        </Card>
+      <div className="mx-auto flex min-h-0 w-full max-w-[1800px] flex-1 flex-col px-5 py-4 2xl:px-8">
+        <div className="shrink-0">
+          <JobFilterBar
+            filters={filters}
+            countries={countries}
+            workTypes={workTypes}
+            jobFamilies={jobFamilies}
+            onChange={setFilters}
+            onReset={resetFilters}
+          />
+        </div>
 
         {errorMessage && (
-          <div role="alert" className="mt-5 border border-coral/30 bg-red-50 px-4 py-3 text-sm font-medium text-coral">
-            {errorMessage}
+          <div role="alert" className="mt-3 shrink-0 rounded-2xl border border-coral/30 bg-red-50 px-4 py-3 text-sm font-medium text-coral">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span>{errorMessage}</span>
+              {isMembershipLimitMessage(errorMessage) && <LinkButton href="/membership">Pro 멤버십 보기</LinkButton>}
+            </div>
           </div>
         )}
 
         {loading ? (
-          <Card className="mt-6 p-8 text-center text-sm text-slate-600">공고 데이터를 불러오는 중입니다.</Card>
+          <Card className="mt-4 p-8 text-center text-sm text-slate-600">공고 데이터를 불러오는 중입니다.</Card>
         ) : filteredJobs.length === 0 ? (
-          <div className="mt-6">
+          <div className="mt-4">
             <EmptyState title="조건에 맞는 공고가 없습니다" description="국가, 직무군, 검색어를 조정하거나 맞춤추천 진단에서 프로필 조건을 다시 확인하세요." />
           </div>
         ) : (
           <>
-            <div className="mt-6 grid gap-4 xl:grid-cols-2">
-              {visibleJobs.map((job) => (
-                <JobCard
-                  key={job.job_id}
-                  job={job}
-                  creating={creatingJobId === job.job_id}
-                  onCreateRoadmap={() => handleCreateRoadmap(job)}
+            <div className="mt-4 grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(460px,0.85fr)_minmax(620px,1.15fr)] xl:items-stretch xl:overflow-hidden">
+              <section className="flex min-h-0 min-w-0 flex-col">
+                <div className="mb-3 flex shrink-0 flex-col gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm font-black text-night">
+                    {filteredJobs.length.toLocaleString()}개 공고 중 {pageStartIndex + 1}-{Math.min(pageStartIndex + visibleJobs.length, filteredJobs.length)}개
+                  </p>
+                  <p className="hidden text-xs font-bold text-slate-500 xl:block">카드를 선택하면 오른쪽에서 상세 정보를 확인할 수 있습니다.</p>
+                  <p className="text-xs font-bold text-slate-500 xl:hidden">공고를 누르면 넓은 화면에서 상세 정보가 함께 표시됩니다.</p>
+                </div>
+                <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto pr-1 xl:pr-2">
+                  {visibleJobs.map((job) => (
+                    <JobCard
+                      key={job.job_id}
+                      job={job}
+                      selected={selectedJobId === job.job_id}
+                      onSelect={() => setSelectedJobId(job.job_id)}
+                    />
+                  ))}
+                </div>
+
+                <JobsPagination
+                  currentPage={safeCurrentPage}
+                  totalPages={totalPages}
+                  totalCount={filteredJobs.length}
+                  start={pageStartIndex + 1}
+                  end={Math.min(pageStartIndex + visibleJobs.length, filteredJobs.length)}
+                  onChange={setCurrentPage}
                 />
-              ))}
+              </section>
+
+              <aside className="hidden min-h-0 min-w-0 xl:block">
+                <JobDetailPanel
+                  job={selectedJob}
+                  creating={selectedJob ? creatingJobId === selectedJob.job_id : false}
+                  onCreateRoadmap={() => {
+                    if (selectedJob) {
+                      handleCreateRoadmap(selectedJob);
+                    }
+                  }}
+                />
+              </aside>
             </div>
-
-            <JobsPagination
-              currentPage={safeCurrentPage}
-              totalPages={totalPages}
-              totalCount={filteredJobs.length}
-              start={pageStartIndex + 1}
-              end={Math.min(pageStartIndex + visibleJobs.length, filteredJobs.length)}
-              onChange={setCurrentPage}
-            />
-
           </>
         )}
       </div>
-    </PageShell>
+    </main>
   );
 }
 
 function uniqueValues(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort();
+}
+
+function matchesExperienceLevel(years: number | null, level: string) {
+  const value = years ?? 0;
+  if (level === "JUNIOR") return value <= 2;
+  if (level === "MID") return value >= 3 && value <= 5;
+  if (level === "SENIOR") return value >= 6;
+  return true;
 }
 
 function JobsPagination({

@@ -1,6 +1,8 @@
 package com.careerlens.backend.config;
 
 import com.careerlens.backend.dto.ApiErrorResponse;
+import com.careerlens.backend.exception.PaymentGatewayException;
+import com.careerlens.backend.exception.QuotaExceededException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.time.LocalDateTime;
@@ -45,6 +47,20 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiErrorResponse> handleAccessDenied(AccessDeniedException exception, HttpServletRequest request) {
         return build(HttpStatus.FORBIDDEN, exception.getMessage(), request, List.of());
+    }
+
+    @ExceptionHandler(QuotaExceededException.class)
+    public ResponseEntity<ApiErrorResponse> handleQuotaExceeded(QuotaExceededException exception, HttpServletRequest request) {
+        return build(HttpStatus.PAYMENT_REQUIRED, exception.getMessage(), request, List.of("membership_upgrade_required"));
+    }
+
+    @ExceptionHandler(PaymentGatewayException.class)
+    public ResponseEntity<ApiErrorResponse> handlePaymentGateway(PaymentGatewayException exception, HttpServletRequest request) {
+        String statusDetail = exception.getStatusCode() == null ? "status=unavailable" : "status=" + exception.getStatusCode();
+        return build(HttpStatus.BAD_GATEWAY, exception.getMessage(), request, List.of(
+                "provider=" + exception.getProvider(),
+                statusDetail
+        ));
     }
 
     @ExceptionHandler(Exception.class)
