@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
 import { SiteHeader } from "@/components/site-header";
-import { Badge, Button, Card, EmptyState, LinkButton, MetricCard, PageHeader, PageShell, SelectInput, TextInput, TimelineCard } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, LinkButton, PageHeader, PageShell, SelectInput, TextInput } from "@/components/ui";
 import {
   fetchDeparturePlanFromRoadmap,
   generateDeparturePlan,
@@ -23,6 +23,8 @@ const defaultRequest: DeparturePlanRequest = {
   visa_status: "내정 후 회사 제출 서류 확인 필요",
   housing_status: "임시 숙소 미정"
 };
+
+type DepartureMilestone = DeparturePlan["milestones"][number];
 
 export default function DepartureRoadmapPage() {
   const auth = useRequiredAuth();
@@ -173,105 +175,12 @@ export default function DepartureRoadmapPage() {
 
           {plan && (
             <>
-              <Card className="p-5">
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge tone={plan.generation_mode.includes("AI") ? "brand" : "muted"}>
-                        {plan.generation_mode.includes("AI") ? "AI 보조" : "규칙 기반"}
-                      </Badge>
-                      <Badge tone={urgencyTone(plan.urgency_status)}>{urgencyLabel(plan.urgency_status)}</Badge>
-                    </div>
-                    <h2 className="mt-4 text-2xl font-semibold text-night">
-                      {plan.origin_airport} → {plan.destination_airport} 출국 준비
-                    </h2>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{plan.summary}</p>
-                    {plan.updated_at && (
-                      <p className="mt-2 text-xs font-semibold text-slate-500">
-                        저장일 {formatDateTime(plan.created_at ?? plan.updated_at)} · 최근 갱신 {formatDateTime(plan.refreshed_at ?? plan.updated_at)}
-                      </p>
-                    )}
-                  </div>
-                  <LinkButton
-                    href={linkedRoadmapId ? `/roadmap/administration?roadmapId=${linkedRoadmapId}` : "/roadmap/administration"}
-                    variant="secondary"
-                    className="shrink-0 whitespace-nowrap"
-                  >
-                    행정로드맵 확인
-                  </LinkButton>
-                </div>
-              </Card>
+              <DepartureJourneyPanel plan={plan} linkedRoadmapId={linkedRoadmapId} />
 
-              <div className="grid gap-3 md:grid-cols-4">
-                <MetricCard label="입사 예정일" value={plan.start_date} helper={`${plan.target_country} ${plan.destination_city}`} />
-                <MetricCard label="권장 입국일" value={plan.recommended_arrival_date} helper="입국 후 적응 여유 포함" />
-                <MetricCard label="출국 후보 기간" value={`${plan.departure_window_start}~`} helper={plan.departure_window_end} />
-                <MetricCard label="출국 준비 D-day" value={dDayLabel(plan.days_until_departure_window)} helper="후보 기간 시작 기준" />
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+                <FlightOfferDeck plan={plan} />
+                <MilestoneJourney milestones={plan.milestones} />
               </div>
-
-              <Card className="p-5">
-                <p className="lens-kicker">FLIGHT SEARCH BRIEF</p>
-                <h2 className="mt-3 text-xl font-semibold text-night">항공편 탐색 기준</h2>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Badge tone={flightDataTone(plan.flight_data_status)}>{flightDataLabel(plan.flight_data_status)}</Badge>
-                  {plan.flight_offers.length > 0 && <Badge tone="brand">{plan.flight_offers.length}개 후보</Badge>}
-                </div>
-                <p className="mt-3 text-sm leading-6 text-slate-700">{plan.flight_search_note}</p>
-                {plan.flight_offers.length > 0 && (
-                  <div className="mt-5 grid gap-3">
-                    {plan.flight_offers.map((offer, index) => (
-                      <div key={`${offer.provider}-${offer.departure_at}-${index}`} className="rounded-xl border border-line bg-white p-4">
-                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-night">
-                              {offer.origin_code} → {offer.destination_code}
-                            </p>
-                            <p className="mt-1 text-xs text-slate-500">
-                              {formatDateTime(offer.departure_at)} 출발 · {formatDateTime(offer.arrival_at)} 도착
-                            </p>
-                            <p className="mt-2 text-sm text-slate-600">
-                              {offer.carrier_name || offer.carrier_code} {offer.flight_number} · {offer.duration || "소요시간 미기재"}
-                            </p>
-                          </div>
-                          <div className="rounded-xl border border-line bg-panel px-3 py-2 text-right">
-                            <p className="text-xs font-bold text-slate-500">{offer.provider}</p>
-                            <p className="mt-1 text-base font-semibold text-night">
-                              {offer.currency} {offer.total_price || "미기재"}
-                            </p>
-                            {offer.bookable_seats !== null && <p className="mt-1 text-xs text-slate-500">좌석 {offer.bookable_seats}</p>}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {/* <div className="mt-5 grid gap-3 md:grid-cols-3">
-                  {plan.flight_api_providers.map((provider) => (
-                    <div key={provider.provider} className="rounded-xl border border-line bg-panel p-4">
-                      <p className="text-sm font-semibold text-night">{provider.provider}</p>
-                      <p className="mt-2 text-xs font-bold text-brand">{provider.integrationStatus}</p>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">{provider.useCase}</p>
-                      <p className="mt-2 text-xs leading-5 text-slate-500">{provider.note}</p>
-                    </div>
-                  ))}
-                </div> */}
-              </Card>
-
-              <section className="border-l border-night pl-4">
-                <div className="space-y-4">
-                  {plan.milestones.map((milestone) => (
-                    <TimelineCard key={`${milestone.phase}-${milestone.title}`} label={milestone.phase} title={milestone.title}>
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div>
-                          <p className="text-sm leading-6 text-slate-600">{milestone.description}</p>
-                          <p className="mt-2 text-xs text-slate-500">기한: {milestone.due_date}</p>
-                        </div>
-                        <Badge tone={milestoneTone(milestone.status)}>{milestoneLabel(milestone.status)}</Badge>
-                      </div>
-                    </TimelineCard>
-                  ))}
-                </div>
-              </section>
 
               <Card className="p-5">
                 <p className="text-xs leading-5 text-slate-500">{plan.disclaimer}</p>
@@ -288,10 +197,181 @@ export default function DepartureRoadmapPage() {
   }
 }
 
+function DepartureJourneyPanel({ plan, linkedRoadmapId }: { plan: DeparturePlan; linkedRoadmapId: number | null }) {
+  const isAiAssisted = plan.generation_mode.includes("AI");
+  const updatedLabel = plan.updated_at
+    ? `저장일 ${formatDateTime(plan.created_at ?? plan.updated_at)} · 최근 갱신 ${formatDateTime(plan.refreshed_at ?? plan.updated_at)}`
+    : null;
+
+  return (
+    <section className="rounded-2xl border border-line bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <div className="flex flex-wrap gap-2">
+            <Badge tone={isAiAssisted ? "brand" : "muted"}>{isAiAssisted ? "AI 보조" : "규칙 기반"}</Badge>
+            <Badge tone={urgencyTone(plan.urgency_status)}>{urgencyLabel(plan.urgency_status)}</Badge>
+            <Badge tone={flightDataTone(plan.flight_data_status)}>{flightDataLabel(plan.flight_data_status)}</Badge>
+          </div>
+          <h2 className="mt-4 text-2xl font-semibold leading-8 text-night">
+            <span aria-hidden="true">✈️</span> {plan.origin_airport} → {plan.destination_airport} 출국 계획
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{plan.summary}</p>
+          {updatedLabel && <p className="mt-2 text-xs font-semibold text-slate-500">{updatedLabel}</p>}
+        </div>
+        <LinkButton
+          href={linkedRoadmapId ? `/roadmap/administration?roadmapId=${linkedRoadmapId}` : "/roadmap/administration"}
+          variant="secondary"
+          className="shrink-0 whitespace-nowrap"
+        >
+          행정로드맵 확인
+        </LinkButton>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryFact label="출국 후보" value={formatDateRange(plan.departure_window_start, plan.departure_window_end)} />
+        <SummaryFact label="권장 입국" value={plan.recommended_arrival_date} />
+        <SummaryFact label="입사 예정" value={plan.start_date} />
+        <SummaryFact label="준비 D-day" value={dDayLabel(plan.days_until_departure_window)} helper={`${bufferDaysLabel(plan.recommended_arrival_date, plan.start_date)} 여유`} />
+      </div>
+    </section>
+  );
+}
+
+function FlightOfferDeck({ plan }: { plan: DeparturePlan }) {
+  return (
+    <section className="rounded-2xl border border-line bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="lens-kicker">FLIGHT</p>
+          <h2 className="mt-3 text-xl font-semibold text-night">항공편 확인</h2>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge tone={flightDataTone(plan.flight_data_status)}>{flightDataLabel(plan.flight_data_status)}</Badge>
+          {plan.flight_offers.length > 0 && <Badge tone="brand">{plan.flight_offers.length}개 후보</Badge>}
+        </div>
+      </div>
+
+      <p className="mt-4 text-sm leading-6 text-slate-700">{plan.flight_search_note}</p>
+
+      {plan.flight_offers.length > 0 ? (
+        <div className="mt-5 space-y-3">
+          {plan.flight_offers.map((offer, index) => (
+            <div key={`${offer.provider}-${offer.departure_at}-${index}`} className="rounded-xl border border-line bg-panel p-4">
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-base font-semibold text-night">
+                      {offer.origin_code} → {offer.destination_code}
+                    </p>
+                    <Badge tone="muted">{offer.provider}</Badge>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    {formatDateTime(offer.departure_at)} 출발 · {formatDateTime(offer.arrival_at)} 도착
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    {offer.carrier_name || offer.carrier_code} {offer.flight_number} · {offer.duration || "소요시간 미기재"}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-white px-4 py-3 text-left shadow-sm md:text-right">
+                  <p className="text-xs font-bold text-slate-500">예상 비용</p>
+                  <p className="mt-1 text-lg font-semibold text-night">
+                    {offer.currency} {offer.total_price || "미기재"}
+                  </p>
+                  {offer.bookable_seats !== null && <p className="mt-1 text-xs text-slate-500">좌석 {offer.bookable_seats}</p>}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-5 rounded-xl border border-dashed border-line bg-panel p-4">
+          <p className="text-sm font-semibold text-night">실시간 후보 없음</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">아래 API 연동 또는 공식 항공사/OTA에서 최종 확인합니다.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {plan.flight_api_providers.slice(0, 3).map((provider) => (
+              <Badge key={provider.provider} tone="muted">{provider.provider}</Badge>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MilestoneJourney({ milestones }: { milestones: DepartureMilestone[] }) {
+  return (
+    <section className="rounded-2xl border border-line bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="lens-kicker">MILESTONES</p>
+          <h2 className="mt-3 text-xl font-semibold text-night">준비 단계</h2>
+        </div>
+        <Badge tone="muted">{milestones.length}개 단계</Badge>
+      </div>
+
+      <div className="mt-5 divide-y divide-line">
+        {milestones.map((milestone, index) => (
+          <article key={`${milestone.phase}-${milestone.title}`} className="grid gap-3 py-4 first:pt-0 last:pb-0 sm:grid-cols-[44px_1fr_auto] sm:items-start">
+            <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${milestoneMarkerClass(milestone.status)}`}>
+              {index + 1}
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-bold uppercase text-brand">{milestone.phase}</p>
+                <p className="text-xs font-semibold text-slate-500">기한 {milestone.due_date}</p>
+              </div>
+              <h3 className="mt-1 text-base font-semibold leading-6 text-night">{milestone.title}</h3>
+              <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-600">{milestone.description}</p>
+            </div>
+            <Badge tone={milestoneTone(milestone.status)} className="w-fit shrink-0">
+              {milestoneLabel(milestone.status)}
+            </Badge>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SummaryFact({ label, value, helper }: { label: string; value: string; helper?: string }) {
+  return (
+    <div className="rounded-xl border border-line bg-panel px-4 py-3">
+      <p className="text-xs font-bold text-slate-500">{label}</p>
+      <p className="mt-1 text-base font-semibold text-night">{value}</p>
+      {helper && <p className="mt-1 text-xs leading-5 text-slate-500">{helper}</p>}
+    </div>
+  );
+}
+
 function dDayLabel(days: number) {
   if (days < 0) return "기간 지남";
   if (days === 0) return "오늘";
   return `D-${days}`;
+}
+
+function bufferDaysLabel(arrivalDate: string, startDate: string) {
+  const days = daysBetween(arrivalDate, startDate);
+  if (days === null) return "일정 확인";
+  if (days < 0) return "날짜 확인";
+  return `${days}일`;
+}
+
+function daysBetween(startDate: string, endDate: string) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  return Math.round((end.getTime() - start.getTime()) / 86400000);
+}
+
+function formatShortDate(value: string) {
+  if (!value) return "미정";
+  const [year, month, day] = value.split("T")[0].split("-");
+  if (!year || !month || !day) return value;
+  return `${Number(month)}.${Number(day)}`;
+}
+
+function formatDateRange(start: string, end: string) {
+  return `${formatShortDate(start)} - ${formatShortDate(end)}`;
 }
 
 function urgencyLabel(status: string) {
@@ -317,6 +397,12 @@ function milestoneTone(status: string) {
   if (status === "DONE") return "muted";
   if (status === "URGENT") return "risk";
   return "brand";
+}
+
+function milestoneMarkerClass(status: string) {
+  if (status === "DONE") return "bg-slate-200 text-slate-700";
+  if (status === "URGENT") return "bg-red-600 text-white";
+  return "bg-brand text-white";
 }
 
 function flightDataLabel(status: string) {
