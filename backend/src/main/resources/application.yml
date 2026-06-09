@@ -57,6 +57,7 @@ app:
     secret-key: ${KAKAOPAY_SECRET_KEY:}
     cid: ${KAKAOPAY_CID:TC0ONETIME}
     api-base-url: ${KAKAOPAY_API_BASE_URL:https://open-api.kakaopay.com}
+    demo-duplicate-redirect-enabled: ${KAKAOPAY_DEMO_DUPLICATE_REDIRECT_ENABLED:false}
   travel:
     provider: ${TRAVEL_PROVIDER:duffel}
     duffel:

@@ -50,6 +50,7 @@ public class KakaoPayService {
     private final String apiBaseUrl;
     private final String appPublicBaseUrl;
     private final String frontendPublicBaseUrl;
+    private final boolean demoDuplicateRedirectEnabled;
 
     public KakaoPayService(
             PaymentOrderRepository paymentOrderRepository,
@@ -61,7 +62,8 @@ public class KakaoPayService {
             @Value("${app.kakaopay.cid:TC0ONETIME}") String cid,
             @Value("${app.kakaopay.api-base-url:https://open-api.kakaopay.com}") String apiBaseUrl,
             @Value("${app.public-base-url:http://localhost:8080}") String appPublicBaseUrl,
-            @Value("${app.frontend-public-base-url:http://localhost:3000}") String frontendPublicBaseUrl
+            @Value("${app.frontend-public-base-url:http://localhost:3000}") String frontendPublicBaseUrl,
+            @Value("${app.kakaopay.demo-duplicate-redirect-enabled:false}") boolean demoDuplicateRedirectEnabled
     ) {
         this.paymentOrderRepository = paymentOrderRepository;
         this.userRepository = userRepository;
@@ -74,6 +76,7 @@ public class KakaoPayService {
         this.apiBaseUrl = trimTrailingSlash(apiBaseUrl);
         this.appPublicBaseUrl = trimTrailingSlash(appPublicBaseUrl);
         this.frontendPublicBaseUrl = trimTrailingSlash(frontendPublicBaseUrl);
+        this.demoDuplicateRedirectEnabled = demoDuplicateRedirectEnabled;
     }
 
     @Transactional
@@ -117,6 +120,14 @@ public class KakaoPayService {
     public String approveAndBuildRedirectUrl(String orderId, String pgToken) {
         PaymentOrder order = findOrder(orderId);
         if (STATUS_APPROVED.equals(order.getStatus())) {
+            if (demoDuplicateRedirectEnabled) {
+                // DEMO ONLY: intentionally re-apply membership on repeated success redirects.
+                // This reproduces the duplicate payment approval bug for troubleshooting footage.
+                membershipService.activatePro(order.getUser(), order);
+                order.setUpdatedAt(LocalDateTime.now());
+                paymentOrderRepository.save(order);
+                return frontendResultUrl("success", orderId, "duplicate_approved_demo");
+            }
             return frontendResultUrl("success", orderId, "already_approved");
         }
         if (!STATUS_READY.equals(order.getStatus())) {
