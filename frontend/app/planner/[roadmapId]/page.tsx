@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
+import { EmploymentFlowGuide, EmploymentFlowStrip } from "@/components/roadmap/employment-flow-guide";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Button, Card, EmptyState, LinkButton, MetricCard, PageHeader, PageShell, ScoreBar } from "@/components/ui";
 import { createApplicationFromRoadmap } from "@/lib/applications";
@@ -108,12 +109,10 @@ export default function PlannerRoadmapPage() {
         actions={
           <>
             <LinkButton href="/planner" variant="secondary">목록</LinkButton>
-            <LinkButton href="/roadmap/employment/documents" variant="secondary">문서 분석</LinkButton>
+            <LinkButton href={nextTask ? `/roadmap/employment/documents?taskId=${nextTask.task_id}` : "/roadmap/employment/documents"} variant="secondary">문서 검증</LinkButton>
             <Button type="button" variant="secondary" disabled={!roadmap || creatingApplication} onClick={moveToApplicationPipeline}>
               {creatingApplication ? "연결 중" : "지원관리로 넘기기"}
             </Button>
-            <LinkButton href={`/roadmap/departure?roadmapId=${roadmapId}`} variant="secondary">출국로드맵</LinkButton>
-            <LinkButton href={`/roadmap/administration?roadmapId=${roadmapId}`} variant="secondary">행정로드맵</LinkButton>
           </>
         }
       />
@@ -138,7 +137,9 @@ export default function PlannerRoadmapPage() {
               nextTask={nextTask}
             />
 
-            <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+            <EmploymentFlowStrip currentStep="planner" roadmapId={roadmap.roadmap_id} />
+
+            <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)_280px]">
               <RoadmapSummaryCard
                 roadmap={roadmap}
                 completionRate={completionRate}
@@ -185,6 +186,10 @@ export default function PlannerRoadmapPage() {
                   })}
                 </div>
               </section>
+
+              <aside className="h-fit xl:sticky xl:top-24">
+                <EmploymentFlowGuide currentStep="planner" roadmapId={roadmap.roadmap_id} />
+              </aside>
             </div>
           </div>
         )}
@@ -264,21 +269,6 @@ function RoadmapSummaryCard({
         </div>
         <div className="mt-5">
           <ScoreBar label="완료율" value={completionRate} tone={completionRate >= 80 ? "success" : "brand"} />
-        </div>
-      </Card>
-
-      <Card className="rounded-3xl border-slate-200 p-5 shadow-sm">
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-brand">Next Flow</p>
-        <div className="mt-4 grid gap-2">
-          <LinkButton href="/roadmap/employment/documents" variant="secondary" className="justify-start rounded-xl">
-            문서 분석으로 제출물 점검
-          </LinkButton>
-          <LinkButton href="/applications" variant="secondary" className="justify-start rounded-xl">
-            지원관리에서 지원 상태 확인
-          </LinkButton>
-          <LinkButton href={`/roadmap/departure?roadmapId=${roadmap.roadmap_id}`} variant="secondary" className="justify-start rounded-xl">
-            출국로드맵 확인
-          </LinkButton>
         </div>
       </Card>
     </aside>

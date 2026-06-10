@@ -122,7 +122,7 @@ export default function AccountSettingsPage() {
       />
 
       <section className="lens-container py-8">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
           <div className="space-y-5">
             <Card className="rounded-3xl p-6">
               <div className="flex flex-col gap-3 border-b border-line pb-5 sm:flex-row sm:items-start sm:justify-between">
@@ -249,24 +249,14 @@ export default function AccountSettingsPage() {
 
           <aside className="space-y-5">
             <Card className="rounded-3xl p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand">Account Summary</p>
-              <h2 className="mt-2 text-xl font-semibold text-ink">{currentUser.display_name}</h2>
-              <p className="mt-1 text-sm text-slate-500">{currentUser.email}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand">Account</p>
+              <h2 className="mt-2 text-xl font-semibold text-ink">계정 상태</h2>
               <div className="mt-5 grid gap-3">
+                <SummaryRow label="이름" value={currentUser.display_name} />
                 <SummaryRow label="아이디" value={currentUser.login_id} />
                 <SummaryRow label="권한" value={currentUser.admin ? "관리자" : "일반 사용자"} />
                 <SummaryRow label="프로필" value={currentUser.profile_completed ? "저장 완료" : "입력 필요"} />
                 <SummaryRow label="계정 상태" value={currentUser.account_status ?? "ACTIVE"} />
-              </div>
-            </Card>
-
-            <Card className="rounded-3xl bg-night p-6 text-white">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-mint">Security Note</p>
-              <h2 className="mt-2 text-xl font-semibold">계정 변경 후 확인할 것</h2>
-              <div className="mt-5 space-y-3 text-sm leading-6 text-slate-200">
-                <p>이메일을 변경하면 이메일 확인 상태가 초기화됩니다.</p>
-                <p>비밀번호 변경 후에도 현재 로그인 세션은 유지됩니다.</p>
-                <p>관리자 권한과 결제 멤버십은 별도 정책으로 관리됩니다.</p>
               </div>
             </Card>
           </aside>

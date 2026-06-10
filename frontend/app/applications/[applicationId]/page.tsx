@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
+import { EmploymentFlowGuide } from "@/components/roadmap/employment-flow-guide";
 import { SiteHeader } from "@/components/site-header";
 import {
   Badge,
@@ -226,6 +227,8 @@ export default function ApplicationWorkspacePage() {
                   <MetricCard label="민감정보" value={`${assistantSummary.sensitive}개`} />
                 </div>
               </Card>
+
+              <EmploymentFlowGuide currentStep="applications" roadmapId={record.roadmap_id} />
             </aside>
 
             <div className="space-y-5">
@@ -325,7 +328,7 @@ export default function ApplicationWorkspacePage() {
                     {isSaving ? "저장 중" : "워크스페이스 저장"}
                   </Button>
                   <LinkButton href="/roadmap/employment/documents" variant="secondary">문서 점검으로 이동</LinkButton>
-                  {record.roadmap_id && <LinkButton href={`/planner/${record.roadmap_id}`} variant="subtle">연결된 로드맵 보기</LinkButton>}
+                  {record.roadmap_id && <LinkButton href={`/planner/${record.roadmap_id}`} variant="subtle">커리어 플래너로 돌아가기</LinkButton>}
                 </div>
               </Card>
             </div>
