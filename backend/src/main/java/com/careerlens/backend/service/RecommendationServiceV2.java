@@ -98,6 +98,7 @@ public class RecommendationServiceV2 {
     private final PatternProfileRepository patternProfileRepository;
     private final DiagnosisResultRepository diagnosisResultRepository;
     private final AiExplanationService aiExplanationService;
+    private final WeightedSumScoringService weightedSumScoringService;
 
     public RecommendationServiceV2(
             UserRepository userRepository,
@@ -105,7 +106,8 @@ public class RecommendationServiceV2 {
             JobPostingRepository jobPostingRepository,
             PatternProfileRepository patternProfileRepository,
             DiagnosisResultRepository diagnosisResultRepository,
-            AiExplanationService aiExplanationService
+            AiExplanationService aiExplanationService,
+            WeightedSumScoringService weightedSumScoringService
     ) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
@@ -113,6 +115,7 @@ public class RecommendationServiceV2 {
         this.patternProfileRepository = patternProfileRepository;
         this.diagnosisResultRepository = diagnosisResultRepository;
         this.aiExplanationService = aiExplanationService;
+        this.weightedSumScoringService = weightedSumScoringService;
     }
 
     @Transactional
@@ -542,13 +545,34 @@ public class RecommendationServiceV2 {
             int jobFitScore,
             WeightSet weights
     ) {
-        return clamp((int) Math.round(
-                acceptanceProbabilityScore * weights.probabilityWeight() / 100.0
-                        + salaryScore * weights.salaryWeight() / 100.0
-                        + workLifeBalanceScore * weights.workLifeBalanceWeight() / 100.0
-                        + companyValueScore * weights.companyValueWeight() / 100.0
-                        + jobFitScore * weights.jobFitWeight() / 100.0
+        List<WeightedSumScoringService.WeightedCriterion> criteria = new ArrayList<>();
+        criteria.add(new WeightedSumScoringService.WeightedCriterion(
+                "acceptance_probability",
+                acceptanceProbabilityScore,
+                weights.probabilityWeight()
         ));
+        criteria.add(new WeightedSumScoringService.WeightedCriterion(
+                "salary",
+                salaryScore,
+                weights.salaryWeight()
+        ));
+        criteria.add(new WeightedSumScoringService.WeightedCriterion(
+                "work_life_balance",
+                workLifeBalanceScore,
+                weights.workLifeBalanceWeight()
+        ));
+        criteria.add(new WeightedSumScoringService.WeightedCriterion(
+                "company_value",
+                companyValueScore,
+                weights.companyValueWeight()
+        ));
+        criteria.add(new WeightedSumScoringService.WeightedCriterion(
+                "job_fit",
+                jobFitScore,
+                weights.jobFitWeight()
+        ));
+
+        return weightedSumScoringService.calculate(criteria);
     }
 
     private RecommendationDiagnosisResponseDto buildResponse(
