@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
+import { EmploymentFlowGuide } from "@/components/roadmap/employment-flow-guide";
 import { SiteHeader } from "@/components/site-header";
 import { Button, Card, EmptyState, LinkButton, PageShell } from "@/components/ui";
 import { fetchUserApplications, type ApplicationRecord, type ApplicationStatus } from "@/lib/applications";
@@ -212,8 +213,9 @@ export default function ApplicationsPage() {
                 )}
               </Card>
 
-              <aside className="xl:sticky xl:top-24 xl:self-start">
+              <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
                 <ApplicationActionPanel record={selectedRecord} documentReadyCount={documentReadyCount} />
+                <EmploymentFlowGuide currentStep="applications" roadmapId={selectedRecord?.roadmap_id} />
               </aside>
             </div>
           )}
@@ -359,6 +361,11 @@ function ApplicationActionPanel({ record, documentReadyCount }: { record: Applic
           지원 워크스페이스 열기
           <LensIcon name="external" className="h-4 w-4" />
         </LinkButton>
+        {record.roadmap_id && (
+          <LinkButton href={`/planner/${record.roadmap_id}`} variant="secondary" className="w-full rounded-md border-slate-300 bg-white text-slate-900">
+            커리어 플래너로 돌아가기
+          </LinkButton>
+        )}
         <div className="grid grid-cols-2 gap-2">
           <LinkButton href="/roadmap/employment/documents" variant="secondary" className="w-full rounded-md border-slate-300 bg-white text-slate-900">
             문서 점검

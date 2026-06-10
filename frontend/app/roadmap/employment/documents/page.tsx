@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
+import { EmploymentFlowGuide } from "@/components/roadmap/employment-flow-guide";
 import { SiteHeader } from "@/components/site-header";
 import {
   Badge,
@@ -248,6 +249,7 @@ export default function EmploymentDocumentsPage() {
                 onSelectTask={selectTask}
               />
               <ReviewStandardCard selectedTask={selectedTask} />
+              <EmploymentFlowGuide currentStep="documents" roadmapId={selectedTask?.roadmapId} />
             </aside>
 
             <section className="space-y-4">

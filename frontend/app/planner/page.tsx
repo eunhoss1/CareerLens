@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { AuthCheckingScreen, AuthRequiredScreen, useRequiredAuth } from "@/components/auth/RequireAuth";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Card, EmptyState, LinkButton, PageShell, ScoreBar } from "@/components/ui";
-import { fetchUserRoadmaps, type PlannerRoadmap } from "@/lib/planner";
+import { deletePlannerRoadmap, fetchUserRoadmaps, type PlannerRoadmap } from "@/lib/planner";
 
 export default function PlannerListPage() {
   const auth = useRequiredAuth();
   const [roadmaps, setRoadmaps] = useState<PlannerRoadmap[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [deletingRoadmapId, setDeletingRoadmapId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (auth.isChecking) {
@@ -40,6 +42,23 @@ export default function PlannerListPage() {
   const inProgressRoadmaps = roadmapSummaries.filter((item) => item.completionRate > 0 && item.completionRate < 100).length;
   const averageCompletion = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
 
+  async function handleDeleteRoadmap(roadmap: PlannerRoadmap) {
+    const confirmed = window.confirm(`"${roadmap.title}" 로드맵을 삭제할까요?\n연결된 과제, 문서 검증 기록, 출국/행정 로드맵, 지원 관리 기록도 함께 삭제됩니다.`);
+    if (!confirmed) {
+      return;
+    }
+    setDeletingRoadmapId(roadmap.roadmap_id);
+    setDeleteError(null);
+    try {
+      await deletePlannerRoadmap(roadmap.roadmap_id);
+      setRoadmaps((current) => current.filter((item) => item.roadmap_id !== roadmap.roadmap_id));
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "로드맵 삭제에 실패했습니다.");
+    } finally {
+      setDeletingRoadmapId(null);
+    }
+  }
+
   if (auth.isChecking) {
     return <AuthCheckingScreen title="커리어 플래너 접근 권한을 확인하는 중입니다." />;
   }
@@ -63,6 +82,12 @@ export default function PlannerListPage() {
         {!isLoading && roadmapSummaries.length > 0 && (
           <div className="grid w-full items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
             <main className="min-w-0 space-y-4">
+              {deleteError && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+                  {deleteError}
+                </div>
+              )}
+
               <SummaryHero
                 roadmapCount={roadmapSummaries.length}
                 inProgressRoadmaps={inProgressRoadmaps}
@@ -81,6 +106,8 @@ export default function PlannerListPage() {
                       completed={completed}
                       total={total}
                       completionRate={completionRate}
+                      onDelete={handleDeleteRoadmap}
+                      isDeleting={deletingRoadmapId === roadmap.roadmap_id}
                     />
                   );
                 })}
@@ -170,16 +197,19 @@ function RoadmapListCard({
   roadmap,
   completed,
   total,
-  completionRate
+  completionRate,
+  onDelete,
+  isDeleting
 }: {
   roadmap: PlannerRoadmap;
   completed: number;
   total: number;
   completionRate: number;
+  onDelete: (roadmap: PlannerRoadmap) => void;
+  isDeleting: boolean;
 }) {
   return (
-    <a href={`/planner/${roadmap.roadmap_id}`} className="group block h-full">
-      <Card className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-5 shadow-[0_18px_44px_rgba(15,23,42,0.05)] transition duration-200 hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
+    <Card className="group flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-5 shadow-[0_18px_44px_rgba(15,23,42,0.05)] transition duration-200 hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-teal-700">{roadmap.target_company}</p>
@@ -210,10 +240,22 @@ function RoadmapListCard({
               생성일 {new Date(roadmap.created_at).toLocaleDateString("ko-KR")}
             </Badge>
           </div>
-          <span className="text-lg font-semibold text-slate-400 transition group-hover:translate-x-1 group-hover:text-teal-700">›</span>
+          <div className="flex items-center gap-2">
+            <LinkButton href={`/planner/${roadmap.roadmap_id}`} variant="secondary" className="rounded-full px-3 py-1.5 text-xs">
+              상세 보기
+            </LinkButton>
+            <button
+              type="button"
+              className="rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isDeleting}
+              onClick={() => onDelete(roadmap)}
+            >
+              {isDeleting ? "삭제 중" : "삭제"}
+            </button>
+            <span className="text-lg font-semibold text-slate-400 transition group-hover:translate-x-1 group-hover:text-teal-700">›</span>
+          </div>
         </div>
-      </Card>
-    </a>
+    </Card>
   );
 }
 

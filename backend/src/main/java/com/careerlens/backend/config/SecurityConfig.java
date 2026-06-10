@@ -25,7 +25,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
                         .requestMatchers("/api/auth/signup", "/api/auth/login", "/api/auth/check-login-id", "/api/auth/check-email").permitAll()
                         .requestMatchers("/api/payments/kakao/success", "/api/payments/kakao/cancel", "/api/payments/kakao/fail").permitAll()
-                        .requestMatchers("/api/auth/me").authenticated()
+                        .requestMatchers("/api/auth/me", "/api/auth/me/**").authenticated()
                         .requestMatchers("/api/payments/**").authenticated()
                         .requestMatchers("/api/memberships/**").authenticated()
                         .requestMatchers("/api/jobs/external/**").hasRole("ADMIN")
