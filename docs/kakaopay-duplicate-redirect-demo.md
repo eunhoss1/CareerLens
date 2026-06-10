@@ -1,10 +1,11 @@
-# KakaoPay Duplicate Redirect Demo
+# KakaoPay Duplicate Payment Demo
 
 이 문서는 트러블슈팅 발표 영상을 찍기 위한 데모 브랜치 전용 안내입니다.
 
 ## 목적
 
-결제 성공 리다이렉트 URL이 반복 호출될 때 멤버십 승인 처리를 멱등하게 막지 않으면, 같은 주문이 여러 번 처리되어 Pro 이용 기간이 비정상적으로 증가할 수 있다는 문제를 재현합니다.
+결제 완료 화면에서 새로고침했을 때 새 카카오페이 결제 요청이 다시 생성되는 문제를 재현합니다.
+사용자 입장에서는 결제가 끝난 화면에서 F5를 눌렀을 뿐인데 다시 4,900원 결제 화면으로 이동하고, 테스트 결제를 완료하면 카카오페이 결제내역에 새 결제 건이 추가되는 흐름입니다.
 
 ## 데모 브랜치
 
@@ -14,7 +15,14 @@
 
 ## 활성화 방법
 
-기본값은 안전하게 `false`입니다. 재현 영상 촬영 시에만 로컬 환경변수에 아래 값을 추가합니다.
+프론트 성공 페이지의 새 결제 재요청은 이 데모 브랜치에서 기본 활성화됩니다.
+끄고 싶으면 프론트 환경변수에 아래 값을 추가합니다.
+
+```env
+NEXT_PUBLIC_KAKAOPAY_DEMO_REPEAT_ON_SUCCESS=false
+```
+
+백엔드의 같은 주문 중복 승인 재현까지 함께 보려면 아래 값을 켭니다.
 
 ```env
 KAKAOPAY_DEMO_DUPLICATE_REDIRECT_ENABLED=true
@@ -24,21 +32,22 @@ KAKAOPAY_DEMO_DUPLICATE_REDIRECT_ENABLED=true
 
 1. 로컬 백엔드와 프론트엔드를 실행합니다.
 2. 카카오페이 샌드박스 결제를 한 번 성공시킵니다.
-3. DB에서 `payment_orders.order_id`와 `user_memberships.expires_at`을 확인합니다.
-4. 같은 결제 성공 리다이렉트 URL을 다시 호출합니다.
-   - 형태: `/api/payments/kakao/success?order_id=...&pg_token=...`
-5. `user_memberships.expires_at`이 다시 30일 연장되는지 확인합니다.
+3. `/membership/success?order_id=...` 성공 화면에 도착합니다.
+4. 성공 화면에서 F5를 누릅니다.
+5. 프론트가 새 `POST /api/payments/kakao/ready` 요청을 보내고, 새 카카오페이 결제창으로 이동합니다.
+6. 테스트 결제를 완료합니다.
+7. 카카오페이 테스트 결제내역에 4,900원 결제 완료 건이 추가되는 것을 확인합니다.
 
 ## 정상 해결 버전과 비교할 포인트
 
-정상 버전은 `PaymentOrder.status`가 이미 `APPROVED`이면 승인 처리를 다시 하지 않고 `already_approved`로 프론트에 돌려보냅니다.
-
-데모 버전은 `KAKAOPAY_DEMO_DUPLICATE_REDIRECT_ENABLED=true`일 때만 이미 승인된 주문에도 `membershipService.activatePro(...)`를 다시 호출합니다.
+정상 버전에서는 결제 성공 화면에서 새로고침해도 새 결제 요청을 만들지 않습니다.
+또한 백엔드는 `PaymentOrder.status`가 이미 `APPROVED`인 주문을 다시 승인하지 않도록 멱등 처리합니다.
 
 ## 발표용 정리
 
 | 이슈 | 원인 | 해결 | 결과 |
 | --- | --- | --- | --- |
-| 결제 성공 URL 반복 호출 시 Pro 기간 중복 증가 | 결제 승인 결과를 DB 상태로 멱등 처리하지 않으면 같은 주문이 다시 처리됨 | `PaymentOrder` 상태를 `READY -> APPROVED`로 저장하고, 이미 승인된 주문은 재처리하지 않도록 차단 | 새로고침/재접근에도 Pro 기간이 비정상 증가하지 않음 |
+| 결제 완료 화면 새로고침 시 새 결제 요청이 반복 생성됨 | 결제 완료 페이지 진입과 결제 ready 요청이 분리되지 않거나, 성공 화면 재진입을 결제 시작으로 오인함 | 결제 시작은 사용자의 명시적 버튼 클릭에서만 실행하고, 성공 페이지는 결과 표시만 담당하도록 분리 | 새로고침해도 추가 결제 요청이 발생하지 않음 |
+| 결제 성공 URL 반복 호출 시 Pro 기간 중복 증가 | 결제 승인 결과를 DB 상태로 멱등 처리하지 않으면 같은 주문이 다시 처리됨 | `PaymentOrder` 상태를 `READY -> APPROVED`로 저장하고, 이미 승인된 주문은 재처리하지 않도록 차단 | 새로고침/재접근에서 Pro 기간이 비정상 증가하지 않음 |
 
 > 주의: 이 브랜치는 문제 재현용입니다. 운영 배포에 사용하지 마세요.
