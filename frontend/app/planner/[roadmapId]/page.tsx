@@ -137,9 +137,9 @@ export default function PlannerRoadmapPage() {
               nextTask={nextTask}
             />
 
-            <EmploymentFlowStrip currentStep="planner" roadmapId={roadmap.roadmap_id} />
+            <EmploymentFlowStrip currentStep="planner" roadmapId={roadmap.roadmap_id} className="xl:hidden" />
 
-            <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)_280px]">
+            <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)_260px]">
               <RoadmapSummaryCard
                 roadmap={roadmap}
                 completionRate={completionRate}
@@ -170,7 +170,7 @@ export default function PlannerRoadmapPage() {
                         weekHours={weekHours}
                         weekRate={weekRate}
                       >
-                        <div className="grid gap-4 2xl:grid-cols-2">
+                        <div className="grid gap-4">
                           {group.tasks.map((task) => (
                             <TaskCard
                               key={task.task_id}
@@ -216,8 +216,8 @@ function RoadmapTopPanel({
   nextTask: PlannerTask | null;
 }) {
   return (
-    <Card className="rounded-3xl border-slate-200 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_420px]">
+    <Card className="rounded-3xl border-slate-200 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)] sm:p-5">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-brand">Progress Overview</p>
           <h2 className="mt-2 text-2xl font-black leading-tight text-night">이어갈 준비 과제</h2>
@@ -289,10 +289,10 @@ function WeekSelector({
 
   return (
     <Card className="rounded-3xl border-slate-200 p-4 shadow-sm">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+      <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-brand">Week Board</p>
-          <h3 className="mt-1 text-xl font-black text-night">주차별 과제 보기</h3>
+          <h3 className="mt-1 text-lg font-black text-night">주차 선택</h3>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1">
           <WeekButton active={selectedWeek === "ALL"} label="전체" meta={`${done}/${total}`} onClick={() => onSelect("ALL")} />
@@ -364,7 +364,7 @@ function TaskCard({
   const isDone = task.status === "DONE";
 
   return (
-    <article className={`flex min-h-[340px] flex-col rounded-2xl border p-4 transition ${isDone ? "border-emerald-200 bg-emerald-50/30" : "border-slate-200 bg-[#fbfcfd] hover:border-slate-300"}`}>
+    <article className={`flex flex-col rounded-2xl border p-4 transition ${isDone ? "border-emerald-200 bg-emerald-50/30" : "border-slate-200 bg-[#fbfcfd] hover:border-slate-300"}`}>
       <div className="flex flex-wrap gap-2">
         {isNextTask && <Badge tone="brand">다음 추천</Badge>}
         <Badge tone="muted">{categoryLabel(task.category)}</Badge>
@@ -385,7 +385,7 @@ function TaskCard({
         </div>
       </details>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mt-4 flex flex-wrap gap-2">
         <StatusButton active={task.status === "TODO"} disabled={isUpdating} onClick={() => onStatusChange("TODO")}>
           대기
         </StatusButton>
@@ -395,7 +395,7 @@ function TaskCard({
         <StatusButton active={task.status === "DONE"} disabled={isUpdating} onClick={() => onStatusChange("DONE")}>
           완료
         </StatusButton>
-        <LinkButton href={`/roadmap/employment/documents?taskId=${task.task_id}`} variant="secondary" className="min-h-9 rounded-xl px-3 text-xs">
+        <LinkButton href={`/roadmap/employment/documents?taskId=${task.task_id}`} variant="secondary" className="min-h-9 min-w-[92px] whitespace-nowrap rounded-xl px-3 text-xs">
           문서 검증
         </LinkButton>
       </div>
@@ -424,7 +424,7 @@ function StatusButton({ active, disabled, children, onClick }: { active: boolean
     <Button
       type="button"
       variant={active ? "primary" : "secondary"}
-      className="min-h-9 rounded-xl px-3 text-xs"
+      className="min-h-9 min-w-[72px] whitespace-nowrap rounded-xl px-3 text-xs"
       disabled={disabled}
       onClick={onClick}
     >

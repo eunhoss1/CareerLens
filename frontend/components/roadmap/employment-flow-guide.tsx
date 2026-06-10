@@ -52,18 +52,18 @@ export function EmploymentFlowGuide({ currentStep, roadmapId, className = "" }: 
   const currentIndex = steps.findIndex((step) => step.key === currentStep);
 
   return (
-    <aside className={`rounded-3xl border border-slate-200 bg-white p-5 shadow-sm ${className}`}>
+    <aside className={`rounded-3xl border border-slate-200 bg-white p-4 shadow-sm ${className}`}>
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-black uppercase tracking-[0.16em] text-brand">Career Flow</p>
-          <h2 className="mt-2 text-xl font-black text-night">준비 흐름</h2>
+          <h2 className="mt-1 text-lg font-black text-night">준비 흐름</h2>
         </div>
         <span className="rounded-full bg-[#e9f7f4] px-3 py-1 text-xs font-black text-[#147062]">
           {currentIndex + 1}/{steps.length}
         </span>
       </div>
 
-      <ol className="mt-5 space-y-3">
+      <ol className="mt-4 space-y-2">
         {steps.map((step, index) => {
           const isCurrent = step.key === currentStep;
           const isDone = index < currentIndex;
@@ -73,7 +73,7 @@ export function EmploymentFlowGuide({ currentStep, roadmapId, className = "" }: 
             <li key={step.key}>
               <Link
                 href={href}
-                className={`group grid grid-cols-[32px_minmax(0,1fr)] gap-3 rounded-2xl border p-3 transition ${
+                className={`group grid grid-cols-[28px_minmax(0,1fr)] gap-2.5 rounded-2xl border p-2.5 transition ${
                   isCurrent
                     ? "border-night bg-night text-white shadow-sm"
                     : isDone
@@ -83,7 +83,7 @@ export function EmploymentFlowGuide({ currentStep, roadmapId, className = "" }: 
                 aria-current={isCurrent ? "step" : undefined}
               >
                 <span
-                  className={`grid h-8 w-8 place-items-center rounded-full text-xs font-black ${
+                  className={`grid h-7 w-7 place-items-center rounded-full text-xs font-black ${
                     isCurrent
                       ? "bg-white text-night"
                       : isDone
@@ -98,7 +98,7 @@ export function EmploymentFlowGuide({ currentStep, roadmapId, className = "" }: 
                     <span className="truncate text-sm font-black">{step.label}</span>
                     {isCurrent && <span className="shrink-0 text-[10px] font-black text-white/70">현재</span>}
                   </span>
-                  <span className={`mt-1 block text-xs leading-5 ${isCurrent ? "text-white/75" : "text-slate-500"}`}>
+                  <span className={`mt-1 block text-xs leading-4 ${isCurrent ? "text-white/75" : "text-slate-500"}`}>
                     {step.description}
                   </span>
                 </span>
@@ -108,7 +108,7 @@ export function EmploymentFlowGuide({ currentStep, roadmapId, className = "" }: 
         })}
       </ol>
 
-      <div className="mt-5 rounded-2xl border border-slate-200 bg-[#f8faf9] p-4">
+      <div className="mt-4 rounded-2xl border border-slate-200 bg-[#f8faf9] p-3">
         <p className="text-xs font-black text-slate-500">다음 행동</p>
         <p className="mt-1 text-sm font-black leading-6 text-night">{getCurrentAction(currentStep)}</p>
       </div>
