@@ -405,7 +405,7 @@ function TaskCard({
         <StatusButton active={task.status === "DONE"} disabled={isUpdating} onClick={() => onStatusChange("DONE")}>
           완료
         </StatusButton>
-        <LinkButton href="/roadmap/employment/documents" variant="secondary" className="min-h-9 rounded-xl px-3 text-xs">
+        <LinkButton href={`/roadmap/employment/documents?taskId=${task.task_id}`} variant="secondary" className="min-h-9 rounded-xl px-3 text-xs">
           문서 검증
         </LinkButton>
       </div>
