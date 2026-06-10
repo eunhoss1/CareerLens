@@ -3,12 +3,20 @@ package com.careerlens.backend.service;
 import com.careerlens.backend.dto.PlannerRoadmapDto;
 import com.careerlens.backend.dto.PlannerTaskDto;
 import com.careerlens.backend.entity.DiagnosisResult;
+import com.careerlens.backend.entity.DepartureRoadmap;
 import com.careerlens.backend.entity.JobPosting;
 import com.careerlens.backend.entity.PlannerRoadmap;
 import com.careerlens.backend.entity.PlannerTask;
+import com.careerlens.backend.repository.AdministrationRoadmapRepository;
+import com.careerlens.backend.repository.ApplicationRecordRepository;
+import com.careerlens.backend.repository.DepartureFlightOfferRepository;
+import com.careerlens.backend.repository.DepartureMilestoneRepository;
+import com.careerlens.backend.repository.DepartureRoadmapRepository;
 import com.careerlens.backend.repository.DiagnosisResultRepository;
 import com.careerlens.backend.repository.PlannerRoadmapRepository;
 import com.careerlens.backend.repository.PlannerTaskRepository;
+import com.careerlens.backend.repository.VerificationBadgeRepository;
+import com.careerlens.backend.repository.VerificationRequestRepository;
 import com.careerlens.backend.security.AccessGuard;
 import com.careerlens.backend.security.JwtClaims;
 import java.time.LocalDateTime;
@@ -37,19 +45,40 @@ public class PlannerService {
     private final PlannerTaskRepository plannerTaskRepository;
     private final PlannerTaskDraftService plannerTaskDraftService;
     private final MembershipService membershipService;
+    private final VerificationBadgeRepository verificationBadgeRepository;
+    private final VerificationRequestRepository verificationRequestRepository;
+    private final ApplicationRecordRepository applicationRecordRepository;
+    private final DepartureRoadmapRepository departureRoadmapRepository;
+    private final DepartureFlightOfferRepository departureFlightOfferRepository;
+    private final DepartureMilestoneRepository departureMilestoneRepository;
+    private final AdministrationRoadmapRepository administrationRoadmapRepository;
 
     public PlannerService(
             DiagnosisResultRepository diagnosisResultRepository,
             PlannerRoadmapRepository plannerRoadmapRepository,
             PlannerTaskRepository plannerTaskRepository,
             PlannerTaskDraftService plannerTaskDraftService,
-            MembershipService membershipService
+            MembershipService membershipService,
+            VerificationBadgeRepository verificationBadgeRepository,
+            VerificationRequestRepository verificationRequestRepository,
+            ApplicationRecordRepository applicationRecordRepository,
+            DepartureRoadmapRepository departureRoadmapRepository,
+            DepartureFlightOfferRepository departureFlightOfferRepository,
+            DepartureMilestoneRepository departureMilestoneRepository,
+            AdministrationRoadmapRepository administrationRoadmapRepository
     ) {
         this.diagnosisResultRepository = diagnosisResultRepository;
         this.plannerRoadmapRepository = plannerRoadmapRepository;
         this.plannerTaskRepository = plannerTaskRepository;
         this.plannerTaskDraftService = plannerTaskDraftService;
         this.membershipService = membershipService;
+        this.verificationBadgeRepository = verificationBadgeRepository;
+        this.verificationRequestRepository = verificationRequestRepository;
+        this.applicationRecordRepository = applicationRecordRepository;
+        this.departureRoadmapRepository = departureRoadmapRepository;
+        this.departureFlightOfferRepository = departureFlightOfferRepository;
+        this.departureMilestoneRepository = departureMilestoneRepository;
+        this.administrationRoadmapRepository = administrationRoadmapRepository;
     }
 
     // ===== 주요 기능: Controller에서 직접 호출하는 커리어 플래너 기능 =====
@@ -113,6 +142,31 @@ public class PlannerService {
         task.setStatus(normalizeStatus(status));
         plannerTaskRepository.save(task);
         return toDto(task.getRoadmap());
+    }
+
+    @Transactional
+    public void deleteRoadmap(Long roadmapId, JwtClaims claims) {
+        PlannerRoadmap roadmap = plannerRoadmapRepository.findWithDetailsById(roadmapId)
+                .orElseThrow(() -> new IllegalArgumentException("Planner roadmap not found: " + roadmapId));
+        verifyRoadmapOwner(roadmap, claims);
+
+        verificationBadgeRepository.deleteByPlannerTaskRoadmapId(roadmapId);
+        verificationBadgeRepository.deleteByVerificationRequestTaskRoadmapId(roadmapId);
+        verificationRequestRepository.deleteByPlannerTaskRoadmapId(roadmapId);
+        applicationRecordRepository.deleteByPlannerRoadmapId(roadmapId);
+        deleteDepartureRoadmap(roadmapId);
+        administrationRoadmapRepository.deleteByPlannerRoadmapId(roadmapId);
+        plannerTaskRepository.deleteByRoadmapId(roadmapId);
+        plannerRoadmapRepository.delete(roadmap);
+    }
+
+    private void deleteDepartureRoadmap(Long roadmapId) {
+        departureRoadmapRepository.findByPlannerRoadmapId(roadmapId).ifPresent(departureRoadmap -> {
+            Long departureRoadmapId = departureRoadmap.getId();
+            departureFlightOfferRepository.deleteByDepartureRoadmapId(departureRoadmapId);
+            departureMilestoneRepository.deleteByDepartureRoadmapId(departureRoadmapId);
+            departureRoadmapRepository.delete(departureRoadmap);
+        });
     }
 
     private void verifyDiagnosisOwner(DiagnosisResult diagnosis, JwtClaims claims) {

@@ -1,8 +1,10 @@
 package com.careerlens.backend.service;
 
+import com.careerlens.backend.dto.AccountUpdateRequestDto;
 import com.careerlens.backend.dto.AuthResponseDto;
 import com.careerlens.backend.dto.AvailabilityResponseDto;
 import com.careerlens.backend.dto.LoginRequestDto;
+import com.careerlens.backend.dto.PasswordChangeRequestDto;
 import com.careerlens.backend.dto.SignupRequestDto;
 import com.careerlens.backend.entity.User;
 import com.careerlens.backend.repository.UserProfileRepository;
@@ -146,6 +148,63 @@ public class AuthService {
         return toResponse(user);
     }
 
+    @Transactional
+    public AuthResponseDto updateCurrentUser(JwtClaims claims, AccountUpdateRequestDto request) {
+        User user = userRepository.findById(claims.userId())
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        String displayName = request.displayName() == null ? "" : request.displayName().trim();
+        String email = normalizeIdentifier(request.email());
+        if (displayName.isBlank()) {
+            throw new IllegalArgumentException("이름을 입력해주세요.");
+        }
+        if (email.isBlank()) {
+            throw new IllegalArgumentException("이메일을 입력해주세요.");
+        }
+
+        userRepository.findByEmail(email)
+                .filter(existing -> !existing.getId().equals(user.getId()))
+                .ifPresent(existing -> {
+                    throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
+                });
+
+        boolean emailChanged = !email.equalsIgnoreCase(user.getEmail());
+        user.setDisplayName(displayName);
+        user.setEmail(email);
+        user.setCountryDialCode(blankToNull(request.countryDialCode()));
+        user.setPhoneNumber(blankToNull(request.phoneNumber()));
+        user.setMarketingOptIn(Boolean.TRUE.equals(request.marketingOptIn()));
+        if (emailChanged) {
+            user.setEmailVerified(false);
+        }
+        user.setUpdatedAt(LocalDateTime.now());
+        return toResponse(user);
+    }
+
+    @Transactional
+    public AuthResponseDto changePassword(JwtClaims claims, PasswordChangeRequestDto request) {
+        User user = userRepository.findById(claims.userId())
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        if (user.getPasswordHash() == null || !passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("현재 비밀번호가 일치하지 않습니다.");
+        }
+        if (!request.newPassword().equals(request.newPasswordConfirm())) {
+            throw new IllegalArgumentException("새 비밀번호 확인이 일치하지 않습니다.");
+        }
+        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("현재 비밀번호와 다른 새 비밀번호를 입력해주세요.");
+        }
+        validatePasswordPolicy(request.newPassword());
+
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        user.setPasswordChangedAt(LocalDateTime.now());
+        user.setFailedLoginAttempts(0);
+        user.setLockedUntil(null);
+        user.setUpdatedAt(LocalDateTime.now());
+        return toResponse(user);
+    }
+
     private void ensureLoginAllowed(User user) {
         String status = user.getAccountStatus() == null || user.getAccountStatus().isBlank()
                 ? ACTIVE_STATUS
@@ -190,7 +249,10 @@ public class AuthService {
                 user.getLastLoginAt(),
                 token.accessToken(),
                 "Bearer",
-                token.expiresAt()
+                token.expiresAt(),
+                user.getCountryDialCode(),
+                user.getPhoneNumber(),
+                Boolean.TRUE.equals(user.getMarketingOptIn())
         );
     }
 

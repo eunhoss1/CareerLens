@@ -12,6 +12,9 @@ export type AuthUser = {
   access_token?: string;
   token_type?: string;
   expires_at?: number;
+  country_dial_code?: string | null;
+  phone_number?: string | null;
+  marketing_opt_in?: boolean;
 };
 
 export type AvailabilityResponse = {
@@ -101,6 +104,58 @@ export async function fetchCurrentUser(): Promise<AuthUser> {
   }
 
   return response.json();
+}
+
+export async function updateCurrentUser(input: {
+  display_name: string;
+  email: string;
+  country_dial_code?: string;
+  phone_number?: string;
+  marketing_opt_in?: boolean;
+}): Promise<AuthUser> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+  const response = await apiFetch(`${baseUrl}/api/auth/me`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders()
+    },
+    body: JSON.stringify(input),
+    cache: "no-store"
+  }, "계정 정보 수정");
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Account update request failed."));
+  }
+
+  const user = await response.json();
+  storeUser(user);
+  return user;
+}
+
+export async function changePassword(input: {
+  current_password: string;
+  new_password: string;
+  new_password_confirm: string;
+}): Promise<AuthUser> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+  const response = await apiFetch(`${baseUrl}/api/auth/me/password`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders()
+    },
+    body: JSON.stringify(input),
+    cache: "no-store"
+  }, "비밀번호 변경");
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Password change request failed."));
+  }
+
+  const user = await response.json();
+  storeUser(user);
+  return user;
 }
 
 async function authRequest(path: string, input: object): Promise<AuthUser> {

@@ -79,6 +79,18 @@ export async function fetchUserRoadmaps(userId: number): Promise<PlannerRoadmap[
   return response.json();
 }
 
+export async function deletePlannerRoadmap(roadmapId: number): Promise<void> {
+  const response = await apiFetch(`${baseUrl}/api/planner/roadmaps/${roadmapId}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+    cache: "no-store"
+  }, "커리어 플래너 삭제");
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Planner roadmap delete request failed."));
+  }
+}
+
 export async function updatePlannerTaskStatus(taskId: number, status: PlannerTaskStatus): Promise<PlannerRoadmap> {
   const response = await apiFetch(`${baseUrl}/api/planner/tasks/${taskId}/status`, {
     method: "PATCH",

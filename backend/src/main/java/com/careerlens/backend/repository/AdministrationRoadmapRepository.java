@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface AdministrationRoadmapRepository extends JpaRepository<AdministrationRoadmap, Long> {
 
     Optional<AdministrationRoadmap> findByPlannerRoadmapId(Long plannerRoadmapId);
+
+    void deleteByPlannerRoadmapId(Long plannerRoadmapId);
 }

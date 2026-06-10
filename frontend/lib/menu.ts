@@ -162,8 +162,8 @@ export const mainMenus: MenuItem[] = [
       {
         title: "계정 설정",
         href: "/mypage/settings",
-        status: "planned",
-        description: "로그인 정보와 알림 설정을 관리합니다."
+        status: "active",
+        description: "이름, 이메일, 연락처와 비밀번호를 관리합니다."
       }
     ]
   },

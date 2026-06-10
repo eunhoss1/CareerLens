@@ -15,6 +15,9 @@ public record AuthResponseDto(
         LocalDateTime lastLoginAt,
         String accessToken,
         String tokenType,
-        Long expiresAt
+        Long expiresAt,
+        String countryDialCode,
+        String phoneNumber,
+        Boolean marketingOptIn
 ) {
 }

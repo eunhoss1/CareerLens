@@ -22,4 +22,6 @@ public interface ApplicationRecordRepository extends JpaRepository<ApplicationRe
 
     @EntityGraph(attributePaths = {"user", "jobPosting", "plannerRoadmap"})
     Optional<ApplicationRecord> findByUserIdAndJobPostingId(Long userId, Long jobPostingId);
+
+    void deleteByPlannerRoadmapId(Long roadmapId);
 }
