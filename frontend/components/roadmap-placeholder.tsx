@@ -1,5 +1,6 @@
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Card, LinkButton, PageHeader, PageShell, SectionHeader, StepCard } from "@/components/ui";
+import type { ReactNode } from "react";
 
 export type PlaceholderItem = {
   title: string;
@@ -15,7 +16,7 @@ export function RoadmapPlaceholderPage({
   primaryLabel,
   items
 }: {
-  kicker: string;
+  kicker: ReactNode;
   title: string;
   description: string;
   primaryHref: string;

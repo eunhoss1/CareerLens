@@ -1,84 +1,102 @@
-import { ResourceBoard, type ResourceBoardPost } from "@/components/resources/resource-board";
+"use client";
+
+import { useState } from "react";
 import { SiteHeader } from "@/components/site-header";
-import { Card, LinkButton, MetricCard, PageHeader, PageShell, SectionHeader } from "@/components/ui";
+import { LinkButton, MetricCard, PageShell } from "@/components/ui";
 import { noticeItems } from "@/lib/resource-guides";
 
-const categoryCounts = noticeItems.reduce<Record<string, number>>((acc, notice) => {
-  acc[notice.category] = (acc[notice.category] ?? 0) + 1;
-  return acc;
-}, {});
-
-const noticeBoardPosts: ResourceBoardPost[] = noticeItems.map((notice, index) => ({
-  id: notice.id,
-  category: notice.category,
-  title: notice.title,
-  date: notice.date,
-  summary: notice.summary,
-  body: [
-    notice.summary,
-    "자세한 내용은 연결된 화면에서 확인할 수 있습니다. 추천 진단, 공고 조회, 로드맵 생성 흐름과 함께 확인하면 준비 상태를 더 구체적으로 점검할 수 있습니다.",
-    "비자, 체류자격, 고용 조건처럼 변경 가능성이 큰 정보는 반드시 공식 기관과 고용주 안내를 함께 확인해야 합니다."
-  ],
-  author: "CareerLens",
-  views: 152 - index * 17,
-  priority: notice.priority,
-  pinned: notice.priority === "높음",
-  relatedHref: notice.relatedHref,
-  tags: [notice.category, notice.priority, notice.audience]
-}));
-
 export default function NoticesPage() {
-  const highPriorityCount = noticeItems.filter((notice) => notice.priority === "높음").length;
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("전체");
+
+  const filteredPosts = noticeItems.filter((item) => {
+    const matchesSearch = item.title
+      .toLowerCase()
+      .includes(search.toLowerCase());
+    const matchesCategory = category === "전체" || item.category === category;
+    return matchesSearch && matchesCategory;
+  });
 
   return (
     <PageShell>
       <SiteHeader />
-      <PageHeader
-        kicker="NOTICE BOARD"
-        title="공지사항"
-        description="CareerLens 이용 안내와 공고 데이터, 추천 진단, 비자 정보 업데이트를 확인합니다. 필요한 공지는 연결 화면에서 바로 이어서 확인할 수 있습니다."
-        actions={
-          <>
-            <LinkButton href="/resources" variant="secondary">자료실</LinkButton>
-            <LinkButton href="/mypage">프로필 확인</LinkButton>
-          </>
-        }
-      />
-
-      <section className="lens-container py-6">
-        <div className="grid gap-3 md:grid-cols-4">
-          <MetricCard label="전체 공지" value={`${noticeItems.length}건`} helper="게시판 등록" />
-          <MetricCard label="중요 안내" value={`${highPriorityCount}건`} helper="우선 확인" />
-          <MetricCard label="분류" value={`${Object.keys(categoryCounts).length}개`} helper="서비스/데이터/정책" />
-          <MetricCard label="연결 화면" value="제공" helper="상세 확인" />
-        </div>
-
-        <div className="mt-6">
-          <ResourceBoard posts={noticeBoardPosts} apiType="NOTICE" />
-        </div>
-
-        <Card className="mt-6 p-5">
-          <SectionHeader
-            kicker="SERVICE GUIDE"
-            title="이용 전 확인할 기준"
-            description="CareerLens는 추천 결과를 더 쉽게 이해하도록 돕는 서비스입니다. 공고와 비자 정보는 공식 출처 확인을 함께 진행해야 합니다."
-          />
-          <div className="mt-5 grid gap-3 md:grid-cols-3">
-            <RuleCard title="프로필 최신화" description="추천 진단 전 마이페이지의 희망 국가, 직무, 기술스택, 경력 정보를 먼저 확인하세요." />
-            <RuleCard title="공고 원문 확인" description="지원 전에는 공고 원문에서 근무지, 경력, 비자, 마감 여부를 다시 확인하세요." />
-            <RuleCard title="공식 출처 우선" description="비자와 행정 절차는 공식 기관과 고용주 안내를 기준으로 최종 판단하세요." />
+      <div className="border-b border-slate-200 bg-white">
+        <div className="mx-auto w-full max-w-[1200px] px-6 py-5 flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">
+              NOTICE BOARD
+            </p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+              공지사항
+            </h1>
           </div>
-        </Card>
-      </section>
-    </PageShell>
-  );
-}
+          <LinkButton
+            href="/resources"
+            variant="secondary"
+            className="rounded-xl border-slate-200 text-xs font-semibold"
+          >
+            자료실
+          </LinkButton>
+        </div>
+      </div>
 
-function RuleCard({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="border border-line bg-panel p-4">
-      <h3 className="text-sm font-semibold text-night">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
-    </div>
+      <main className="bg-slate-50/50 min-h-screen pb-12">
+        <section className="max-w-[1200px] mx-auto px-6 py-8">
+          {/* 검색 및 필터 바 */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-8">
+            <input
+              type="text"
+              placeholder="공지사항 검색..."
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs outline-none focus:border-indigo-500 shadow-sm"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <select
+              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600 outline-none shadow-sm"
+              onChange={(e) => setCategory(e.target.value)}
+            >
+              <option value="전체">전체 카테고리</option>
+              {Array.from(new Set(noticeItems.map((i) => i.category))).map(
+                (cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                )
+              )}
+            </select>
+          </div>
+
+          <div className="grid gap-3">
+            {filteredPosts.map((post, index) => (
+              <div
+                key={post.id}
+                className="group rounded-2xl border border-slate-200 bg-white p-6 transition-all hover:border-indigo-300 hover:shadow-lg"
+              >
+                <div className="flex justify-between mb-3">
+                  <span className="text-[10px] font-bold uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg">
+                    {post.category}
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    {post.date}
+                  </span>
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">
+                  {post.title}
+                </h3>
+                <p className="text-xs text-slate-500 mb-4 line-clamp-2">
+                  {post.summary}
+                </p>
+                <a
+                  href={post.relatedHref}
+                  className="text-xs font-bold text-indigo-600"
+                >
+                  상세 확인 ↗
+                </a>
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
+    </PageShell>
   );
 }

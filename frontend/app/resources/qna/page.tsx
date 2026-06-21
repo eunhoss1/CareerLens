@@ -1,93 +1,109 @@
-import { ResourceBoard, type ResourceBoardPost } from "@/components/resources/resource-board";
+"use client";
+
+import { useState } from "react";
 import { SiteHeader } from "@/components/site-header";
-import { Badge, Card, LinkButton, MetricCard, PageHeader, PageShell, SectionHeader } from "@/components/ui";
+import {
+  Badge,
+  Card,
+  LinkButton,
+  PageHeader,
+  PageShell,
+} from "@/components/ui";
 import { qnaItems } from "@/lib/resource-guides";
 
-const topicGroups = [
-  { title: "추천 진단", description: "프로필과 공고 패턴을 비교해 추천 결과가 나오는 방식" },
-  { title: "프로필 입력", description: "희망 국가, 직무, 기술스택, 경력 정보를 입력하는 기준" },
-  { title: "AI 활용", description: "추천 이유 요약, 로드맵 과제, 문서 분석에 AI가 쓰이는 방식" },
-  { title: "비자 정보", description: "공식 링크와 준비 체크리스트를 함께 확인하는 원칙" }
-];
-
-const qnaBoardPosts: ResourceBoardPost[] = qnaItems.map((item, index) => ({
-  id: `qna-${String(index + 1).padStart(3, "0")}`,
-  category: item.tags[0] ?? "기타",
-  title: item.question,
-  date: `2026.05.${String(10 - Math.min(index, 5)).padStart(2, "0")}`,
-  summary: item.answer,
-  body: [
-    item.answer,
-    "관련 화면으로 이동하면 프로필 입력, 추천 진단, 로드맵 생성, 비자 정보 확인 흐름을 이어서 볼 수 있습니다.",
-    "개인별 상황에 따라 결과가 달라질 수 있으므로 공고 원문과 공식 기관 안내를 함께 확인하는 것이 좋습니다."
-  ],
-  author: "CareerLens",
-  views: 98 - index * 9,
-  status: "답변완료",
-  pinned: index < 2,
-  tags: item.tags,
-  relatedHref: item.relatedHref
-}));
-
 export default function QnaPage() {
+  const [search, setSearch] = useState("");
+  const [tag, setTag] = useState("전체");
+
+  const filteredPosts = qnaItems.filter((item) => {
+    const matchesSearch = item.question
+      .toLowerCase()
+      .includes(search.toLowerCase());
+    const matchesTag = tag === "전체" || item.tags.includes(tag);
+    return matchesSearch && matchesTag;
+  });
+
   return (
     <PageShell>
       <SiteHeader />
-      <PageHeader
-        kicker="Q&A BOARD"
-        title="Q&A"
-        description="CareerLens 이용 중 자주 생기는 질문을 정리했습니다. 추천 진단, 프로필 입력, AI 활용, 비자 정보 확인 기준을 검색과 카테고리로 빠르게 찾을 수 있습니다."
-        actions={
-          <>
-            <LinkButton href="/resources" variant="secondary">자료실</LinkButton>
-            <LinkButton href="/jobs/recommendation">추천 진단</LinkButton>
-          </>
+
+      <style jsx global>{`
+        .lens-kicker {
+          display: inline-block;
+          border: none !important;
+          background: none !important;
+          padding: 0 !important;
+          font-size: 10px !important;
+          font-weight: 800 !important;
+          letter-spacing: 0.15em !important;
+          text-transform: uppercase !important;
+          color: #4f46e5 !important;
         }
+      `}</style>
+
+      <PageHeader
+        kicker={<span className="lens-kicker">Q&A RESOURCE</span>}
+        title="자주 묻는 질문"
+        description="커리어 플래너 활용, 검증 기준 및 서비스 이용 관련 궁금증을 확인하세요."
       />
 
-      <section className="lens-container py-6">
-        <div className="grid gap-3 md:grid-cols-4">
-          <MetricCard label="등록 질문" value={`${qnaItems.length}건`} helper="자주 묻는 질문" />
-          <MetricCard label="답변 상태" value="100%" helper="답변완료" />
-          <MetricCard label="주요 주제" value={`${topicGroups.length}개`} helper="추천/프로필/AI/비자" />
-          <MetricCard label="연결 화면" value="제공" helper="바로 이동" />
-        </div>
-
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {topicGroups.map((topic) => (
-            <Card key={topic.title} className="p-5">
-              <Badge tone="brand">{topic.title}</Badge>
-              <p className="mt-3 text-sm leading-6 text-slate-600">{topic.description}</p>
-            </Card>
-          ))}
-        </div>
-
-        <div className="mt-6">
-          <ResourceBoard posts={qnaBoardPosts} apiType="QNA" allowQuestion emptyMessage="조건에 맞는 질문이 없습니다." />
-        </div>
-
-        <Card className="mt-6 p-5">
-          <SectionHeader
-            kicker="HELP GUIDE"
-            title="질문을 해결하는 순서"
-            description="공고를 먼저 고르는 것이 아니라, 내 프로필을 정리한 뒤 추천 진단과 로드맵으로 이어가면 준비 항목을 더 명확히 확인할 수 있습니다."
-          />
-          <div className="mt-5 grid gap-3 md:grid-cols-3">
-            <Tip title="1. 프로필 확인" description="희망 국가, 직무, 경력, 기술스택, 언어 정보를 마이페이지에서 먼저 정리합니다." />
-            <Tip title="2. 추천 진단" description="저장된 프로필과 공고별 PatternProfile을 비교해 추천 공고와 부족 요소를 확인합니다." />
-            <Tip title="3. 로드맵 연결" description="추천 결과에서 커리어 플래너를 생성하고 문서 분석, 지원 관리, 행정 준비로 이어갑니다." />
+      <main className="bg-slate-50/50 min-h-screen pb-12">
+        <section className="max-w-[1200px] mx-auto px-6 py-8">
+          {/* 검색 및 필터 바 */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-8">
+            <input
+              type="text"
+              placeholder="질문 검색..."
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs outline-none focus:border-indigo-500 shadow-sm"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <select
+              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600 outline-none shadow-sm"
+              onChange={(e) => setTag(e.target.value)}
+            >
+              <option value="전체">전체 주제</option>
+              {Array.from(new Set(qnaItems.flatMap((i) => i.tags))).map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
           </div>
-        </Card>
-      </section>
-    </PageShell>
-  );
-}
 
-function Tip({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="border border-line bg-white p-4">
-      <h3 className="text-sm font-semibold text-night">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
-    </div>
+          <div className="grid gap-3">
+            {filteredPosts.map((post, index) => (
+              <div
+                key={index}
+                className="group rounded-2xl border border-slate-200 bg-white p-6 transition-all hover:border-indigo-300 hover:shadow-lg"
+              >
+                <div className="flex gap-2 mb-3">
+                  {post.tags.map((t) => (
+                    <span
+                      key={t}
+                      className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg"
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">
+                  Q. {post.question}
+                </h3>
+                <p className="text-xs text-slate-500 italic mb-4">
+                  A. {post.answer}
+                </p>
+                <a
+                  href={post.relatedHref}
+                  className="text-xs font-bold text-indigo-600"
+                >
+                  답변 보기 ↗
+                </a>
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
+    </PageShell>
   );
 }

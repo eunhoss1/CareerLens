@@ -34,22 +34,18 @@ export async function verifyTaskText(input: {
   documentType: string;
   submittedText: string;
 }): Promise<VerificationResult> {
-  const response = await apiFetch(
-    `${baseUrl}/api/verifications/tasks/${input.taskId}/text`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders()
-      },
-      body: JSON.stringify({
-        document_type: input.documentType,
-        submitted_text: input.submittedText
-      }),
-      cache: "no-store"
+  const response = await apiFetch(`${baseUrl}/api/verifications/tasks/${input.taskId}/text`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders()
     },
-    "문서 텍스트 검증 요청"
-  );
+    body: JSON.stringify({
+      document_type: input.documentType,
+      submitted_text: input.submittedText
+    }),
+    cache: "no-store"
+  }, "문서 텍스트 검증 요청");
 
   if (!response.ok) {
     throw new Error(await readApiError(response, "Document verification request failed."));
@@ -59,14 +55,10 @@ export async function verifyTaskText(input: {
 }
 
 export async function fetchTaskVerifications(taskId: number): Promise<VerificationResult[]> {
-  const response = await apiFetch(
-    `${baseUrl}/api/verifications/tasks/${taskId}`,
-    {
-      headers: authHeaders(),
-      cache: "no-store"
-    },
-    "문서 검증 이력 조회"
-  );
+  const response = await apiFetch(`${baseUrl}/api/verifications/tasks/${taskId}`, {
+    headers: authHeaders(),
+    cache: "no-store"
+  }, "문서 검증 이력 조회");
 
   if (!response.ok) {
     throw new Error(await readApiError(response, "Verification history request failed."));
@@ -80,22 +72,18 @@ export async function verifyTaskGithub(input: {
   githubUrl: string;
   note?: string;
 }): Promise<VerificationResult> {
-  const response = await apiFetch(
-    `${baseUrl}/api/verifications/tasks/${input.taskId}/github`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders()
-      },
-      body: JSON.stringify({
-        github_url: input.githubUrl,
-        note: input.note ?? ""
-      }),
-      cache: "no-store"
+  const response = await apiFetch(`${baseUrl}/api/verifications/tasks/${input.taskId}/github`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders()
     },
-    "GitHub 검증 요청"
-  );
+    body: JSON.stringify({
+      github_url: input.githubUrl,
+      note: input.note ?? ""
+    }),
+    cache: "no-store"
+  }, "GitHub 검증 요청");
 
   if (!response.ok) {
     throw new Error(await readApiError(response, "GitHub verification request failed."));
@@ -113,16 +101,12 @@ export async function verifyTaskFile(input: {
   body.append("document_type", input.documentType);
   body.append("file", input.file);
 
-  const response = await apiFetch(
-    `${baseUrl}/api/verifications/tasks/${input.taskId}/file`,
-    {
-      method: "POST",
-      headers: authHeaders(),
-      body,
-      cache: "no-store"
-    },
-    "파일 검증 요청"
-  );
+  const response = await apiFetch(`${baseUrl}/api/verifications/tasks/${input.taskId}/file`, {
+    method: "POST",
+    headers: authHeaders(),
+    body,
+    cache: "no-store"
+  }, "파일 검증 요청");
 
   if (!response.ok) {
     throw new Error(await readApiError(response, "File verification request failed."));
@@ -132,14 +116,10 @@ export async function verifyTaskFile(input: {
 }
 
 export async function fetchUserBadges(userId: number): Promise<VerificationBadge[]> {
-  const response = await apiFetch(
-    `${baseUrl}/api/verifications/users/${userId}/badges`,
-    {
-      headers: authHeaders(),
-      cache: "no-store"
-    },
-    "검증 배지 조회"
-  );
+  const response = await apiFetch(`${baseUrl}/api/verifications/users/${userId}/badges`, {
+    headers: authHeaders(),
+    cache: "no-store"
+  }, "검증 배지 조회");
 
   if (!response.ok) {
     throw new Error(await readApiError(response, "Verification badge request failed."));

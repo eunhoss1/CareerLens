@@ -12,9 +12,6 @@ export type AuthUser = {
   access_token?: string;
   token_type?: string;
   expires_at?: number;
-  country_dial_code?: string | null;
-  phone_number?: string | null;
-  marketing_opt_in?: boolean;
 };
 
 export type AvailabilityResponse = {
@@ -26,7 +23,27 @@ export type AvailabilityResponse = {
 
 const STORAGE_KEY = "careerlens_user";
 
+// 🛠️ 개발 환경용 마스터 더미 유저 세팅 (일반 유저 화면을 보고 싶다면 role을 "USER", admin을 false로 변경)
+const DUMMY_DEV_USER: AuthUser = {
+  user_id: 999,
+  login_id: "kanaviiii",
+  display_name: "테스트조장",
+  email: "kanaviiii@careerlens.com",
+  role: "ADMIN",
+  admin: true,
+  profile_completed: true,
+  account_status: "ACTIVE",
+  email_verified: true,
+  access_token: "mock-dev-token-xyz",
+  token_type: "Bearer",
+};
+
 export function getStoredUser(): AuthUser | null {
+  // 🎨 개발 모드(npm run dev)일 때는 로컬스토리지 무시하고 항상 로그인 상태 유지
+  if (process.env.NODE_ENV === "development") {
+    return DUMMY_DEV_USER;
+  }
+
   if (typeof window === "undefined") {
     return null;
   }
@@ -52,15 +69,21 @@ export function authHeaders(): Record<string, string> {
     return {};
   }
   return {
-    Authorization: `${user.token_type ?? "Bearer"} ${user.access_token}`
+    Authorization: `${user.token_type ?? "Bearer"} ${user.access_token}`,
   };
 }
 
-export async function apiFetch(input: RequestInfo | URL, init: RequestInit | undefined, context: string): Promise<Response> {
+export async function apiFetch(
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+  context: string
+): Promise<Response> {
   try {
     return await fetch(input, init);
   } catch {
-    throw new Error(`${context} 서버에 연결할 수 없습니다. 백엔드 실행 상태와 네트워크를 확인해주세요.`);
+    throw new Error(
+      `${context} 서버에 연결할 수 없습니다. 백엔드 실행 상태와 네트워크를 확인해주세요.`
+    );
   }
 }
 
@@ -80,111 +103,98 @@ export async function signup(input: {
   return authRequest("/api/auth/signup", input);
 }
 
-export async function login(input: { login_id: string; password: string }): Promise<AuthUser> {
+export async function login(input: {
+  login_id: string;
+  password: string;
+}): Promise<AuthUser> {
   return authRequest("/api/auth/login", input);
 }
 
-export async function checkLoginIdAvailability(loginId: string): Promise<AvailabilityResponse> {
-  return availabilityRequest(`/api/auth/check-login-id?login_id=${encodeURIComponent(loginId)}`);
+export async function checkLoginIdAvailability(
+  loginId: string
+): Promise<AvailabilityResponse> {
+  return availabilityRequest(
+    `/api/auth/check-login-id?login_id=${encodeURIComponent(loginId)}`
+  );
 }
 
-export async function checkEmailAvailability(email: string): Promise<AvailabilityResponse> {
-  return availabilityRequest(`/api/auth/check-email?email=${encodeURIComponent(email)}`);
+export async function checkEmailAvailability(
+  email: string
+): Promise<AvailabilityResponse> {
+  return availabilityRequest(
+    `/api/auth/check-email?email=${encodeURIComponent(email)}`
+  );
 }
 
 export async function fetchCurrentUser(): Promise<AuthUser> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-  const response = await apiFetch(`${baseUrl}/api/auth/me`, {
-    headers: authHeaders(),
-    cache: "no-store"
-  }, "현재 사용자 조회");
+  // 🎨 백엔드가 꺼져 있어도 /api/auth/me 호출 에러로 튕기지 않도록 개발 모드 처리
+  if (process.env.NODE_ENV === "development") {
+    return DUMMY_DEV_USER;
+  }
+
+  const baseUrl =
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+  const response = await apiFetch(
+    `${baseUrl}/api/auth/me`,
+    {
+      headers: authHeaders(),
+      cache: "no-store",
+    },
+    "현재 사용자 조회"
+  );
 
   if (!response.ok) {
-    throw new Error(await readApiError(response, "Current user request failed."));
+    throw new Error(
+      await readApiError(response, "Current user request failed.")
+    );
   }
 
   return response.json();
-}
-
-export async function updateCurrentUser(input: {
-  display_name: string;
-  email: string;
-  country_dial_code?: string;
-  phone_number?: string;
-  marketing_opt_in?: boolean;
-}): Promise<AuthUser> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-  const response = await apiFetch(`${baseUrl}/api/auth/me`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeaders()
-    },
-    body: JSON.stringify(input),
-    cache: "no-store"
-  }, "계정 정보 수정");
-
-  if (!response.ok) {
-    throw new Error(await readApiError(response, "Account update request failed."));
-  }
-
-  const user = await response.json();
-  storeUser(user);
-  return user;
-}
-
-export async function changePassword(input: {
-  current_password: string;
-  new_password: string;
-  new_password_confirm: string;
-}): Promise<AuthUser> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-  const response = await apiFetch(`${baseUrl}/api/auth/me/password`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeaders()
-    },
-    body: JSON.stringify(input),
-    cache: "no-store"
-  }, "비밀번호 변경");
-
-  if (!response.ok) {
-    throw new Error(await readApiError(response, "Password change request failed."));
-  }
-
-  const user = await response.json();
-  storeUser(user);
-  return user;
 }
 
 async function authRequest(path: string, input: object): Promise<AuthUser> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-  const response = await apiFetch(`${baseUrl}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
+  const baseUrl =
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+  const response = await apiFetch(
+    `${baseUrl}${path}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(input),
+      cache: "no-store",
     },
-    body: JSON.stringify(input),
-    cache: "no-store"
-  }, "인증 요청");
+    "인증 요청"
+  );
 
   if (!response.ok) {
-    throw new Error(await readApiError(response, "Authentication request failed."));
+    throw new Error(
+      await readApiError(response, "Authentication request failed.")
+    );
   }
 
   return response.json();
 }
 
-async function availabilityRequest(path: string): Promise<AvailabilityResponse> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-  const response = await apiFetch(`${baseUrl}${path}`, {
-    method: "GET",
-    cache: "no-store"
-  }, "중복 확인");
+async function availabilityRequest(
+  path: string
+): Promise<AvailabilityResponse> {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+  const response = await apiFetch(
+    `${baseUrl}${path}`,
+    {
+      method: "GET",
+      cache: "no-store",
+    },
+    "중복 확인"
+  );
 
   if (!response.ok) {
-    throw new Error(await readApiError(response, "Availability request failed."));
+    throw new Error(
+      await readApiError(response, "Availability request failed.")
+    );
   }
 
   return response.json();
